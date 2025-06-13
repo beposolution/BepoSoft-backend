@@ -112,20 +112,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'beposoft.wsgi.application'
 
 
-# DATABASES = {  
-#     'default': {  
-#         'ENGINE': 'django.db.backends.mysql',  
-#         'NAME': 'bepocart_beposoft',  
-#         'USER': 'bepocart_bepocart',  
-#         'PASSWORD': 'beposoft123@#',
-#         'HOST': '124.201.148.37.host.secureserver.net',  
-#         'PORT': '3306', 
-#         'OPTIONS': {
-#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
-#         }
+DATABASES = {  
+    'default': {  
+        'ENGINE': 'django.db.backends.mysql',  
+        'NAME': 'bepocart_beposoft',  
+        'USER': 'bepocart_bepocart',  
+        'PASSWORD': 'beposoft123@#',
+        'HOST': '124.201.148.37.host.secureserver.net',  
+        'PORT': '3306', 
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
+        }
         
-#     }  
-# }
+    }  
+}
 
 
 
