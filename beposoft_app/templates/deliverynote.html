@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Note</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .invoice-container {
+            max-width: 800px;
+            background: #fff;
+            padding: 20px;
+            border: 1px solid #ddd;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin: auto;
+        }
+        .invoice-header h2 {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+        .invoice-header p {
+            margin: 0;
+            font-size: 14px;
+        }
+        .table th, .table td {
+            vertical-align: middle;
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            word-break: break-word;
+        }
+        .table th {
+            background-color: #f1f1f1;
+        }
+        .no-print {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .signature {
+            max-width: 100px;
+            height: auto;
+        }
+        .bill-ship-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+        .bill-ship {
+            width: 48%;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: #f9f9f9;
+        }
+        .bill-ship p {
+            margin: 2px 0;
+        }
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container" id="invoice">
+        <div class="text-center invoice-header">
+            <h2 style="font-size:25px;font-weight:200px;">{{ company.name }}</h2>
+            <p>{{ company.address }}</p>
+            <p>Mobile: {{ company.phone }}, Email: {{ company.email }}</p>
+            <p class="fw-bold">GSTIN: {{ order.company.gst }}</p>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-md-6 col-12">
+                <p><strong style="font-size:15px">Invoice Number:</strong> {{ order.invoice }}</p>
+                <p><strong style="font-size:15px">Sales Person:</strong> {{ order.manage_staff }}</p>
+            </div>
+            <div class="col-md-6 col-12 text-end">
+                <p><strong style="font-size:15px">Invoice Date:</strong> {{ order.order_date }}</p>
+            </div>
+        </div>
+        
+        <div class="bill-ship-container">
+            <div class="bill-ship">
+                <p><strong>Bill to:</strong></p>
+                <p>{{ order.customer.name }}</p>
+                <p>{{ order.customer.address }}</p>
+                <p><strong>Phone:</strong> {{ order.customer.phone }}</p>
+            </div>
+            <div class="bill-ship">
+                <p><strong>Ship to:</strong></p>
+                <p>{{ order.billing_address.name }}</p>
+                <p>{{ order.billing_address.address }}</p>
+                <p><strong>Phone:</strong> {{ order.billing_address.phone }}</p>
+            </div>
+        </div>
+
+        <table class="table table-bordered text-center mt-3">
+            <thead class="table-light">
+                <tr>
+                    <th>Sl No.</th>
+                    <th>Image</th>
+                    <th>Product</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for warehouse_item in warehouse_items %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>
+                        {% if warehouse_item.product.image %}
+                            <img src="{{ warehouse_item.product.image.url }}" alt="{{ warehouse_item.product.name }}" width="50">
+                        {% else %}
+                            No Image
+                        {% endif %}
+                    </td>
+                    <td>{{ warehouse_item.product.name }}</td>
+                    <td>{{ warehouse_item.description }}</td>
+                    <td>{{ warehouse_item.quantity }} {{ warehouse_item.product.unit }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <p class="text-end fw-bold">Total Products: {{ warehouse_items|length }}</p>
+        
+        <div class="row my-3">
+            <div class="col-md-4 col-12">
+                <p><strong>Packed By:</strong> {{ warehouse.packed_by }}</p>
+            </div>
+            <div class="col-md-4 col-12">
+                <p><strong>Verified By:</strong> {{ warehouse.verified_by }}</p>
+            </div>
+            <div class="col-md-4 col-12 text-end">
+                <p><strong>Approved By:</strong></p>
+                <img src="{{ warehouse.checked_by.signatur_up.url }}" alt="Signature" class="signature">
+            </div>
+        </div>
+    </div>
+    
+    <div class="no-print">
+        <button class="btn btn-primary" id="downloadBtn" onclick="downloadDeliveryNote()">Download</button>
+    </div>
+    
+    <script>
+        function downloadDeliveryNote() {
+            const button = document.getElementById("downloadBtn");
+            button.style.display = "none";
+
+            html2canvas(document.querySelector("#invoice"), {
+                scale: window.innerWidth < 768 ? 2 : 3,
+                useCORS: true
+            }).then(canvas => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF("p", "mm", "a4");
+
+                const imgData = canvas.toDataURL("image/png");
+                let imgWidth = 210;
+                let imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                let fontSize = window.innerWidth < 768 ? 10 : 12; 
+                pdf.setFontSize(fontSize);
+
+                if (imgHeight > 297) {
+                    let heightLeft = imgHeight;
+                    let yPosition = 10;
+
+                    pdf.addImage(imgData, "PNG", 10, yPosition, imgWidth - 20, 297);
+                    heightLeft -= 297;
+                    yPosition -= 297;
+
+                    while (heightLeft > 0) {
+                        pdf.addPage();
+                        pdf.addImage(imgData, "PNG", 10, yPosition, imgWidth - 20, 297);
+                        heightLeft -= 297;
+                        yPosition -= 297;
+                    }
+                } else {
+                    pdf.addImage(imgData, "PNG", 10, 10, imgWidth - 20, imgHeight);
+                }
+
+                pdf.save("Delivery_Note.pdf");
+                button.style.display = "block";
+            });
+        }
+    </script>
+</body>
+</html>
+

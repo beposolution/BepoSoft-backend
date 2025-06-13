@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Invoice</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-size: 12px;
+    }
+    .no-print { display: block; }
+    @media print {
+      .no-print { display: none; }
+    }
+    .button-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 20px;
+      padding-bottom: 20px;
+    }
+    #invoice {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20px;
+      border: 1px solid #000;
+      background: #fff;
+      box-sizing: border-box;
+      overflow: hidden;
+      max-height: 297mm; /* Prevents content from spilling past A4 */
+    }
+    .company-details div {
+      margin-bottom: 2px;
+      line-height: 1.3;
+    }
+    .invoice-table th, .invoice-table td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+    .invoice-table th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-5">
+    <div class="container" id="invoice">
+      <!-- Company Details -->
+      <div class="text-center company-details">
+        <h2 style="font-size: 28px; margin-bottom: 25px;margin-top: 45px;">{{order.company}}</h2>
+        <div style="font-size: 14px;">
+          <div>{{ order.company.address }}</div>
+          <div>Mobile: {{ order.company.phone }}, Email: {{ order.company.email }}</div>
+          <div><strong>GSTIN: {{ order.company.gst }}</strong></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+          <p>Invoice Number: {{ order.invoice }}</p>
+          <p>Invoice Date: {{ order.updated_at|date:"d-M-Y" }}</p>
+        </div>
+      </div>
+
+      <!-- Bill to / Ship to -->
+      <table class="table table-bordered mt-3">
+        <thead>
+          <tr>
+            <th>Bill to</th>
+            <th>Ship to</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{order.customer.name}}<br>{{order.customer.address}}<br>Phone: {{ order.customer.phone }}</td>
+            <td>{{order.billing_address.address}}<br>Phone: {{ order.billing_address.phone }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Items Table -->
+      <table class="invoice-table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th rowspan="2">Product</th>
+            <th rowspan="2">HSN Code</th>
+            <th rowspan="2">Rate</th>
+            <th colspan="3">Taxable Amount</th>
+            <th rowspan="2">Dis</th>
+            <th rowspan="2">Price</th>
+            <th rowspan="2">Qty</th>
+            <th rowspan="2">Amount</th>
+          </tr>
+          <tr>
+            <th>Tax in(%)</th>
+            <th>Tax Amount</th>
+            <th>Net Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item.product.name }}</td>
+            <td>{{ item.product.hsn_code }}</td>
+            <td>{{ exclude_price|floatformat:2 }}</td>
+            <td>{{ item.product.tax }}</td>
+            <td>{{ item.tax_amount|floatformat:2 }}</td>
+            <td>{{ item.final_price|floatformat:2 }}</td>
+            <td>{{ item.discount|floatformat:2 }}</td>
+            <td>{{ item.product.selling_price|floatformat:2 }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.total|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="8" style="text-align: right; font-weight: bold;">TOTAL</td>
+            <td style="font-weight: bold;">{{ total_quantity }}</td>
+            <td style="font-weight: bold;">{{ totalamount|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- Bank and Summary Tables wrapped in fixed layout table -->
+      <table class="table table-bordered mt-4" style="width: 100%; table-layout: fixed; font-size: 12px;">
+        <tr>
+          <!-- Bank Details -->
+          <td style="width: 50%; vertical-align: top;">
+            <table class="table table-bordered mb-0" style="font-size: 12px;">
+              <tr><th colspan="2" style="text-align: center; font-size: 14px;">Bank Details</th></tr>
+              <tr><td><strong>A/C Name:</strong></td><td><strong>{{ order.bank.created_user }}</strong></td></tr>
+              <tr><td><strong>Bank A/C:</strong></td><td><strong>{{ order.bank.account_number }}</strong></td></tr>
+              <tr><td><strong>Bank Name:</strong></td><td><strong>{{ order.bank.name }}</strong></td></tr>
+              <tr><td><strong>Bank IFSC:</strong></td><td><strong>{{ order.bank.ifsc_code }}</strong></td></tr>
+              <tr><td><strong>Branch:</strong></td><td><strong>{{ order.bank.branch }}</strong></td></tr>
+            </table>
+          </td>
+
+          <!-- Financial Summary -->
+          <td style="width: 50%; vertical-align: top;">
+            <table class="table table-bordered mb-0" style="font-size: 12px;">
+              <tr><td><strong>Discounted Amount</strong></td><td class="text-end"><strong>{{ discounted_amount|floatformat:2 }}</strong></td></tr>
+              <tr><td><strong>Net Amount</strong></td><td class="text-end"><strong>{{ totalamount|floatformat:2 }}</strong></td></tr>
+              <tr><td><strong>Net Amount Before Tax</strong></td><td class="text-end"><strong>{{ net_amount_before_tax|floatformat:2 }}</strong></td></tr>
+              <tr><td><strong>Total Tax Amount</strong></td><td class="text-end"><strong>{{ total_tax_amount|floatformat:2 }}</strong></td></tr>
+              <tr><td><strong>Shipping Charge</strong></td><td class="text-end"><strong>{{ order.shipping_charge|floatformat:2 }}</strong></td></tr>
+              <tr><td><strong>Total Payable Amount</strong></td><td class="text-end"><strong>{{ grand_total|floatformat:2 }}</strong></td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Footer -->
+      <div style="text-align: center; margin-top: 20px;">
+        <p><strong>Thank you!</strong></p>
+        <hr>
+        <p>Invoice was created on a computer and is valid without the signature and seal.</p>
+      </div>
+
+      <!-- Download Button -->
+      <div class="button-container">
+        <button class="btn btn-primary no-print" id="downloadBtn" onclick="downloadInvoice()">Download Invoice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script -->
+  <script>
+    function downloadInvoice() {
+      const downloadBtn = document.getElementById("downloadBtn");
+      downloadBtn.style.display = "none";
+
+      const invoice = document.querySelector("#invoice");
+
+      html2canvas(invoice, {
+        scale: 2,
+        useCORS: true,
+        scrollY: -window.scrollY
+      }).then(canvas => {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF("p", "mm", "a4");
+
+        const imgData = canvas.toDataURL("image/png");
+
+        const pageWidth = 210;
+        const pageHeight = 297;
+
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (imgHeight > pageHeight) {
+          const scaleRatio = pageHeight / imgHeight;
+          const scaledWidth = imgWidth * scaleRatio;
+          const scaledHeight = imgHeight * scaleRatio;
+          const marginX = (pageWidth - scaledWidth) / 2;
+
+          pdf.addImage(imgData, "PNG", marginX, 0, scaledWidth, scaledHeight);
+        } else {
+          pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+        }
+
+        pdf.save("invoice.pdf");
+        downloadBtn.style.display = "block";
+      });
+    }
+  </script>
+</body>
+</html>
