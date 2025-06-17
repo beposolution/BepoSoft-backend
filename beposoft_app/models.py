@@ -145,6 +145,32 @@ class User(models.Model):
         db_table = "User"
 
 
+class CallLogModel(models.Model):
+    customer_name = models.CharField(max_length=100)
+    active_calls = models.PositiveIntegerField(help_text="Number of active calls")
+    phone_number = models.CharField(max_length=15)
+    call_duration_seconds = models.PositiveIntegerField()
+    call_date = models.DateField()
+    start_time = models.DateTimeField(help_text="Start time of the call")
+    end_time = models.DateTimeField(help_text="End time of the call")
+    bill_count = models.PositiveIntegerField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def clean(self):
+        super().clean()
+        # Check if end_time is after start_time
+        if self.end_time and self.start_time and self.end_time <= self.start_time:
+            raise ValidationError({
+                'end_time': "End time must be after start time."
+            })
+
+    def __str__(self):
+        return f"{self.customer_name} - {self.phone_number}"
+
+    class Meta:
+        db_table = "call_log_model"
+
+
 class Attributes(models.Model):
     created_user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100) 
@@ -385,8 +411,6 @@ class ProductAttributeVariant(models.Model):
     def __str__(self):
         return f"{self.variant_product.name} - {self.attribute}"    
     
-
-
 
 
     

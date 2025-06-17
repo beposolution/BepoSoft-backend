@@ -184,6 +184,9 @@ urlpatterns = [
 
     
     path('api/sendtrackingid/', SendShippingIDView.as_view(), name='send-shipping-id'),
+
+    path('api/call-log/create/<int:created_by_id>/', CallLogDataView.as_view(), name='calllog-create'),
+    path('api/call-log/view/', CallLogView.as_view(), name='calllog-view'),
     
 
 ]

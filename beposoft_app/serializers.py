@@ -752,8 +752,6 @@ class PerfomaInvoiceOrderSerializers(serializers.ModelSerializer):
 
         return order
        
-    
-    
      
 
 class PerformaOrderListSerilaizer(serializers.ModelSerializer):
@@ -764,6 +762,12 @@ class PerformaOrderListSerilaizer(serializers.ModelSerializer):
         fields='__all__'       
 
 
+class CallLogSerializer(serializers.ModelSerializer):
+    created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+
+    class Meta:
+        model = CallLogModel
+        fields = '__all__'
 
         
 class PerfomaInvoiceProducts(serializers.ModelSerializer):
