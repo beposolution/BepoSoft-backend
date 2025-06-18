@@ -1402,7 +1402,7 @@ class VariantProductsByProductView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        
+import traceback
 class CreateOrder(BaseTokenView):
     @transaction.atomic
     def post(self, request):
@@ -1458,8 +1458,8 @@ class CreateOrder(BaseTokenView):
                 )
                 product = products_map[product_id]
 
-                old_locked_stock = Decimal(product.locked_stock or 0)
-                product.locked_stock = old_locked_stock + Decimal(data["quantity"])
+                old_locked_stock = product.locked_stock or 0
+                product.locked_stock = old_locked_stock + data["quantity"]
                 print(f"Updating stock for product {product_id}: adding {data['quantity']} to locked_stock {old_locked_stock}")
                 product.save()
 
@@ -1469,9 +1469,10 @@ class CreateOrder(BaseTokenView):
 
         except Exception as e:
             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
+            # Also print exception with traceback to console
+            print("Exception occurred:")
+            traceback.print_exc()
             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 class OrderListView(BaseTokenView):
     def get(self, request):
