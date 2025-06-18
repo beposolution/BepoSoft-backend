@@ -64,28 +64,26 @@ class UserLoginAPIView(APIView):
         try:
             serializer = UserLoginSerializer(data=request.data)
             if serializer.is_valid():
-                email = serializer.validated_data.get('email')
+                username = serializer.validated_data.get('username')
                 password = serializer.validated_data.get('password')
 
-                customer = User.objects.filter(email=email, approval_status="approved").first()
+                customer = User.objects.filter(username=username, approval_status="approved").first()
 
                 if customer and customer.check_password(password):
-                    if customer.designation=="HR":
+                    if customer.designation == "HR":
                         self.handle()
+
                     expiration_time = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
-                   
+
                     user_token = {
-                        'id': customer.pk,  # Use ID or another unique identifier
-                        'email': customer.email,
-                        'name':customer.name,
+                        'id': customer.pk,
+                        'username': customer.username,
+                        'name': customer.name,
                         'exp': expiration_time,
                         "active": customer.department_id.name,
-                        
                         'iat': datetime.utcnow(),
-                       
-                        
                     }
-                   
+
                     token = jwt.encode(user_token, settings.SECRET_KEY, algorithm='HS256')
                     response_data = {
                         "status": "success",
@@ -95,13 +93,10 @@ class UserLoginAPIView(APIView):
                         "active": customer.department_id.name
                     }
 
-                    # Set JWT token in cookies
-                   
-                    warehouse = getattr(customer, 'warehouse_id', None)  # Assuming a OneToOneField or ForeignKey
+                    warehouse = getattr(customer, 'warehouse_id', None)
                     if warehouse:
                         response_data['warehouse_id'] = warehouse.id
 
-                    # Set JWT token in cookies
                     response = Response(response_data, status=status.HTTP_200_OK)
 
                     response.set_cookie(
@@ -109,13 +104,13 @@ class UserLoginAPIView(APIView):
                         value=token,
                         httponly=True,
                         samesite='Lax',
-                        secure=settings.SECURE_COOKIE  # Ensure this matches your settings
+                        secure=settings.SECURE_COOKIE
                     )
                     return response
                 else:
                     return Response({
                         "status": "error",
-                        "message": "Invalid email or password"
+                        "message": "Invalid username or password"
                     }, status=status.HTTP_401_UNAUTHORIZED)
             else:
                 return Response({
@@ -128,8 +123,7 @@ class UserLoginAPIView(APIView):
                 "status": "error",
                 "message": "An error occurred",
                 "errors": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
     
     def handle(self, *args, **kwargs):
         today = now().date()
