@@ -1427,7 +1427,7 @@ class CreateOrder(BaseTokenView):
                         "quantity": Decimal(item.quantity),
                         "discount": Decimal(item.discount or 0),
                         "tax": Decimal(item.product.tax or 0),
-                        "rate": Decimal(item.product.selling_price or 0),
+                        "rate": Decimal(item.price or 0),
                         "description": item.note,
                     }
                 else:
@@ -1858,7 +1858,13 @@ class Cart(BaseTokenView):
             product = get_object_or_404(Products, pk=request.data.get("product"))
             quantity = request.data.get("quantity")
             
-            return self.add_product_in_cart(product, quantity, authUser)
+            if authUser.designation in ['BDM', 'BDO']:
+                price = product.selling_price
+            else:
+                price = product.retail_price
+                
+            
+            return self.add_product_in_cart(product, quantity, authUser, price)
            
         except KeyError as e:
             return Response({"status": "error", "message": f"Missing field: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1866,14 +1872,14 @@ class Cart(BaseTokenView):
 
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def add_product_in_cart(self, product, quantity, user):
+    def add_product_in_cart(self, product, quantity, user, price):
         existing_cart_item = BeposoftCart.objects.filter(product=product, user=user).first()
         
         if existing_cart_item:
             # If the product is already in the cart, return an error message
             return Response({"status": "error", "message": "Product already exists in the cart"}, status=status.HTTP_400_BAD_REQUEST)
        
-        BeposoftCart.objects.create(product=product, user=user, quantity=quantity)
+        BeposoftCart.objects.create(product=product, user=user, quantity=quantity, price=price)
         return Response({"status": "success", "message": "Product added to cart"}, status=status.HTTP_201_CREATED)
 
 
@@ -1883,24 +1889,24 @@ class Cart(BaseTokenView):
 
 class StaffDeleteCartProduct(BaseTokenView):
     
-    def put(self,request,pk):
-        try :
-
+    def put(self, request, pk):
+        try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
-            
 
             cartItem = get_object_or_404(BeposoftCart, pk=pk)
             serializer = BepocartSerializers(cartItem, data=request.data, partial=True)
-            print("fvhgfhdj",serializer.data)
+            
+
             if serializer.is_valid():
-                print("fghgf",serializer.validated_data)
                 serializer.save()
+                cartItem.refresh_from_db()  # Refresh the instance to get updated values
                 return Response({"status": "success", "message": "Cart item updated successfully."}, status=status.HTTP_200_OK)
-            return Response({"status" : "error","message":serializer.errors}, status=status.HTTP_200_OK)
+            
+            return Response({"status": "error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         
-        except Exception as e :
+        except Exception as e:
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def delete(self, request, pk):

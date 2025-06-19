@@ -678,10 +678,9 @@ class ProductAttributeModelSerilizer(serializers.ModelSerializer):
         
         
 class BepocartSerializers(serializers.ModelSerializer):
-    price = serializers.SerializerMethodField()
     class Meta :
         model = BeposoftCart
-        fields = [f.name for f in BeposoftCart._meta.fields] + ['price']
+        fields = [f.name for f in BeposoftCart._meta.fields]
 
         
         
@@ -703,6 +702,8 @@ class BepocartSerializersView(serializers.ModelSerializer):
             "name", "tax", "exclude_price", "image", "selling_price", "retail_price", "price"
         ]
     def get_price(self, obj):
+        if obj.price is not None:
+            return obj.price
         # Get the user and check if their designation is 'BDO' or 'BDM'
         user = obj.user
         if user.designation in ['BDO', 'BDM']:
