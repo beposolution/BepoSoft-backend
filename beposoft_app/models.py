@@ -614,6 +614,7 @@ class BeposoftCart(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     discount = models.IntegerField(null=True, blank=True)
     note = models.TextField(blank=True, null=True)
+    price = models.FloatField(null=True, blank=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
