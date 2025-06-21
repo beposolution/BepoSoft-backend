@@ -64,6 +64,7 @@ class UserLoginAPIView(APIView):
         try:
             serializer = UserLoginSerializer(data=request.data)
             if serializer.is_valid():
+                # username and password from serializer for login
                 username = serializer.validated_data.get('username')
                 password = serializer.validated_data.get('password')
 
