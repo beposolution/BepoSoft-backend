@@ -558,20 +558,20 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
             return obj.variant.name
         return None
     def get_price_discount(self, obj):
-        selling_price = obj.product.selling_price or 0
+        rate = obj.rate or 0
         discount = obj.discount or 0
-        price_discount = max(selling_price - discount, 0)
+        price_discount = max(rate - discount, 0)
 
         return round(price_discount, 2)
     
    
         
     def get_exclude_price(self, obj):
-        selling_price = obj.product.selling_price or 0
+        rate = obj.rate or 0
         discount = obj.discount or 0
         tax = obj.product.tax or 0
 
-        total_price = max(selling_price - discount, 0)
+        total_price = max(rate - discount, 0)
         exclude_price = total_price / (1 + (tax / 100))
 
         return round(exclude_price, 2)

@@ -155,6 +155,7 @@ class CallLogModel(models.Model):
     end_time = models.DateTimeField(help_text="End time of the call")
     bill_count = models.PositiveIntegerField()
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    family_name = models.ForeignKey(Family, on_delete=models.CASCADE, null=True, blank=True)
 
     def clean(self):
         super().clean()
