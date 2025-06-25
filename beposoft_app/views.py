@@ -3511,9 +3511,6 @@ class DeliveryListView(BaseTokenView):
         except Exception as e:
             return JsonResponse({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        
-        
-
 
 class ParcalServiceView(BaseTokenView):
     def post(self, request):
