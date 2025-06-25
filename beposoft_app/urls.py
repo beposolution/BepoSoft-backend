@@ -106,6 +106,8 @@ urlpatterns = [
     path('api/payment/<int:pk>/reciept/',CreateReceiptAgainstInvoice.as_view()),
     path('api/customer/<int:pk>/ledger/',CustomerOrderLedgerdata.as_view()),
     path('api/recieptsupdate/get/<int:id>/',ReceiptViewbyId.as_view()),
+    path('api/advancereceipt/',CreateAdvanceReceipt.as_view()),
+    path('api/bank-receipts/', BankReceiptListCreateView.as_view()),
     
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),

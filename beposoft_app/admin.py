@@ -29,7 +29,9 @@ admin.site.register(Attendance)
 admin.site.register(WareHouse)
 admin.site.register(PerfomaInvoiceOrder)
 admin.site.register(PerfomaInvoiceOrderItem)
-admin.site.register(CallLogModel)
+admin.site.register(CallLog)
+admin.site.register(AdvanceReceipt)
+admin.site.register(BankReceipt)
 
 
 

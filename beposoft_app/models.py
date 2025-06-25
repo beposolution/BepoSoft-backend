@@ -145,7 +145,7 @@ class User(models.Model):
         db_table = "User"
 
 
-class CallLogModel(models.Model):
+class CallLog(models.Model):
     customer_name = models.CharField(max_length=100)
     active_calls = models.PositiveIntegerField(help_text="Number of active calls")
     phone_number = models.CharField(max_length=15)
@@ -167,9 +167,10 @@ class CallLogModel(models.Model):
 
     def __str__(self):
         return f"{self.customer_name} - {self.phone_number}"
-
+    
     class Meta:
-        db_table = "call_log_model"
+        db_table = "calllog"
+
 
 
 class Attributes(models.Model):
@@ -623,6 +624,51 @@ class BeposoftCart(models.Model):
     
     class Meta:
         db_table = "beposoft_cart"
+        
+class AdvanceReceipt(models.Model):
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, null=True, related_name='advance_receipts')
+    payment_receipt = models.CharField(max_length=15, unique=True, editable=False)  # Auto-generated ID
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='advance_receipts')
+    transactionID = models.CharField(max_length=50)
+    received_at = models.DateField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    remark = models.TextField()
+
+    def save(self, *args, **kwargs):
+        if not self.payment_receipt:
+            last_id = AdvanceReceipt.objects.all().order_by('id').last()
+            next_id = last_id.id + 1 if last_id else 1
+            self.payment_receipt = f"ADV-{str(next_id).zfill(4)}{chr(65 + (next_id % 26))}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Advance Receipt #{self.payment_receipt} for Customer: {self.customer}"
+
+    class Meta:
+        db_table = "advance_receipts"
+        
+class BankReceipt(models.Model):
+    payment_receipt = models.CharField(max_length=15, unique=True, editable=False)  # Auto-generated ID
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='bank_receipts')
+    transactionID = models.CharField(max_length=50)
+    received_at = models.DateField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    remark = models.TextField()
+
+    def save(self, *args, **kwargs):
+        if not self.payment_receipt:
+            last_id = BankReceipt.objects.all().order_by('id').last()
+            next_id = last_id.id + 1 if last_id else 1
+            self.payment_receipt = f"ADV-{str(next_id).zfill(4)}{chr(65 + (next_id % 26))}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Bank Receipt #{self.payment_receipt}"
+
+    class Meta:
+        db_table = "bank_receipts"
 
     
 class PaymentReceipt(models.Model):

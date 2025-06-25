@@ -516,6 +516,24 @@ class Bankserializers(serializers.ModelSerializer):
         model = Bank
         fields = ['id', 'name'] 
         
+class BankReceiptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankReceipt
+        fields = '__all__'
+        read_only_fields = ['payment_receipt']
+
+class AdvanceReceiptSerializer(serializers.ModelSerializer):
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customers.objects.all(), required=False, allow_null=True)
+    bank = serializers.PrimaryKeyRelatedField(queryset=Bank.objects.all())
+    created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+
+    class Meta:
+        model = AdvanceReceipt
+        fields = [
+            'id', 'customer', 'amount', 'bank', 'transactionID',
+            'received_at', 'created_by', 'remark'
+        ]
+        read_only_fields = ['id']
 
 class PaymentRecieptsViewSerializers(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.name")
@@ -767,7 +785,7 @@ class CallLogSerializer(serializers.ModelSerializer):
     created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
     class Meta:
-        model = CallLogModel
+        model = CallLog
         fields = '__all__'
 
         
@@ -853,6 +871,26 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentReceipt
         fields = ['amount']       
+        
+class AdvancePaymentReceiptSerializer(serializers.ModelSerializer):
+    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), required=False, allow_null=True)
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customers.objects.all(), required=True)
+    bank = serializers.PrimaryKeyRelatedField(queryset=Bank.objects.all(), required=True)
+    created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
+
+    class Meta:
+        model = PaymentReceipt
+        fields = [
+            'id', 'order', 'customer', 'amount', 'bank', 'transactionID',
+            'received_at', 'created_by', 'remark'
+        ]
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        # If `order` not provided, you can set to None or implement default logic here
+        if 'order' not in validated_data:
+            validated_data['order'] = None  # Only if model allows null=True for order
+        return super().create(validated_data)
 
 
 class OrderPaymentSerializer(serializers.ModelSerializer):

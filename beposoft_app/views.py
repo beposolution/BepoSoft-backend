@@ -18,7 +18,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError
 from decimal import Decimal
 from django.db.models import Sum
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Q
 from collections import defaultdict
@@ -1377,8 +1377,6 @@ class VariantProductCreate(BaseTokenView):
 
 
 
-
-
 class VariantProductsByProductView(BaseTokenView):
     def get(self, request, pk):
         try:
@@ -2128,8 +2126,95 @@ class OrderTotalAmountSave(BaseTokenView):
         except Exception as e :
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
+class BankReceiptListCreateView(BaseTokenView):
+    def post(self, request):
+        try:
+            # Authenticate user from token
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            request.data['created_by'] = authUser.pk
+
+            serializer = BankReceiptSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"status": "success", "message": "Bank Receipt created successfully"},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            # Authenticate user from token
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            receipts = BankReceipt.objects.all().order_by('-id')
+            serializer = BankReceiptSerializer(receipts, many=True)
+            return Response(
+                {"status": "success", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
         
-        
+class CreateAdvanceReceipt(BaseTokenView):
+    def post(self, request):
+        try:
+            # Authenticate user from token
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            request.data['created_by'] = authUser.pk
+
+            # DO NOT overwrite 'order' here, accept it from the request
+            serializer = AdvanceReceiptSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"status": "success", "message": "Advance Receipt created successfully"},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            # Authenticate user from token
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # Fetch all Advance Receipts - filter by user if needed
+            receipts = AdvanceReceipt.objects.all().order_by('-id')
+            serializer = AdvanceReceiptSerializer(receipts, many=True)
+            return Response(
+                {"status": "success", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class CreateReceiptAgainstInvoice(BaseTokenView):
     def post(self, request, pk):
@@ -2156,28 +2241,41 @@ class CreateReceiptAgainstInvoice(BaseTokenView):
         except Exception as e:
             # Log the exception message for debugging
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        
+
+   
 class CustomerOrderLedgerdata(BaseTokenView):
-    def get(self,request,pk):
+    def get(self, request, pk):
         try:
+            # Authenticate user
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
-            
+
+            # Fetch customer
             customer = get_object_or_404(Customers, pk=pk)
-            ledger = Order.objects.filter(customer =customer.pk).order_by("-order_date")
-            
-            serializers = LedgerSerializers(ledger, many=True)
-            return Response({"data":serializers.data},status=status.HTTP_200_OK)
-        except Exception as e :
+
+            # Fetch order ledger
+            ledger = Order.objects.filter(customer=customer.pk).order_by("-order_date")
+            ledger_serializer = LedgerSerializers(ledger, many=True)
+
+            # Fetch advance receipts for the customer (if related to customer)
+            advance_receipts = AdvanceReceipt.objects.filter(customer=customer).order_by('-id')
+            advance_serializer = AdvanceReceiptSerializer(advance_receipts, many=True)
+
+            # Return combined response
+            return Response(
+                {
+                    "data": {
+                        "ledger": ledger_serializer.data,
+                        "advance_receipts": advance_serializer.data
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+     
             
-            
-            
-            
-
-
 class CreatePerfomaInvoice(BaseTokenView):
     def post(self, request):
         try:
@@ -2395,11 +2493,10 @@ class CallLogDataView(APIView):
   
 class CallLogView(APIView):
     def get(self, request):
-        logs = CallLogModel.objects.all()
+        logs = CallLog.objects.all()
         serializer = CallLogSerializer(logs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-
 
 class WarehouseDataView(BaseTokenView):
     def post(self, request):
@@ -4157,7 +4254,11 @@ def generate_shipping_label(request, order_id):
     order_items = OrderItem.objects.filter(order=order).select_related('product')
 
     # Fetch the shipping details for the order's customer
-    shipping_data = get_object_or_404(Shipping, customer=order.customer)
+    # shipping_data = get_object_or_404(Shipping, customer=order.customer)
+    shipping_data = Shipping.objects.filter(customer=order.customer).first()
+    if not shipping_data:
+        raise Http404("Shipping data not found.")
+
 
     # Fetch warehouse data for the order (assuming one warehouse per order)
     warehouse = Warehousedata.objects.filter(order=order).first()
