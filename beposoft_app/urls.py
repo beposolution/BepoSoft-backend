@@ -76,6 +76,7 @@ urlpatterns = [
 
     path('api/add/product/attribute/values/',ProductAttributeCreateValue.as_view(),name="add-product-attribute-values"),
     path('api/product/attribute/<int:pk>/values/',ProductAttributeListValue.as_view(),name="product-attribute-values"),
+    path('api/product/attribute/<int:pk>/update/',ProductAttributeValueUpdate.as_view(),name="product-attribute-update"),
     path('api/product/attribute/delete/<int:pk>/values/',ProductAttributeValueDelete.as_view(),name="delete-product-attribute-values"),
 
 
@@ -108,6 +109,8 @@ urlpatterns = [
     path('api/recieptsupdate/get/<int:id>/',ReceiptViewbyId.as_view()),
     path('api/advancereceipt/',CreateAdvanceReceipt.as_view()),
     path('api/bank-receipts/', BankReceiptListCreateView.as_view()),
+    path('api/allreceipts/view/', AllReceiptsView.as_view()),
+    
     
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),
