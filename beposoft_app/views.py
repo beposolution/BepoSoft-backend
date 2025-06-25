@@ -1784,7 +1784,7 @@ class ProductAttributeCreateValue(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-            
+        
         
 
 
@@ -1806,6 +1806,27 @@ class ProductAttributeListValue(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        
+class ProductAttributeValueUpdate(BaseTokenView):
+    def put(self, request, pk=None):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        if not pk:
+            return Response({"status": "error", "message": "ID is required for update"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            attribute = ProductAttribute.objects.get(pk=pk)
+        except ProductAttribute.DoesNotExist:
+            return Response({"status": "error", "message": "Attribute not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ProductAttributeModelSerilizer(attribute, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            logger.info(f"Attribute value updated successfully: {serializer.data}")
+            return Response({"status": "success", "message": "Attribute value updated successfully"}, status=status.HTTP_200_OK)
+        return Response({"status": "error", "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -2241,6 +2262,23 @@ class CreateReceiptAgainstInvoice(BaseTokenView):
         except Exception as e:
             # Log the exception message for debugging
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class AllReceiptsView(APIView):
+    def get(self, request):
+        advance_receipts = AdvanceReceipt.objects.all()
+        bank_receipts = BankReceipt.objects.all()
+        payment_receipts = PaymentReceipt.objects.all()
+
+        advance_serializer = AdvanceReceiptSerializer(advance_receipts, many=True)
+        bank_serializer = BankReceiptSerializer(bank_receipts, many=True)
+        payment_serializer = PaymentRecieptSerializers(payment_receipts, many=True)
+
+        return Response({
+            "advance_receipts": advance_serializer.data,
+            "bank_receipts": bank_serializer.data,
+            "payment_receipts": payment_serializer.data,
+        }, status=status.HTTP_200_OK)
 
    
 class CustomerOrderLedgerdata(BaseTokenView):
