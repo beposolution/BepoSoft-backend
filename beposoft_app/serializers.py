@@ -517,6 +517,8 @@ class Bankserializers(serializers.ModelSerializer):
         fields = ['id', 'name'] 
         
 class BankReceiptSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.ReadOnlyField(source='created_by.name')
+    bank_name = serializers.ReadOnlyField(source='bank.name')
     class Meta:
         model = BankReceipt
         fields = '__all__'
@@ -526,14 +528,17 @@ class AdvanceReceiptSerializer(serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(queryset=Customers.objects.all(), required=False, allow_null=True)
     bank = serializers.PrimaryKeyRelatedField(queryset=Bank.objects.all())
     created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+    created_by_name = serializers.ReadOnlyField(source='created_by.name')
+    bank_name = serializers.ReadOnlyField(source='bank.name')
+    customer_name = serializers.ReadOnlyField(source='customer.name')
 
     class Meta:
         model = AdvanceReceipt
         fields = [
-            'id', 'customer', 'amount', 'bank', 'transactionID',
-            'received_at', 'created_by', 'remark'
+            'id', 'customer', 'amount', 'bank', 'transactionID','payment_receipt',
+            'received_at', 'created_by', 'created_by_name', 'remark','customer_name','bank_name'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'payment_receipt']
 
 class PaymentRecieptsViewSerializers(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.name")
@@ -742,6 +747,10 @@ class BepocartSerializersView(serializers.ModelSerializer):
 
 
 class PaymentRecieptSerializers(serializers.ModelSerializer):
+    created_by_name = serializers.ReadOnlyField(source='created_by.name')
+    bank_name = serializers.ReadOnlyField(source='bank.name')
+    customer_name = serializers.ReadOnlyField(source='customer.name')
+    order_name = serializers.ReadOnlyField(source='order.invoice')
     class Meta :
         model = PaymentReceipt
         fields = '__all__'
@@ -1252,21 +1261,34 @@ class BankbasedReceiptSerializer(serializers.ModelSerializer):
         model = PaymentReceipt
         fields = ['payment_receipt','amount','received_at']
 
-
-
-
-
-
-
+class UnifiedPaymentSerializer(serializers.Serializer):
+    payment_receipt = serializers.CharField(allow_null=True)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    received_at = serializers.DateField()
 
 
 class FinanaceReceiptSerializer(serializers.ModelSerializer):
-    payments=BankbasedReceiptSerializer(read_only=True,many=True)
-    banks=CompanyExpenseSeriizers(read_only=True,many=True)
-    class Meta:
-        model=Bank
-        fields = ['id','name','open_balance','payments','banks']
+    payments = serializers.SerializerMethodField()
+    banks = CompanyExpenseSeriizers(read_only=True, many=True)
 
+    class Meta:
+        model = Bank
+        fields = ['id', 'name', 'open_balance', 'payments', 'banks']
+
+    def get_payments(self, bank):
+        from itertools import chain
+
+        # BankbasedReceipt (assuming `payment_receipt`, `amount`, `received_at`)
+        payments_qs = bank.payments.all().values('payment_receipt', 'amount', 'received_at')
+
+        # AdvanceReceipt (no payment_receipt)
+        advance_qs = bank.advance_receipts.all().values('payment_receipt','amount', 'received_at')
+
+        # BankReceipt (has payment_receipt)
+        bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
+
+        combined = chain(payments_qs, advance_qs, bank_receipt_qs)
+        return UnifiedPaymentSerializer(combined, many=True).data
 
 class AttendanceSummarySerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()

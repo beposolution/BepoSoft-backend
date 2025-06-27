@@ -110,7 +110,12 @@ urlpatterns = [
     path('api/advancereceipt/',CreateAdvanceReceipt.as_view()),
     path('api/bank-receipts/', BankReceiptListCreateView.as_view()),
     path('api/allreceipts/view/', AllReceiptsView.as_view()),
-    
+    path('api/advancereceipt/view/', AdvanceReceiptListView.as_view()),
+    path('api/bankreceipt/view/', BankReceiptListView.as_view()),
+    path('api/orderreceipt/view/', OrderReceiptListView.as_view()),
+    path('api/advancereceipt/view/<int:pk>/', AdvanceReceiptDetailView.as_view(), name='advance-receipt-detail'),
+    path('api/bankreceipt/view/<int:pk>/', BankReceiptDetailView.as_view(), name='bank-receipt-detail'),
+    path('api/orderreceipt/view/<int:pk>/', OrderReceiptDetailView.as_view(), name='order-receipt-detail'),
     
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),
@@ -118,7 +123,6 @@ urlpatterns = [
     path('api/perfoma/<str:invoice>/invoice/',PerfomaInvoiceDetailView.as_view()),
     path('api/performa/invoice/staff/',PerformaOrderStaff.as_view()),
     path('performainvoice/<str:invoice_number>/', GeneratePerformaInvoice, name='generate_invoice'),
-    
     
     
     path('api/warehouse/data/',WarehouseDataView.as_view()),

@@ -2205,9 +2205,13 @@ class CreateAdvanceReceipt(BaseTokenView):
             # DO NOT overwrite 'order' here, accept it from the request
             serializer = AdvanceReceiptSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                receipt = serializer.save()
                 return Response(
-                    {"status": "success", "message": "Advance Receipt created successfully"},
+                    {
+                        "status": "success",
+                        "message": "Advance Receipt created successfully",
+                        "data": AdvanceReceiptSerializer(receipt).data
+                    },
                     status=status.HTTP_200_OK
                 )
 
@@ -2279,7 +2283,93 @@ class AllReceiptsView(APIView):
             "bank_receipts": bank_serializer.data,
             "payment_receipts": payment_serializer.data,
         }, status=status.HTTP_200_OK)
+        
+class AdvanceReceiptListView(APIView):
+    def get(self, request):
+        try:
+            receipts = AdvanceReceipt.objects.all()
+            serializer = AdvanceReceiptSerializer(receipts, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class BankReceiptListView(APIView):
+    def get(self, request):
+        try:
+            receipts = BankReceipt.objects.all()
+            serializer = BankReceiptSerializer(receipts, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class OrderReceiptListView(APIView):
+    def get(self, request):
+        try:
+            receipts = PaymentReceipt.objects.all()
+            serializer = PaymentRecieptSerializers(receipts, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class AdvanceReceiptDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            receipt = get_object_or_404(AdvanceReceipt, pk=pk)
+            serializer = AdvanceReceiptSerializer(receipt)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            receipt = get_object_or_404(AdvanceReceipt, pk=pk)
+            serializer = AdvanceReceiptSerializer(receipt, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class BankReceiptDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            receipt = get_object_or_404(BankReceipt, pk=pk)
+            serializer = BankReceiptSerializer(receipt)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            receipt = get_object_or_404(BankReceipt, pk=pk)
+            serializer = BankReceiptSerializer(receipt, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class OrderReceiptDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            receipt = get_object_or_404(PaymentReceipt, pk=pk)
+            serializer = PaymentRecieptSerializers(receipt)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            receipt = get_object_or_404(PaymentReceipt, pk=pk)
+            serializer = PaymentRecieptSerializers(receipt, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
    
 class CustomerOrderLedgerdata(BaseTokenView):
     def get(self, request, pk):
@@ -4668,20 +4758,27 @@ class UpdateCartPricesView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class FinancereportAPIView(BaseTokenView):
-     def get(self, request):
+    def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-           
-            bank_data=Bank.objects.all()
-            bank_serializer=FinanaceReceiptSerializer(bank_data,many=True)  
-            return Response({"data":bank_serializer.data},status=status.HTTP_200_OK)
-        except Exception as  e :
-            return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            bank_data = Bank.objects.all()
+            bank_serializer = FinanaceReceiptSerializer(bank_data, many=True)
+
+            return Response({
+                "bank_data": bank_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
         
 class CustomerUploadView(BaseTokenView):
