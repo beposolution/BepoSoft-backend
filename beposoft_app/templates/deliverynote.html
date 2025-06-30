@@ -142,7 +142,11 @@
             </div>
             <div class="col-md-4 col-12 text-end">
                 <p><strong>Approved By:</strong></p>
+                {% if warehouse.checked_by.signatur_up %}
                 <img src="{{ warehouse.checked_by.signatur_up.url }}" alt="Signature" class="signature">
+                {% else %}
+                <p>No Signature Available</p>
+                {% endif %}
             </div>
         </div>
     </div>
