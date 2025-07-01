@@ -174,7 +174,7 @@ urlpatterns = [
     path('api/bulk/upload/products/',ProductBulkUploadAPIView.as_view()),
     path('api/bulk/upload/orders/',OrderBulkUploadAPIView.as_view()),
     path('api/bulk/upload/customers/',CustomerUploadView.as_view()),
-    path('invoice/<int:pk>/', GenerateInvoice, name='generate_invoice'),
+    path('invoice/<str:invoice>/', GenerateInvoice, name='generate_invoice'),
     path('deliverynote/<int:order_id>/', Deliverynote, name='delivery_note'),
     path('shippinglabel/<int:order_id>/',generate_shipping_label,name="generate_shipping_label"),
 

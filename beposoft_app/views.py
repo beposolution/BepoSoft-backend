@@ -204,11 +204,9 @@ class CreateUser2View(BaseTokenView):
             
             # Save user data
             serializer = UserSerializer(data=request.data)
-            print("Serializer before save:", serializer)
             if serializer.is_valid():
                 user_instance = serializer.save()
 
-                print("Serializer data after save:", serializer.data)
 
                 if allocated_states:
                     valid_states = State.objects.filter(pk__in=allocated_states)
@@ -230,7 +228,6 @@ class CreateUser2View(BaseTokenView):
                     user_instance.save()
 
                 response_serializer = UserSerializer(user_instance)
-                print("Final response data:", response_serializer.data)
 
                 return Response(
                     {
@@ -270,11 +267,9 @@ class CreateUserView(BaseTokenView):
             
             # Save user data
             serializer = UserSerializer(data=request.data)
-            print("Serializer before save:", serializer)
             if serializer.is_valid():
                 user_instance = serializer.save()
 
-                print("Serializer data after save:", serializer.data)
 
                 if allocated_states:
                     valid_states = State.objects.filter(pk__in=allocated_states)
@@ -296,7 +291,6 @@ class CreateUserView(BaseTokenView):
                     user_instance.save()
 
                 response_serializer = UserSerializer(user_instance)
-                print("Final response data:", response_serializer.data)
 
                 return Response(
                     {
@@ -408,7 +402,6 @@ class UserDataUpdate(BaseTokenView):
             serializer = UserUpdateSerilizers(user, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                # print(serializer)
              
                 return Response(
                     {"message": "User updated successfully", "data": serializer.data},
@@ -489,11 +482,9 @@ class CustomerUpdateView(BaseTokenView):
                 return error_response
 
             customer = self.get_customer(pk)
-            print(request.data)
             serializer = CustomerSerilizers(customer, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                print("Saved serializer data:", serializer.data)
                 return Response({"data": serializer.data, "message": "Customer updated successfully"}, status=status.HTTP_200_OK)
             return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -597,7 +588,6 @@ class ProductCreateView(BaseTokenView):
 
             # Extract and validate family IDs
             family_ids = request.data.get('family')
-            print(family_ids)
             if not family_ids:
                 return Response({"message": "No family IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -611,31 +601,19 @@ class ProductCreateView(BaseTokenView):
             request.data['created_user'] = authUser.pk
 
             # Validate and save product
-            logger.info(f"Received data: {request.data}")  # ✅ Log request data
-            print(f"Received data: {request.data}") 
+            logger.info(f"Received data: {request.data}")  
             serializer = ProductsAddSerializer(data=request.data)
-            # print(serializer)
             if serializer.is_valid():
                 product = serializer.save()
-                print(product)
                 product.family.set(families)
-
-                 
-                print(serializer.data)
                 
                  # Associate families with product
             return Response({"message": "Product added successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-           
-        
-   
-                
-            
            
 
         except KeyError as e:
             return Response({"message": f"Missing required field: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -717,7 +695,6 @@ class ProductUpdateView(BaseTokenView):
             product = self.get_product(pk)
 
             serializer = ProductSerializerView(product)
-            print(serializer.data)
             return Response({"message": "Product fetched successfully", "data": serializer.data}, status=status.HTTP_200_OK)
                             
         except Exception as e:
@@ -1210,18 +1187,12 @@ class ShippingDetailView(BaseTokenView):
             }, status=status.HTTP_404_NOT_FOUND)
 
         except Exception as e:
-            print(e)
             return Response({
                 "status": "error",
                 "message": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-        
-
-
-
-            
             
 class CustomerShippingAddressUpdate(BaseTokenView):
     def shipping_address(self,pk):
@@ -1294,10 +1265,6 @@ class VariantProductCreate(BaseTokenView):
 
             images = request.FILES.getlist('images')
              
-            print(f"Product ID: {product_id}")
-            print(f"Attributes: {attributes}")
-            print(f"Image Path:{images}")
-
 
             # Fetch product
             product_instance = Products.objects.filter(pk=product_id).first()
@@ -1453,7 +1420,6 @@ class CreateOrder(BaseTokenView):
 
                 old_locked_stock = product.locked_stock or 0
                 product.locked_stock = old_locked_stock + data["quantity"]
-                print(f"Updating stock for product {product_id}: adding {data['quantity']} to locked_stock {old_locked_stock}")
                 product.save()
 
             # Clear cart after order creation
@@ -1462,8 +1428,6 @@ class CreateOrder(BaseTokenView):
 
         except Exception as e:
             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
-            # Also print exception with traceback to console
-            print("Exception occurred:")
             traceback.print_exc()
             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1506,7 +1470,6 @@ class OrderListView(BaseTokenView):
         except DatabaseError:
             return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderUpdateView(BaseTokenView):
@@ -1523,11 +1486,9 @@ class OrderUpdateView(BaseTokenView):
             # Use partial=True to allow only provided fields to be updated
             # So if cod_amount or shipping_mode are not provided, it won't cause issues
             serializer = OrderSerializer(order, data=request.data, partial=True)
-            print(serializer)
             if serializer.is_valid():
                 # Save the updated order
                 serializer.save()
-                print(serializer)
                 # Return the updated data in the response
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1537,7 +1498,6 @@ class OrderUpdateView(BaseTokenView):
         except DatabaseError:
             return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            print(f"Error: {e}")
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         
@@ -2419,7 +2379,6 @@ class CreatePerfomaInvoice(BaseTokenView):
             warehouse = get_object_or_404(WareHouse, pk=warehouse_id)
             cart_items = BeposoftCart.objects.filter(user=authUser)
             serializer = PerfomaInvoiceOrderSerializers(data=request.data)
-            print(serializer)
             if not serializer.is_valid():
                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
          # Retrieve cart items and validate serializer
@@ -2430,7 +2389,6 @@ class CreatePerfomaInvoice(BaseTokenView):
             # Manually assign the warehouse to the order
             order.warehouses_obj = warehouse
             order.save()  
-            print(order)
             for item_data in cart_items:
                 product = get_object_or_404(Products, pk=item_data.product.pk)
 
@@ -2637,11 +2595,9 @@ class WarehouseDataView(BaseTokenView):
                 serializer = WarehouseBoxesDataSerializer(data=request.data, many=True)
             else:
                 serializer = WarehouseBoxesDataSerializer(data=request.data)
-                print(serializer)
 
             if serializer.is_valid():
                 serializer.save()
-                print(serializer)
                 return Response({"status":"success","data":serializer.data}, status=status.HTTP_201_CREATED)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -2668,9 +2624,7 @@ class WarehouseDetailView(BaseTokenView):
             if error_response:
                 return error_response
             warehousedata = get_object_or_404(Warehousedata,pk=pk)
-            print(warehousedata)
             serializer = WarehouseUpdateSerializers(warehousedata, data=request.data,partial =True)
-            print(serializer)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -2827,7 +2781,6 @@ class WarehouseListView(BaseTokenView):
         except DatabaseError:
             return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from django.shortcuts import get_object_or_404
@@ -2887,7 +2840,6 @@ class WarehouseListViewbyDate(BaseTokenView):
            
 
         except Exception as e:
-            print("Error:", str(e))
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class WarehouseUpdateCheckedByView(BaseTokenView):
@@ -2934,7 +2886,6 @@ class WarehouseUpdateCheckedByView(BaseTokenView):
             )
         
         except Exception as e:
-            print("Error:", str(e))
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2946,16 +2897,12 @@ class ExpensAddView(BaseTokenView):
             if error_response:
                 return error_response
 
-            print("Incoming Request Data:", request.data)  # Debug Request Data
 
             expense = ExpenseSerializer(data=request.data)
-            print(expense)
 
             if expense.is_valid():
-                print("Validated Expense Data:", expense.validated_data)  # Debug Validated Data
 
                 expense_obj = expense.save()
-                print("Saved Expense Object:", expense_obj)  # Debug Saved Object
 
                 return Response({
                     "status": "success",
@@ -2963,11 +2910,9 @@ class ExpensAddView(BaseTokenView):
                     "data": expense.data
                 }, status=status.HTTP_200_OK)
 
-            print("Expense Errors:", expense.errors)  # Debug Errors
             return Response(expense.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            print("Exception Occurred:", str(e))  # Debug Exception
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         
@@ -2996,7 +2941,6 @@ class ExpensAddViewExpectEmi(BaseTokenView):
             if error_response:
                 return error_response
             expense=ExpenseExpectEmiSerializer(data=request.data)
-            print(expense)
             if expense.is_valid():
                 expense.save()
                 return Response({"status": "success", "message": "Expense Added Successfully","data":expense.data}, status=status.HTTP_200_OK)
@@ -3030,7 +2974,6 @@ class ExpensAddAssestView(BaseTokenView):
             if error_response:
                 return error_response
             expense=ExpenseSerializerAssest(data=request.data)
-            print(expense)
             if expense.is_valid():
                 expense.save()
                 return Response({"status": "success", "message": "Expense Added Successfully","data":expense.data},status=status.HTTP_200_OK)
@@ -3044,18 +2987,13 @@ class ExpensAddAssestView(BaseTokenView):
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
-            print("Frontend data: ", request.data)  # Debug Request Data
             expense_change=ExpenseModel.objects.get(pk=pk)
             expense=ExpenseSerializerAssest(expense_change,data=request.data,partial=True)
             if expense.is_valid():
                 saved_expense=expense.save()
-                print ("After serializer save:",ExpenseSerializerAssest(saved_expense).data)  
-                print("All functions completed for pk:",pk)
                 return Response({"status": "success", "message": "Expense Updated Successfully"}, status=status.HTTP_200_OK)
-            print("Expense update failed for pk:", pk, "errors:", expense.errors)
             return Response(expense.errors,status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print("Exception occurred for pk:", pk, "error:", str(e))
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3067,11 +3005,9 @@ class ExpenseUpdate(BaseTokenView):
             if error_response:
                 return error_response
             expense=get_object_or_404(ExpenseModel,pk=pk)
-            print("Before update:", ExpenseSerializer(expense).data)
             serializer = ExpenseSerializer(expense, data=request.data,partial=True)
             if serializer.is_valid():
                 updated_instance = serializer.save()
-                print("After update:", ExpenseSerializer(updated_instance).data)
                 return Response({"status": "success", "message": "Expense Updated Successfully"}, status=status.HTTP_200_OK)
             return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -3591,7 +3527,6 @@ class StatewiseSalesReport(APIView):
             return Response({"data": data}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
@@ -3626,8 +3561,6 @@ class DeliveryListView(BaseTokenView):
             if error_response:
                 return error_response
             data = Warehousedata.objects.filter(shipped_date=date)
-            print("Warehouse Data Queryset:", data)  # Print the queryset object
-            print("Warehouse Data List:", list(data))
             serializer = WareHouseSerializer(data, many=True)
             # Add order_id to each warehouse entry
             warehouse_with_order_id = []
@@ -3874,14 +3807,9 @@ class OrderBulkUploadAPIView(BaseTokenView):
                         # created_user= authUser  
                     )
                         customer.save()
-                        print(f"✅ New customer created: {customer.id} - {customer.name}")
                         state_instance = shipping_province_
                         if state_instance:
-                            print(f"✅ State Found: {state_instance.name} (ID: {state_instance.id})")
-
-                 
-                    
-                        
+                            pass
                  
 
 
@@ -3906,13 +3834,11 @@ class OrderBulkUploadAPIView(BaseTokenView):
                             product_sku = row.get(f"Lineitem sku{i}")  # Extract product SKU
                             product_quantity = row.get(f"Lineitem quantity{i}") 
                             if not product_sku or not product_quantity:
-                                print(f"❌ Skipping product addition: Missing SKU or Quantity for Lineitem {i}")
                                 continue 
                             try:
                                 product = Products.objects.get(pk=product_sku)  # Fetch product using SKU
                                 existing_cart_item = BeposoftCart.objects.filter(user=customer.manager, product=product).first()
                                 if existing_cart_item:
-                                    print(f"❌ Product already exists in the cart: {product.name} (Quantity: {existing_cart_item.quantity})")
                                     continue 
                                 cart_item = BeposoftCart.objects.create(
                                      user=authUser,  # Assign the customer's manager as the cart owner
@@ -3920,9 +3846,8 @@ class OrderBulkUploadAPIView(BaseTokenView):
                                      quantity=int(product_quantity)
                          )
                                 
-                                print(f"✅ Product added to cart: {product.name} (Quantity: {product_quantity})")
                             except Products.DoesNotExist:
-                                print(f"❌ Product with SKU '{product_sku}' not found. Skipping.")
+                                pass
                         manage_staff=User.objects.get(pk=2)
                         company = Company.objects.get(pk=1)
                         family = Family.objects.get(pk=3)
@@ -3952,12 +3877,6 @@ class OrderBulkUploadAPIView(BaseTokenView):
                             
                         )
                         orderdatas.save()
-                        print(f"✅ Order created and saved: {orderdatas.id}")
-
-
-
-
-                        
 
 
 
@@ -4018,40 +3937,6 @@ class OrderBulkUploadAPIView(BaseTokenView):
                         orders_data.append(order_data)
                         
                         
-
-                       
-                            
-
-
-                            
-                        
-
-
-
-
-
-                        print(f"✅ New Customer Added: {customer_data}")
-                        print(f"✅ Shipping Address Added: {shipping_data}")
-                        print(f"✅ Cart details Added: {carts_}")
-                    
-
-                
-
-                            
-
-
-        
-                            
-
-
-                        
-                        
-                 
-
-                        
-
-                        
-
 
 
 
@@ -4369,7 +4254,6 @@ def Deliverynote(request, order_id):
 def generate_shipping_label(request, order_id):
     # Fetch the order
     order = get_object_or_404(Order.objects.select_related('customer'), id=order_id)
-    print(f"Order ID: {order_id}, COD Amount: {order.cod_amount}, Payment Status: {order.payment_status}")
 
 
     # Check if cod_amount is present
@@ -4473,7 +4357,6 @@ class WarehouseAddView(BaseTokenView):
                 return Response({"message": "Warehouse added successfully"}, status=status.HTTP_201_CREATED)
             return Response(warehouse_data.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4833,12 +4716,10 @@ class CustomerUploadView(BaseTokenView):
 
                     # ✅ Check if the customer already exists in the database
                     if phone_number in existing_phones:
-                        print(f"❌ Customer already exists in database: {phone_number}")
                         continue  # ✅ Skip if already exists in the database
                     
                     # ✅ Check if customer is already added in this batch (to prevent duplicate creation)
                     if phone_number in new_customers:
-                        print(f"❌ Duplicate phone number in this batch: {phone_number}")
                         continue  # ✅ Skip if already added in this batch
                     
                     # ✅ If customer does not exist, add to batch
@@ -4874,11 +4755,9 @@ class CustomerUploadView(BaseTokenView):
                         "customer_created_at": customer.created_at
                     }
                     customers_data.append(customer_data)
-                    print(f"✅ Customer Created: {customer_data}") 
 
                 except Exception as e:
                     errors.append({"row": index, "error": str(e)})
-                    print(f"❌ Error processing row {index}: {str(e)}")
                     continue 
 
             # ✅ Return Response
@@ -4889,7 +4768,6 @@ class CustomerUploadView(BaseTokenView):
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            print(e)
             return Response({
                 "status": "error",
                 "message": "An error occurred",
@@ -4935,7 +4813,6 @@ class ReceiptViewbyId(BaseTokenView):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(e)
             return Response({"status": "error", "message": "An error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
@@ -5068,38 +4945,3 @@ def GeneratePerformaInvoice(request, invoice_number):
 
     # Render the HTML template and pass the context
     return render(request, 'performainvoice.html', context)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
