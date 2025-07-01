@@ -85,17 +85,17 @@
           <tr>
             <th rowspan="2">Product</th>
             <th rowspan="2">HSN Code</th>
+            <th rowspan="2">Price</th>
+            <th rowspan="2">Dis</th>
             <th rowspan="2">Rate</th>
             <th colspan="3">Taxable Amount</th>
-            <th rowspan="2">Dis</th>
-            <th rowspan="2">Price</th>
             <th rowspan="2">Qty</th>
             <th rowspan="2">Amount</th>
           </tr>
           <tr>
+            <th>Net Price</th>
             <th>Tax in(%)</th>
             <th>Tax Amount</th>
-            <th>Net Price</th>
           </tr>
         </thead>
         <tbody>
@@ -103,12 +103,12 @@
           <tr>
             <td>{{ item.product.name }}</td>
             <td>{{ item.product.hsn_code }}</td>
+            <td>{{ item.rate|floatformat:2 }}</td>
+            <td>{{ item.discount|floatformat:2 }}</td>
             <td>{{ exclude_price|floatformat:2 }}</td>
+            <td>{{ item.final_price|floatformat:2 }}</td>
             <td>{{ item.product.tax }}</td>
             <td>{{ item.tax_amount|floatformat:2 }}</td>
-            <td>{{ item.final_price|floatformat:2 }}</td>
-            <td>{{ item.discount|floatformat:2 }}</td>
-            <td>{{ item.product.selling_price|floatformat:2 }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.total|floatformat:2 }}</td>
           </tr>
@@ -142,7 +142,7 @@
           <td style="width: 50%; vertical-align: top;">
             <table class="table table-bordered mb-0" style="font-size: 12px;">
               <tr><td><strong>Discounted Amount</strong></td><td class="text-end"><strong>{{ discounted_amount|floatformat:2 }}</strong></td></tr>
-              <tr><td><strong>Net Amount</strong></td><td class="text-end"><strong>{{ totalamount|floatformat:2 }}</strong></td></tr>
+              <!-- <tr><td><strong>Net Amount</strong></td><td class="text-end"><strong>{{ totalamount|floatformat:2 }}</strong></td></tr> -->
               <tr><td><strong>Net Amount Before Tax</strong></td><td class="text-end"><strong>{{ net_amount_before_tax|floatformat:2 }}</strong></td></tr>
               <tr><td><strong>Total Tax Amount</strong></td><td class="text-end"><strong>{{ total_tax_amount|floatformat:2 }}</strong></td></tr>
               <tr><td><strong>Shipping Charge</strong></td><td class="text-end"><strong>{{ order.shipping_charge|floatformat:2 }}</strong></td></tr>
@@ -151,9 +151,9 @@
           </td>
         </tr>
       </table>
-      <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0; background-color: #f9f9f9; border-radius: 5px;">
+      <!-- <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0; background-color: #f9f9f9; border-radius: 5px;">
         <p style="margin: 0;"><strong>Note:<span style="color: red;"> {{ order.note }}</span></strong></p>
-      </div>
+      </div> -->
 
 
       <!-- Footer -->
