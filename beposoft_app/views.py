@@ -4181,15 +4181,16 @@ def GenerateInvoice(request, pk):
     for item in items:
         tax_rate = item.product.tax or 0.0
         quantity = item.quantity or 0
-        selling_price = item.product.selling_price or 0.0
+        selling_price = item.rate or 0.0
         discount = item.discount or 0.0
+        rate = item.rate or 0.0
     
         #exclude price
         total_price = max(selling_price - discount, 0)
         exclude_price = total_price / (1 + (tax_rate/ 100))
         tax_amount = total_price - exclude_price
 
-        final_price = selling_price - discount
+        final_price = rate - discount
         total = final_price * quantity
         discount_total = discount * quantity
 
