@@ -212,6 +212,10 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
         model = Customers
         fields = ['id','name']
 
+class CustomerEditSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customers
+        fields = "__all__"
 
 
 class SingleProductSerializer(serializers.ModelSerializer):
@@ -278,6 +282,7 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "color":variant.color if variant.color else None,
                         "size": variant.size if variant.size else None,
                         "selling_price": variant.selling_price , # Selling price field
+                        "retail_price": variant.retail_price,  
                         "created_user":variant.created_user.name,
                         "approval_status":variant.approval_status
                         
