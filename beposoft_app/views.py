@@ -57,7 +57,39 @@ class UserRegistrationAPIView(APIView):
                 "status": "error",
                 "message": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            
+class TokenLoginAPIView(APIView):
+    def post(self, request, token):
+        try:
+            # Decode the JWT token
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+
+            user_id = payload.get('id')
+            user = User.objects.filter(id=user_id).first()
+
+            if not user:
+                return Response({"status": "error", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Optional: you can authenticate session, return user data, etc.
+            return Response({
+                "status": "success",
+                "message": "Token is valid",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "name": user.name,
+                    "department": user.department_id.name if user.department_id else None,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except jwt.ExpiredSignatureError:
+            return Response({"status": "error", "message": "Token has expired"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        except jwt.InvalidTokenError:
+            return Response({"status": "error", "message": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 
 class UserLoginAPIView(APIView):
     def post(self, request):
@@ -361,7 +393,7 @@ class StaffOrders(BaseTokenView):
                 "message": "An error occurred while fetching orders",
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            
 
 class UserDataUpdate(BaseTokenView):
     def get_user(self, pk):
@@ -477,21 +509,15 @@ class CustomerUpdateView(BaseTokenView):
 
     def put(self, request, pk):
         try:
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
+            customer = Customers.objects.get(pk=pk)
+        except Customers.DoesNotExist:
+            return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            customer = self.get_customer(pk)
-            serializer = CustomerSerilizers(customer, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response({"data": serializer.data, "message": "Customer updated successfully"}, status=status.HTTP_200_OK)
-            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-        
-        except Exception as e:
-            return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-
+        serializer = CustomerEditSerializer(customer, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class FamilyCreatView(BaseTokenView):
     def post(self, request):

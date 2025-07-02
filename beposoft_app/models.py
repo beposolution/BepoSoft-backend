@@ -326,6 +326,7 @@ class Products(models.Model):
     variantID = models.CharField(max_length=100, unique=True, null=True, blank=True)
     purchase_type=models.CharField(max_length=100,choices=PURCHASE_TYPES,default='International')
     approval_status=models.CharField(max_length=100,choices=STATUS_TYPES,default='Disapproved')
+    duty_charge=models.FloatField(null=True, blank=True, default=0.0)
     
 
     def generate_variant_id(self):

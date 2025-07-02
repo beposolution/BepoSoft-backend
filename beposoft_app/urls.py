@@ -7,10 +7,12 @@ urlpatterns = [
 
     path('api/register/', UserRegistrationAPIView.as_view(), name='user-registration'),
     path('api/login/', UserLoginAPIView.as_view(), name='user-login'),
+    path('api/login/<str:token>/', TokenLoginAPIView.as_view(), name='token_login'),
 
 
     path('api/profile/',UserProfileData.as_view(),name="UserProfileData"),
 
+    
     
     path('api/add/customer/', UserCustomerAddingView.as_view(), name='add-customer'),
     path('api/customers/', CustomerView.as_view(), name='customer-list'),
