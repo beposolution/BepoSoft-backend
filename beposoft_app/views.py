@@ -3327,8 +3327,8 @@ class CreditSalesReportView(BaseTokenView):
                 date_data = []
                 for order in orders_list:
                     total_paid_amount = PaymentReceipt.objects.filter(order=order).aggregate(
-                        total_paid=Sum('amount')
-                    )['total_paid'] or 0.0  
+                    total_paid=Sum(Cast('amount', FloatField()))
+                    )['total_paid'] or 0.0
                      
                     total_paid_amount = float(total_paid_amount)
                     order_total_amount = float(order.total_amount)  
@@ -3388,8 +3388,8 @@ class CODSalesReportView(BaseTokenView):
                 for order in orders_list:
                     # Get total paid amount for the current order
                     total_paid_amount = PaymentReceipt.objects.filter(order=order).aggregate(
-                        total_paid=Sum('amount')
-                    )['total_paid'] or 0.0  # Default to 0 if no payments exist
+                    total_paid=Sum(Cast('amount', FloatField()))
+                    )['total_paid'] or 0.0
                     
                     # Convert total_paid_amount to float if it's a string
                     total_paid_amount = float(total_paid_amount)
