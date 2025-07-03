@@ -793,6 +793,7 @@ class Warehousedata(models.Model):
     breadth=models.CharField(max_length=30)
     height=models.CharField(max_length=30,null=True)
     image=models.ImageField(upload_to='images/',null=True,blank=True)
+    image_before=models.ImageField(upload_to='images/',null=True,blank=True)
     packed_by=models.ForeignKey(User,on_delete=models.CASCADE)
     verified_by=models.ForeignKey(User,on_delete=models.CASCADE,null=True,related_name='verified_user')
     checked_by=models.ForeignKey(User,on_delete=models.CASCADE,null=True,related_name='checked_user')
