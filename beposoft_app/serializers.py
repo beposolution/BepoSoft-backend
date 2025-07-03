@@ -635,7 +635,7 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
     class Meta:
         model = Warehousedata
         fields = [
-            'id', 'box', 'weight', 'length', 'breadth', 'height', 'image',
+            'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before',
             'parcel_service', 'tracking_id', 'shipping_charge', 'status',
             'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
         ]

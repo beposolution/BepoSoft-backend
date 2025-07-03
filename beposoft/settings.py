@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ['127.0.0.1','http://65.1.147.199', 'localhost','*',"https://bep
 
 
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.68.60:5173",
+    "http://192.168.68.52:5173",
     "http://localhost:5173",
     "http://65.1.147.199",
     "https://beposoftnew-azure.vercel.app",
@@ -63,8 +63,7 @@ APPEND_SLASH = False
 
 SECURE_COOKIE = True
 
-JWT_EXPIRATION_MINUTES = 1440 
-
+JWT_EXPIRATION_MINUTES = 90 * 24 * 60 # 90 days time for token expiration
 # Application definition
 
 INSTALLED_APPS = [
