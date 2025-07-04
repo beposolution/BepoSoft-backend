@@ -86,6 +86,10 @@ urlpatterns = [
     path('api/orders/', OrderListView.as_view(), name='orders'),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
     
+    # locking and unlocking the delivery note
+    path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),
+    path("api/orders/unlock/<int:order_id>/", UnlockOrderView.as_view(), name="unlock_order"),
+    
     path('api/order/<int:order_id>/items/', CustomerOrderItems.as_view(), name='order-items'),
     # path('api/order/status/update/<int:pk>/', CustomerOrderStatusUpdate.as_view(), name='status-update-order'),
     path('api/shipping/<int:pk>/order/',ShippingManagementView.as_view(),name = "shipping-management"),
