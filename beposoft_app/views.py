@@ -1483,6 +1483,9 @@ class OrderListView(BaseTokenView):
                 family = getattr(order, "family", None)
                 results[idx]["family_id"] = family.id if family else None
                 results[idx]["family_name"] = family.name if family else None
+                
+                results[idx]["locked_by"] = order.locked_by.username if order.locked_by else None
+                results[idx]["locked_at"] = order.locked_at.isoformat() if order.locked_at else None
 
             response_data = {
                 "invoice_created_count": invoice_counts["invoice_created_count"],
@@ -1498,6 +1501,54 @@ class OrderListView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class LockOrderView(BaseTokenView):
+    def post(self, request, order_id):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            order = Order.objects.get(id=order_id)
+
+            if order.locked_by and order.locked_by != user:
+                return Response({"message": "Order already in use"}, status=423)  # 423 Locked
+
+            order.locked_by = user
+            order.locked_at = timezone.now()
+            order.save()
+
+            return Response({"message": "Order locked"}, status=200)
+
+        except Order.DoesNotExist:
+            return Response({"message": "Order not found"}, status=404)
+        except Exception as e:
+            return Response({"message": str(e)}, status=500)
+   
+class UnlockOrderView(BaseTokenView):
+    def post(self, request, order_id):
+        try:
+
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+
+            order = Order.objects.get(id=order_id)
+
+            if order.locked_by == authUser:
+                order.locked_by = None
+                order.locked_at = None
+                order.save()
+                return Response({"status": "unlocked"}, status=status.HTTP_200_OK)
+
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+               
 class OrderUpdateView(BaseTokenView):
     def put(self, request, pk):
         try:
@@ -2836,6 +2887,7 @@ class WarehouseListViewbyDate(BaseTokenView):
                 family = warehouse.get("family", "Bepocart")  # Default to Bepocart if no family found
                 invoice_id = warehouse.get("order")
                 invoice = warehouse.get("invoice") or "No Invoice"
+                cod_amount = warehouse.get("cod_amount")
 
                 # Initialize family group if not exists
                 if family not in grouped_families:
@@ -2855,6 +2907,7 @@ class WarehouseListViewbyDate(BaseTokenView):
                     grouped_families[family]["orders"].append({
                         "invoice_id": invoice_id,
                         "invoice": invoice,
+                        "cod_amount":cod_amount,
                         "warehouses": [warehouse]
                     })
 

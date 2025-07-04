@@ -449,7 +449,8 @@ class Order(models.Model):
     shipping_mode = models.CharField(max_length=100, null=True,blank=True)
     shipping_charge = models.IntegerField(default=0, null=True)
 
-    
+    locked_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='locked_orders')
+    locked_at = models.DateTimeField(null=True, blank=True)
     cod_amount = models.FloatField(default=0.0, null=True, blank=True)  # New field for COD amount
 
     payment_status = models.CharField(max_length=20, choices=[

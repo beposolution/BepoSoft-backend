@@ -624,6 +624,7 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
     packed_by=serializers.CharField(source="packed_by.name")
     checked_by = serializers.SerializerMethodField()
     verified_by = serializers.SerializerMethodField()
+    cod_amount=serializers.IntegerField(source="order.cod_amount")
 
     def get_checked_by(self, obj):
         return obj.checked_by.name if obj.checked_by is not None else None
@@ -635,7 +636,7 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
     class Meta:
         model = Warehousedata
         fields = [
-            'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before',
+            'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before','cod_amount',
             'parcel_service', 'tracking_id', 'shipping_charge', 'status',
             'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
         ]
@@ -719,6 +720,8 @@ class BepocartSerializersView(serializers.ModelSerializer):
     image = serializers.ImageField(source="product.image")
     selling_price = serializers.FloatField(source="product.selling_price")
     retail_price = serializers.FloatField(source="product.retail_price")
+    stock = serializers.IntegerField(source="product.stock")
+    locked_stock = serializers.IntegerField(source="product.locked_stock")
     exclude_price = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
 
@@ -726,7 +729,7 @@ class BepocartSerializersView(serializers.ModelSerializer):
     class Meta:
         model = BeposoftCart
         fields = [
-            "id", "product", "quantity", "discount", "note", "created_at",
+            "id", "product", "quantity", "discount", "note", "created_at","locked_stock","stock",
             "name", "tax", "exclude_price", "image", "selling_price", "retail_price", "price"
         ]
     def get_price(self, obj):
