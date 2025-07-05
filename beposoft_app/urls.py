@@ -85,6 +85,7 @@ urlpatterns = [
     path('api/order/create/', CreateOrder.as_view(), name='create-order'),
     path('api/orders/', OrderListView.as_view(), name='orders'),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
+    path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),
     
     # locking and unlocking the delivery note
     path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),

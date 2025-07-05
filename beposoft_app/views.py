@@ -1401,6 +1401,7 @@ class CreateOrder(BaseTokenView):
             if not cart_items.exists():
                 return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
+            
             serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -1457,6 +1458,22 @@ class CreateOrder(BaseTokenView):
             traceback.print_exc()
             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class OrderItemCreateView(APIView):
+    def post(self, request):
+        serializer = OrderItemUpdateSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            try:
+                with transaction.atomic():
+                    serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except ValueError as ve:
+                return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({'error': 'An unexpected error occurred.', 'details': str(e)},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 class OrderListView(BaseTokenView):
     def get(self, request):
         try:
@@ -1472,7 +1489,7 @@ class OrderListView(BaseTokenView):
             # Optimize Count Queries
             invoice_counts = orders.aggregate(
                 invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
-                invoice_approved_count=Count("id", filter=Q(status="Invoice Approved"))
+                invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
             )
 
             serializer = OrderdetailsSerializer(orders, many=True)
