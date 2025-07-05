@@ -452,10 +452,10 @@ class ShippingSerializers(serializers.ModelSerializer):
     
     
 class ShippingAddressView(serializers.ModelSerializer):
-    # state = serializers.CharField(source='state.name', read_only=True)
+    state = serializers.CharField(source='state.name', read_only=True)
     class Meta:
         model = Shipping
-        fields = ["id","name","address","zipcode","email","city","phone"]
+        fields = ["id","name","address","zipcode","email","city","phone","state"]
 
 
 
@@ -478,7 +478,11 @@ class ExistedOrderAddProductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = "__all__"
-    
+        
+class OrderItemUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = "__all__"
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
