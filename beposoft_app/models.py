@@ -266,7 +266,7 @@ class Shipping(models.Model):
     state = models.ForeignKey(State,on_delete=models.CASCADE,null=True)
     country = models.CharField(max_length=100)
     phone = models.CharField(max_length=100)
-    email = models.CharField(max_length=100)
+    email = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta :
         db_table = "Shipping_Address"
