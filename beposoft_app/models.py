@@ -440,7 +440,7 @@ class Order(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="companies", null=True)
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="customer")
     invoice = models.CharField(max_length=20, unique=True, blank=True)
-    billing_address = models.ForeignKey(Shipping, on_delete=models.CASCADE, related_name="billing_address", null=True, blank=True)
+    billing_address = models.ForeignKey(Shipping, on_delete=models.CASCADE, related_name="billing_address", default="")
     order_date = models.CharField(max_length=100)
     family = models.ForeignKey(Family, on_delete=models.CASCADE)
     state = models.ForeignKey(State, on_delete=models.CASCADE)
@@ -483,7 +483,7 @@ class Order(models.Model):
 
     total_amount = models.FloatField()
     bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="bank")
-    note = models.TextField(null=True, blank=True)
+    note = models.TextField(default="")
 
     payment_method = models.CharField(max_length=50, choices=[
         ('Credit Card', 'Credit Card'),
