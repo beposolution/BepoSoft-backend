@@ -204,7 +204,6 @@ class Customers(models.Model):
         max_length=15,
         null=True,
         blank=True,
-        unique=True,
         validators=[validate_gst],  
     )
     name = models.CharField(max_length=100)
