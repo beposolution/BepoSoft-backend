@@ -4322,30 +4322,41 @@ def GenerateInvoice(request, pk):
 
 # def Invo(request):
 #     return render (request,"invo.html")
+from collections import defaultdict
+
 def Deliverynote(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     warehouse_items = OrderItem.objects.filter(order=order)
-
-    # Fetching associated company details
     company = order.company  
+    warehouse = Warehousedata.objects.filter(order=order).first()
 
-    # Fetching warehouse details
-    warehouse = Warehousedata.objects.filter(order=order).first()  # Assuming one warehouse per order
-
-    # Fetching product details for each warehouse item
+    # Attach full product info to each item
     for item in warehouse_items:
-        item.product = get_object_or_404(Products, id=item.product_id)  # Fetch product details
+        item.product = get_object_or_404(Products, id=item.product_id)
+
+    # Calculate total quantity per unit
+    quantity_totals = defaultdict(int)
+    total_quantity_all_units = 0
+
+    for item in warehouse_items:
+        try:
+            parts = str(item.quantity).split()
+            number = int(parts[0])  # extract number part
+            total_quantity_all_units += number
+        except Exception as e:
+            print("Skipping item due to error:", e)
+
 
     context = {
         "order": order,
         "warehouse_items": warehouse_items,
         "company": company,
         "warehouse": warehouse,
-        
+        "quantity_totals": dict(quantity_totals),
+        "total_quantity_all_units": total_quantity_all_units,
     }
-    
-    return render(request, "deliverynote.html", context)
 
+    return render(request, "deliverynote.html", context)
 
 
 def generate_shipping_label(request, order_id):

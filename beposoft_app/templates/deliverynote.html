@@ -131,7 +131,12 @@
             </tbody>
         </table>
         
-        <p class="text-end fw-bold">Total Products: {{ warehouse_items|length }}</p>
+        <!-- <p class="text-end fw-bold">Total Products: {{ warehouse_items|length }}</p>
+        {% for unit, total in quantity_totals.items %}
+            <p class="text-end fw-bold">Total Quantity: {{ total }} {{ unit }}</p>
+        {% endfor %} -->
+
+        <p class="text-end fw-bold">Total Quantity (All Combined): {{ total_quantity_all_units }}</p>
         
         <div class="row my-3">
             <div class="col-md-4 col-12">
