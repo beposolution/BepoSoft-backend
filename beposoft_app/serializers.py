@@ -126,42 +126,7 @@ class CustomerModelSerializer(serializers.ModelSerializer):
             'address', 'zip_code', 'city', 'state', 'comment', 'created_at'
         ]
 
-    def validate(self, data):
-        if 'gst' in data and data['gst']:  
-            if Customers.objects.filter(gst=data['gst']).exists():
-                raise serializers.ValidationError({'gst': 'GST number is already registered.'})
-        
-        if Customers.objects.filter(email=data.get('email')).exists():
-            raise serializers.ValidationError({'email': 'Email is already registered.'})
-        
-        if Customers.objects.filter(phone=data.get('phone')).exists():
-            raise serializers.ValidationError({'phone': 'Phone number is already registered.'})
-
-        return data
-
-    # If you want to handle uniqueness checks during updates, override update() method
-    def update(self, instance, validated_data):
-        gst = validated_data.get('gst', instance.gst)
-        email = validated_data.get('email', instance.email)
-        phone = validated_data.get('phone', instance.phone)
-
-        # Start a transaction to ensure atomicity
-        with transaction.atomic():
-            # Check if GST is already registered excluding current instance
-            if Customers.objects.filter(gst=gst).exclude(pk=instance.pk).exists():
-                raise serializers.ValidationError({'gst': 'GST number is already registered.'})
-
-            # Check if email is already registered excluding current instance
-            if Customers.objects.filter(email=email).exclude(pk=instance.pk).exists():
-                raise serializers.ValidationError({'email': 'Email is already registered.'})
-
-            # Check if phone is already registered excluding current instance
-            if Customers.objects.filter(phone=phone).exclude(pk=instance.pk).exists():
-                raise serializers.ValidationError({'phone': 'Phone number is already registered.'})
-
-            # Perform the update operation
-            return super().update(instance, validated_data)
-
+   
 
 class CustomerModelSerializerView(serializers.ModelSerializer):
     state = serializers.CharField(source='state.name', read_only=True)
