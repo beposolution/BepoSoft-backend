@@ -463,7 +463,20 @@ class UserCustomerAddingView(BaseTokenView):
             
             serializer = CustomerModelSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                customer = serializer.save()
+                
+                Shipping.objects.create(
+                    created_user=authUser,
+                    customer=customer,
+                    name=customer.name,
+                    address=customer.address or "",
+                    zipcode=customer.zip_code or "",
+                    city=customer.city or "",
+                    state=customer.state,
+                    country="India",  # Default, or get from request if needed
+                    phone=customer.phone,
+                    email=customer.email or "",
+                )
                 return Response({"data": serializer.data, "message": "Customer added successfully"}, status=status.HTTP_201_CREATED)
             return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         
