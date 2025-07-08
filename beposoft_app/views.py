@@ -1497,7 +1497,7 @@ class OrderListView(BaseTokenView):
             # Optimize Query and Order by order_date descending
             orders = Order.objects.select_related(
                 "manage_staff", "customer", "state", "family"
-            ).order_by("-order_date")
+            ).order_by("-id")
 
             # Optimize Count Queries
             invoice_counts = orders.aggregate(
