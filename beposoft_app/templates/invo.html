@@ -101,7 +101,7 @@
         <tbody>
           {% for item in items %}
           <tr>
-            <td>{{ item.product.name }}</td>
+            <td style="text-align: left;">{{ item.product.name }}</td>
             <td>{{ item.product.hsn_code }}</td>
             <td>{{ item.rate|floatformat:2 }}</td>
             <td>{{ item.discount|floatformat:2 }}</td>
