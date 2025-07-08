@@ -1474,8 +1474,27 @@ class CreateOrder(BaseTokenView):
 class OrderItemCreateView(APIView):
     def post(self, request):
         serializer = OrderItemUpdateSerializer(data=request.data)
-        
+
         if serializer.is_valid():
+            order_id = serializer.validated_data.get('order').id
+            product_id = serializer.validated_data.get('product').id
+            size_id = serializer.validated_data.get('size').id if serializer.validated_data.get('size') else None
+            variant_id = serializer.validated_data.get('variant').id if serializer.validated_data.get('variant') else None
+
+            # Check if the product is already added to the order
+            existing_item = OrderItem.objects.filter(
+                order_id=order_id,
+                product_id=product_id,
+                size_id=size_id,
+                variant_id=variant_id
+            ).first()
+
+            if existing_item:
+                return Response(
+                    {"error": "Product is already added to the order."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             try:
                 with transaction.atomic():
                     serializer.save()
@@ -1483,8 +1502,11 @@ class OrderItemCreateView(APIView):
             except ValueError as ve:
                 return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                return Response({'error': 'An unexpected error occurred.', 'details': str(e)},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response(
+                    {'error': 'An unexpected error occurred.', 'details': str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class OrderListView(BaseTokenView):
