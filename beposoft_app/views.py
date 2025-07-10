@@ -4395,27 +4395,17 @@ def Deliverynote(request, order_id):
 
 
 def generate_shipping_label(request, order_id):
-    # Fetch the order
-    order = get_object_or_404(Order.objects.select_related('customer'), id=order_id)
+    order = get_object_or_404(Order.objects.select_related('customer', 'billing_address'), id=order_id)
 
-
-    # Check if cod_amount is present
     cod_amount = order.cod_amount if order.payment_status == 'COD' and order.cod_amount > 0 else None
-
-    # Fetch order items and related products efficiently
     order_items = OrderItem.objects.filter(order=order).select_related('product')
 
-    # Fetch the shipping details for the order's customer
-    # shipping_data = get_object_or_404(Shipping, customer=order.customer)
-    shipping_data = Shipping.objects.filter(customer=order.customer).first()
+    shipping_data = order.billing_address
     if not shipping_data:
         raise Http404("Shipping data not found.")
 
-
-    # Fetch warehouse data for the order (assuming one warehouse per order)
     warehouse = Warehousedata.objects.filter(order=order).first()
 
-    # Calculate Volume Weight (VW) if warehouse data exists
     volume_weight = None
     if warehouse and all([warehouse.length, warehouse.breadth, warehouse.height]):
         try:
@@ -4432,12 +4422,11 @@ def generate_shipping_label(request, order_id):
         "shipping_data": shipping_data,
         "warehouse": warehouse,
         "volume_weight": round(volume_weight, 2) if isinstance(volume_weight, (int, float)) else volume_weight,
-        "speed": "0000053866",  # Can be dynamically generated if needed
-        "cod_amount": cod_amount,  # Ensure this is included in context
+        "speed": "0000053866",
+        "cod_amount": cod_amount,
     }
 
     return render(request, "address.html", context)
-
 
 
 
