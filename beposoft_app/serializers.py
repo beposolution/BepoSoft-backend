@@ -605,9 +605,9 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
 
 
 class  WarehousedataSerializer(serializers.ModelSerializer):
-    customer = serializers.CharField(source="order.customer.name")
-    phone=serializers.CharField(source="order.customer.phone")
-    zip_code=serializers.CharField(source="order.customer.zip_code")
+    customer = serializers.CharField(source="order.billing_address.name")
+    phone=serializers.CharField(source="order.billing_address.phone")
+    zip_code=serializers.CharField(source="order.billing_address.zip_code")
     invoice = serializers.CharField(source="order.invoice")
     family = serializers.CharField(source="order.family.name")
     packed_by=serializers.CharField(source="packed_by.name")
