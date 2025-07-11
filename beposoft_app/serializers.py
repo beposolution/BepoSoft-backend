@@ -933,6 +933,16 @@ class WarehouseDetailSerializer(serializers.ModelSerializer):
         fields = "__all__"  
 
 
+class WarehouseDataSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Warehousedata
+        fields = [
+            "box", "tracking_id"
+        ]
+
+
+
 class OrderdetailsSerializer(serializers.ModelSerializer):
     manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
     staffID = serializers.CharField(source="manage_staff.pk", read_only=True)
@@ -940,19 +950,15 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
     billing_address = ShippingAddressView(read_only=True)
     customer = CustomerOrderSerializer(read_only=True)
     customerID = serializers.IntegerField(source="customer.pk", read_only=True)
-    # items = OrderItemModelSerializer(many=True, read_only=True)
-    # recived_payment = PaymentRecieptsViewSerializers(many=True, read_only=True)
     state = serializers.CharField(source="state.name", read_only=True)
+
+    warehouse_data = WarehouseDataSerializer(source="warehouse", many=True, read_only=True)
 
     class Meta:
         model = Order
         fields = "__all__"
-
-
-
-
-
-          
+        extra_fields = ['warehouse_data'] 
+  
 
 
 class OrderModelSerilizer(serializers.ModelSerializer):
