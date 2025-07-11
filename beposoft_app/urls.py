@@ -102,6 +102,7 @@ urlpatterns = [
     path('api/cart/product/', Cart.as_view(), name='add-product-cart'),
     path('api/cart/products/',StaffcartStoredProductsView.as_view()),
     path('api/cart/update/<int:pk>/',StaffDeleteCartProduct.as_view()),
+    path('api/cart/delete/all/',StaffDeleteCartProductAll.as_view()),
     path('api/cart/price/',UpdateCartPricesView.as_view()),
     
     path('api/add/bank/',CreateBankAccountView.as_view()),
