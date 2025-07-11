@@ -497,7 +497,20 @@ class OrderSerializer(serializers.ModelSerializer):
 
         return data
   
-     
+
+class OrderMonthSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source='customer.name')
+    company_name = serializers.CharField(source='company.name', default=None)
+    warehouse_name = serializers.CharField(source='warehouses.name', default=None)
+    family_name = serializers.CharField(source='family.name', default=None)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'invoice', 'order_date', 'status', 'total_amount', 'payment_status',
+            'payment_method', 'cod_amount', 'customer_name', 'company_name', 'warehouse_name', 'family_name'
+        ]
+        
         
 class BankSerializer(serializers.ModelSerializer):
     # created_user = serializers.CharField(source="created_user.name")
