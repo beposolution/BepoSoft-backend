@@ -2359,24 +2359,33 @@ class CreateReceiptAgainstInvoice(BaseTokenView):
 
 class AllReceiptsView(APIView):
     def get(self, request):
-        advance_receipts = AdvanceReceipt.objects.all()
-        bank_receipts = BankReceipt.objects.all()
-        payment_receipts = PaymentReceipt.objects.all()
+        # Fetch all and annotate with type
+        advance_receipts = [
+            {**receipt, "receipt_type": "advance"} 
+            for receipt in AdvanceReceiptSerializer(AdvanceReceipt.objects.all(), many=True).data
+        ]
+        bank_receipts = [
+            {**receipt, "receipt_type": "bank"} 
+            for receipt in BankReceiptSerializer(BankReceipt.objects.all(), many=True).data
+        ]
+        payment_receipts = [
+            {**receipt, "receipt_type": "payment"} 
+            for receipt in PaymentRecieptSerializers(PaymentReceipt.objects.all(), many=True).data
+        ]
 
-        advance_serializer = AdvanceReceiptSerializer(advance_receipts, many=True)
-        bank_serializer = BankReceiptSerializer(bank_receipts, many=True)
-        payment_serializer = PaymentRecieptSerializers(payment_receipts, many=True)
+        # Combine and sort by ID descending
+        all_receipts = advance_receipts + bank_receipts + payment_receipts
+        sorted_receipts = sorted(all_receipts, key=lambda x: x["id"], reverse=True)
 
         return Response({
-            "advance_receipts": advance_serializer.data,
-            "bank_receipts": bank_serializer.data,
-            "payment_receipts": payment_serializer.data,
+            "receipts": sorted_receipts
         }, status=status.HTTP_200_OK)
+
         
 class AdvanceReceiptListView(APIView):
     def get(self, request):
         try:
-            receipts = AdvanceReceipt.objects.all()
+            receipts = AdvanceReceipt.objects.all().order_by('-id')
             serializer = AdvanceReceiptSerializer(receipts, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -2385,7 +2394,7 @@ class AdvanceReceiptListView(APIView):
 class BankReceiptListView(APIView):
     def get(self, request):
         try:
-            receipts = BankReceipt.objects.all()
+            receipts = BankReceipt.objects.all().order_by('-id')
             serializer = BankReceiptSerializer(receipts, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -2394,7 +2403,7 @@ class BankReceiptListView(APIView):
 class OrderReceiptListView(APIView):
     def get(self, request):
         try:
-            receipts = PaymentReceipt.objects.all()
+            receipts = PaymentReceipt.objects.all().order_by('-id')
             serializer = PaymentRecieptSerializers(receipts, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
