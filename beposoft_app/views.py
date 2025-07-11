@@ -2032,8 +2032,24 @@ class StaffDeleteCartProduct(BaseTokenView):
         except Exception as e:
             # Handle exceptions and return error response
             return Response({"status": "error", "message": "An error occurred while deleting the cart item.", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaffDeleteCartProductAll(BaseTokenView):
+
+    def delete(self, request):
+        try:
+            authUser, error_response = BaseTokenView().get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # To delete only current user's cart items
+            BeposoftCart.objects.filter(user=authUser).delete()
+
+            return Response({"status": "success", "message": "All cart items deleted."}, status=status.HTTP_200_OK)
         
-    
+        except Exception as e:
+            return Response({"status": "error", "message": "Failed to delete all cart items.", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class StaffcartStoredProductsView(BaseTokenView):
     def get(self,request):
