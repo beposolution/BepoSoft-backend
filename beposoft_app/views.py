@@ -2998,6 +2998,30 @@ class WarehouseListViewbyDate(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class OrderListByMonthView(APIView):
+    def get(self, request, year, month):
+        try:
+            # Format month to 2 digits (e.g., 7 → 07)
+            month_str = str(month).zfill(2)
+            year_str = str(year)
+
+            # Filter based on order_date string starting with "YYYY-MM"
+            orders = Order.objects.filter(order_date__startswith=f"{year_str}-{month_str}")
+
+            if not orders.exists():
+                return Response(
+                    {"status": "error", "message": "No orders found for this month"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = OrderMonthSerializer(orders, many=True)
+            return Response({"status": "success", "results": serializer.data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class WarehouseUpdateCheckedByView(BaseTokenView):
     def put(self, request, shipped_date):
         try:

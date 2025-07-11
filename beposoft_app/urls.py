@@ -140,8 +140,9 @@ urlpatterns = [
     path('api/warehouse/get/',WarehouseListView.as_view()),
     path('api/warehousesdataget/<str:shipped_date>/', WarehouseListViewbyDate.as_view(), name='warehouse-list'),
     path('warehouse/update-checked-by/<str:shipped_date>/', WarehouseUpdateCheckedByView.as_view(), name='update-checked-by'),
-    
-    
+    path('api/orders/monthly/<int:year>/<int:month>/', OrderListByMonthView.as_view(), name='orders-by-month'),
+
+
     path('api/grv/data/',GRVaddView.as_view()),
     path('api/getgrv/<int:pk>',GRVGetViewById.as_view()),
     path('api/grv/update/<int:pk>/',GRVUpdateView.as_view()),
