@@ -1644,7 +1644,7 @@ class CustomerOrderItems(BaseTokenView):
                 return Response({"status": "error", "message": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
             
             # Use prefetch_related to fetch related order items in a single query
-            orderItems = OrderItem.objects.filter(order=order_id).select_related('product').order_by('id')
+            orderItems = OrderItem.objects.filter(order=order_id).select_related('product')
             if not orderItems.exists():
                 return Response({"status": "error", "message": "No order items found"}, status=status.HTTP_404_NOT_FOUND)
             
