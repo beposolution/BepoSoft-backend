@@ -500,15 +500,20 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class OrderMonthSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name')
+    customer_id = serializers.CharField(source='customer.id', default=None)
     company_name = serializers.CharField(source='company.name', default=None)
     warehouse_name = serializers.CharField(source='warehouses.name', default=None)
     family_name = serializers.CharField(source='family.name', default=None)
+    family_id = serializers.CharField(source='family.id', default=None)
+    staff_name = serializers.CharField(source='manage_staff.name', default=None)
+    staff_id = serializers.CharField(source='manage_staff.id', default=None)
 
     class Meta:
         model = Order
         fields = [
             'id', 'invoice', 'order_date', 'status', 'total_amount', 'payment_status',
-            'payment_method', 'cod_amount', 'customer_name', 'company_name', 'warehouse_name', 'family_name'
+            'payment_method', 'cod_amount', 'customer_name', 'company_name', 'warehouse_name', 
+            'family_name','staff_name','customer_id','family_id','staff_id'
         ]
         
         
