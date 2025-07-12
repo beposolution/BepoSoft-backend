@@ -11,6 +11,10 @@ class ProductSerilizers(serializers.ModelSerializer):
         fields = "__all__"
         
 
+class LoanEMISerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Loan
+        fields = '__all__'
 
 
 class LoanSerializer(serializers.ModelSerializer):

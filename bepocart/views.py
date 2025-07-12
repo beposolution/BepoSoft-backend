@@ -107,6 +107,29 @@ class EmiView(BaseTokenView):
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class LoanDetailView(APIView):
+    def get_object(self, pk):
+        return get_object_or_404(Loan, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            loan = self.get_object(pk)
+            serializer = LoanEMISerializer(loan)
+            return Response({"message": "Loan fetched successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            loan = self.get_object(pk)
+            serializer = LoanEMISerializer(loan, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Loan updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"status": "error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class LoanEMIView(APIView):
     """Retrieve EMI details for a specific loan by ID"""
