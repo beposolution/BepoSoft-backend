@@ -95,7 +95,7 @@ class EmiView(BaseTokenView):
                 return error_response
 
             # Fetch loans of the authenticated user
-            loans = Loan.objects.filter(user=authUser)
+            loans = Loan.objects.all()
             serializer = LoanSerializer(loans, many=True)
 
             return Response({
