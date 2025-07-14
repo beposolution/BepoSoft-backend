@@ -3007,7 +3007,7 @@ class OrderListByMonthView(APIView):
             year_str = str(year)
 
             # Filter based on order_date string starting with "YYYY-MM"
-            orders = Order.objects.filter(order_date__startswith=f"{year_str}-{month_str}").exclude(family__name="bepocart")
+            orders = Order.objects.filter(order_date__startswith=f"{year_str}-{month_str}").exclude(family__name="bepocart").order_by('-id')
 
             if not orders.exists():
                 return Response(
