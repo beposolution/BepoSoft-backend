@@ -3632,8 +3632,7 @@ class ProductSalesReportView(APIView):
                         "date": date,
                         "product": product,
                         "stock": product_stock.get(product, 0),  # Attach stock from Products model
-                        "data": data,
-                        "family": family
+                        "data": data
                     })
 
             return Response(formatted_response, status=status.HTTP_200_OK)
