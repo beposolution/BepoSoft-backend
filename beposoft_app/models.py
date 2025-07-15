@@ -551,7 +551,17 @@ class Order(models.Model):
     def __str__(self):
         return f"Order {self.invoice} by {self.customer}"
 
-   
+
+class OrderImage(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_images')
+    image = models.ImageField(upload_to='order_images/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Image for Order {self.order.invoice} - {self.id}"
+
+    class Meta:
+        db_table = "order_images"
     
 
 class OrderItem(models.Model):

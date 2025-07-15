@@ -86,6 +86,9 @@ urlpatterns = [
     path('api/orders/', OrderListView.as_view(), name='orders'),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
     path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),
+    path('api/order/images/upload/', OrderImageUploadView.as_view(), name='order-image-upload'),
+    path('api/order/images/<int:order_id>/', OrderImageView.as_view(), name='order-image'),
+    # path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
     
     # locking and unlocking the delivery note
     path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),
@@ -175,7 +178,7 @@ urlpatterns = [
     path('api/finance-report/',FinancereportAPIView.as_view()),
     path('api/receipts/get/',AllpaymentReceiptsView.as_view()),
     
-    
+
     
     
     path('api/parcal/service/',ParcalServiceView.as_view()),

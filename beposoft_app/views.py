@@ -395,6 +395,57 @@ class StaffOrders(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 
+class OrderImageUploadView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        order_id = request.data.get('order')
+        images = request.FILES.getlist('images')
+
+        if not order_id:
+            return Response({"status": "error", "message": "Order ID is required."}, status=400)
+        if not images:
+            return Response({"status": "error", "message": "No images uploaded."}, status=400)
+
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return Response({"status": "error", "message": "Order not found."}, status=404)
+
+        saved_images = []
+        for img in images:
+            instance = OrderImage(order=order, image=img)
+            instance.save()
+            saved_images.append(instance)
+
+        serializer = OrderImageSerializer(saved_images, many=True)
+        return Response({"message": "Images uploaded successfully", "data": serializer.data}, status=201)
+
+class OrderImageView(BaseTokenView):
+    def get(self, request, order_id):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return Response({"status": "error", "message": "Order not found."}, status=404)
+
+        images = OrderImage.objects.filter(order=order)
+        image_serializer = OrderImageSerializer(images, many=True)
+
+        return Response({
+            "order": order.id,
+            "invoice": order.invoice,
+            "images": image_serializer.data
+        }, status=200)
+
+
 class UserDataUpdate(BaseTokenView):
     def get_user(self, pk):
         return get_object_or_404(User, pk=pk)
