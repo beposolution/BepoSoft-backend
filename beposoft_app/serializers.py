@@ -629,6 +629,8 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source="order.invoice")
     family = serializers.CharField(source="order.family.name")
     packed_by=serializers.CharField(source="packed_by.name")
+    packed_by_id=serializers.CharField(source="packed_by.id")
+    parcel_service_id=serializers.CharField(source="parcel_service.id")
     checked_by = serializers.SerializerMethodField()
     verified_by = serializers.SerializerMethodField()
     cod_amount=serializers.IntegerField(source="order.cod_amount")
@@ -644,8 +646,9 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
         model = Warehousedata
         fields = [
             'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before','cod_amount',
-            'parcel_service', 'tracking_id', 'shipping_charge', 'status',
-            'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
+            'parcel_service', 'tracking_id', 'shipping_charge', 'status', 'packed_by_id', 'parcel_service_id',
+            'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone',
+            'zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
         ]
 
     def to_representation(self, instance):
