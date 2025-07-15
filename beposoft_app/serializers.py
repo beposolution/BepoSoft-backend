@@ -75,6 +75,12 @@ class UserUpdateSerilizers(serializers.ModelSerializer):
     family_name = serializers.CharField(source='family.name', read_only=True)
     supervisor_name=serializers.CharField(source='supervisor_id.name',read_only=True)
     department_name=serializers.CharField(source='department_id.name',read_only=True)
+    allocated_states_names = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='name',
+        source='allocated_states'
+    )
    
     class Meta:
         model = User
@@ -1079,6 +1085,12 @@ class StateBaseOrderSerializers(serializers.ModelSerializer):
             return first_waiting_order.order_date
         return None
     
+
+class OrderImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderImage
+        fields = ['id', 'order', 'image', 'uploaded_at']
+
 
 class WareHouseSerializer(serializers.ModelSerializer):
     invoice=serializers.CharField(source="order.invoice")
