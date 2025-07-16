@@ -568,12 +568,11 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Products, on_delete=models.CASCADE)
     size = models.ForeignKey(ProductAttributeVariant, on_delete=models.CASCADE,null=True)
-    
     variant = models.ForeignKey(VariantProducts, on_delete=models.CASCADE,null=True)
     description = models.CharField(max_length=100,null=True)
-    rate = models.IntegerField()  # without GST
+    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True)
     tax = models.PositiveIntegerField()  # tax percentage
-    discount = models.IntegerField(default=0, null=True)
     quantity = models.PositiveIntegerField()
 
     def __str__(self):
