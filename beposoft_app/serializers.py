@@ -598,24 +598,27 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
         elif obj.variant:
             return obj.variant.name
         return None
+        
     def get_price_discount(self, obj):
-        rate = obj.rate or 0
-        discount = obj.discount or 0
-        price_discount = max(rate - discount, 0)
+        rate = obj.rate or Decimal('0')
+        discount = obj.discount or Decimal('0')
+        price_discount = max(rate - discount, Decimal('0'))
 
         return round(price_discount, 2)
-    
-   
-        
-    def get_exclude_price(self, obj):
-        rate = obj.rate or 0
-        discount = obj.discount or 0
-        tax = obj.product.tax or 0
 
-        total_price = max(rate - discount, 0)
-        exclude_price = total_price / (1 + (tax / 100))
+        
+    from decimal import Decimal
+
+    def get_exclude_price(self, obj):
+        rate = obj.rate or Decimal('0')
+        discount = obj.discount or Decimal('0')
+        tax = obj.product.tax or 0  # tax is likely an integer
+
+        total_price = max(rate - discount, Decimal('0'))
+        exclude_price = total_price / (Decimal('1') + (Decimal(tax) / Decimal('100')))
 
         return round(exclude_price, 2)
+
     
     def get_actual_price(self, obj):
         # directly use exclude_price
