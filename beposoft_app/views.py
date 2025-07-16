@@ -1784,6 +1784,8 @@ logger = logging.getLogger(__name__)
 #             logger.error(f"Unexpected error: {e}", exc_info=True)
 #             return Response({"status": "error", "messaaage": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
         
 class ShippingManagementView(BaseTokenView):
     def put(self,request,pk):
@@ -1892,6 +1894,31 @@ class ProductAttributeView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+class ProductWiseReportView(BaseTokenView):
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            order_items = OrderItem.objects.select_related(
+                'product', 'order', 'order__manage_staff'
+            ).prefetch_related(
+                'order__manage_staff__allocated_states'
+            )
+
+            serializer = ProductWiseReportSerializer(order_items, many=True)
+            return Response({
+                "message": "Product-wise report fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while generating report",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 logger = logging.getLogger(__name__)
@@ -2998,7 +3025,7 @@ class WarehouseListViewbyDate(BaseTokenView):
                 return error_response
 
             # Filter data by shipped_date passed in the URL
-            warehouses = Warehousedata.objects.filter(shipped_date=shipped_date)
+            warehouses = Warehousedata.objects.filter(shipped_date=shipped_date).order_by('id')
 
             if not warehouses.exists():
                 return Response(
@@ -3038,13 +3065,10 @@ class WarehouseListViewbyDate(BaseTokenView):
                         "cod_amount":cod_amount,
                         "warehouses": [warehouse]
                     })
-
-
+                    
             # Convert dictionary to list format
             formatted_response = list(grouped_families.values())
-            return Response({"results": formatted_response}, status=status.HTTP_200_OK)
-
-           
+            return Response({"results": formatted_response}, status=status.HTTP_200_OK)   
 
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
