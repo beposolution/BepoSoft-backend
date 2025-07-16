@@ -89,6 +89,7 @@ urlpatterns = [
     path('api/order/images/upload/', OrderImageUploadView.as_view(), name='order-image-upload'),
     path('api/order/images/<int:order_id>/', OrderImageView.as_view(), name='order-image'),
     # path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
+    path('api/product-wise/report/', ProductWiseReportView.as_view(), name='product-wise-report'),
     
     # locking and unlocking the delivery note
     path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),
