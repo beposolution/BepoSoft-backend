@@ -985,7 +985,30 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
-  
+
+
+class ProductWiseReportSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source='product.id')
+    product_name = serializers.CharField(source='product.name')
+    order_id = serializers.IntegerField(source='order.id')
+    invoice = serializers.CharField(source='order.invoice')
+    staff_id = serializers.IntegerField(source='order.manage_staff.id')
+    staff_name = serializers.CharField(source='order.manage_staff.name')
+    allocated_states = serializers.SerializerMethodField()
+    order_date = serializers.CharField(source='order.order_date')
+    order_state = serializers.CharField(source='order.state.name')
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'product_id', 'product_name',
+            'order_id', 'invoice','order_state',
+            'staff_id', 'staff_name',
+            'allocated_states', 'order_date'
+        ]
+
+    def get_allocated_states(self, obj):
+        return [state.name for state in obj.order.manage_staff.allocated_states.all()]
 
 
 class OrderModelSerilizer(serializers.ModelSerializer):
