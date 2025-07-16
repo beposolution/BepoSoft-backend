@@ -4423,26 +4423,80 @@ class StaffBasedCustomers(BaseTokenView):
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# def GenerateInvoice(request, pk):
+#     order = Order.objects.filter(pk=pk).first()
+#     items = OrderItem.objects.filter(order=order)
+    
+#     total_amount = 0
+#     total_tax_amount = 0
+#     total_discount = 0
+#     net_amount_before_tax = 0
+#     total_quantity = 0
+    
+#     for item in items:
+#         tax_rate = item.product.tax or 0.0
+#         quantity = item.quantity or 0
+#         selling_price = item.rate or 0.0
+#         discount = item.discount or 0.0
+#         rate = item.rate or 0.0
+    
+#         #exclude price
+#         total_price = max(selling_price - discount, 0)
+#         exclude_price = total_price / (1 + (tax_rate/ 100))
+#         tax_amount = total_price - exclude_price
+
+#         final_price = rate - discount
+#         total = final_price * quantity
+#         discount_total = discount * quantity
+
+#         item.final_price = final_price
+#         item.total = total
+#         item.tax_amount = tax_amount
+
+#         total_amount += total
+#         total_tax_amount += tax_amount * quantity
+#         total_discount += discount_total
+#         net_amount_before_tax += (exclude_price * quantity)
+#         total_quantity += quantity
+
+#     shipping_charge = order.shipping_charge or 0.0
+#     grand_total = total_amount + shipping_charge
+
+#     context = {
+#         "order": order,
+#         "items": items,
+#         "totalamount": total_amount,
+#         "total_tax_amount": total_tax_amount,
+#         "total_quantity": total_quantity,
+#         "discounted_amount": total_discount,
+#         "net_amount_before_tax": net_amount_before_tax,
+#         "shipping_charge": shipping_charge,
+#         "grand_total": grand_total,
+#         "exclude_price":exclude_price,
+#     }
+
+#     return render(request, 'invo.html', context)
+from decimal import Decimal
+
 def GenerateInvoice(request, pk):
     order = Order.objects.filter(pk=pk).first()
     items = OrderItem.objects.filter(order=order)
     
-    total_amount = 0
-    total_tax_amount = 0
-    total_discount = 0
-    net_amount_before_tax = 0
+    total_amount = Decimal('0.0')
+    total_tax_amount = Decimal('0.0')
+    total_discount = Decimal('0.0')
+    net_amount_before_tax = Decimal('0.0')
     total_quantity = 0
-    
+
     for item in items:
-        tax_rate = item.product.tax or 0.0
+        tax_rate = Decimal(item.product.tax or 0)
         quantity = item.quantity or 0
-        selling_price = item.rate or 0.0
-        discount = item.discount or 0.0
-        rate = item.rate or 0.0
-    
-        #exclude price
-        total_price = max(selling_price - discount, 0)
-        exclude_price = total_price / (1 + (tax_rate/ 100))
+        selling_price = Decimal(item.rate or 0)
+        discount = Decimal(item.discount or 0)
+        rate = Decimal(item.rate or 0)
+
+        total_price = max(selling_price - discount, Decimal('0.0'))
+        exclude_price = total_price / (Decimal('1.0') + (tax_rate / Decimal('100.0')))
         tax_amount = total_price - exclude_price
 
         final_price = rate - discount
@@ -4459,7 +4513,7 @@ def GenerateInvoice(request, pk):
         net_amount_before_tax += (exclude_price * quantity)
         total_quantity += quantity
 
-    shipping_charge = order.shipping_charge or 0.0
+    shipping_charge = Decimal(order.shipping_charge or 0)
     grand_total = total_amount + shipping_charge
 
     context = {
@@ -4472,7 +4526,7 @@ def GenerateInvoice(request, pk):
         "net_amount_before_tax": net_amount_before_tax,
         "shipping_charge": shipping_charge,
         "grand_total": grand_total,
-        "exclude_price":exclude_price,
+        "exclude_price": exclude_price,
     }
 
     return render(request, 'invo.html', context)
