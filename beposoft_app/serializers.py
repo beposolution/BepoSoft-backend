@@ -622,10 +622,10 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
         return self.get_exclude_price(obj)
 
     
-
-    
-    
-    
+class FamilyOrderWarehouseModelSerilizer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehousedata
+        fields = ['id','box','tracking_id']
 
 
 class  WarehousedataSerializer(serializers.ModelSerializer):
@@ -1030,11 +1030,33 @@ class OrderModelSerilizer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = "__all__"
+        
+class FamilyOrderModelSerilizer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name")
+    staffID = serializers.CharField(source="manage_staff.pk")
+    family = serializers.CharField(source="family.name")
+    billing_address = ShippingAddressView(read_only=True)
+    customer = serializers.CharField(source="customer.name", read_only=True)
+    customerID = serializers.IntegerField(source="customer.pk", read_only=True)
+    warehouse=FamilyOrderWarehouseModelSerilizer(many=True,read_only=True)
+    state = serializers.CharField(source="state.name")
+
+    
+    class Meta:
+        model = Order
+        fields = "__all__"
 
 
-
-
-
+class OrderStateWiseSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name")
+    staffID = serializers.CharField(source="manage_staff.pk")
+    family = serializers.CharField(source="family.name")
+    customerID = serializers.IntegerField(source="customer.pk")
+    state = serializers.CharField(source="state.name")
+    
+    class Meta:
+        model = Order
+        fields = "__all__"
 
 
 class WarehouseBoxesDataSerializer(serializers.ModelSerializer):
