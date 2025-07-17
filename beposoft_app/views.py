@@ -4641,7 +4641,7 @@ class FamilyBasedOrderGetView(BaseTokenView):
                 return error_response
 
             # Filter customers based on the manager's family relationship
-            customers = Order.objects.filter(family=authUser.family.pk)
+            customers = Order.objects.filter(family=authUser.family.pk).order_by('-id')
 
             serializer = FamilyOrderModelSerilizer(customers, many=True)
 
