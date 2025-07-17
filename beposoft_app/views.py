@@ -3773,7 +3773,7 @@ class StatewiseSalesReport(APIView):
                     date_orders = Order.objects.filter(state=state, order_date=order_date['order_date'])
                     order_data = {
                         'order_date': order_date['order_date'],
-                        'waiting_orders': OrderModelSerilizer(date_orders, many=True).data
+                        'waiting_orders': OrderStateWiseSerializer(date_orders, many=True).data
                     }
                     state_data['orders'].append(order_data)
 
@@ -4643,7 +4643,7 @@ class FamilyBasedOrderGetView(BaseTokenView):
             # Filter customers based on the manager's family relationship
             customers = Order.objects.filter(family=authUser.family.pk)
 
-            serializer = OrderModelSerilizer(customers, many=True)
+            serializer = FamilyOrderModelSerilizer(customers, many=True)
 
             return Response(serializer.data, status=200)
 
