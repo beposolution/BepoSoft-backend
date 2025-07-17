@@ -997,6 +997,7 @@ class ProductWiseReportSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source='order.invoice')
     staff_id = serializers.IntegerField(source='order.manage_staff.id')
     staff_name = serializers.CharField(source='order.manage_staff.name')
+    staff_family = serializers.CharField(source='order.manage_staff.family.name')
     allocated_states = serializers.SerializerMethodField()
     order_date = serializers.CharField(source='order.order_date')
     order_state = serializers.CharField(source='order.state.name')
