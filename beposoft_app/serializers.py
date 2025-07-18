@@ -931,18 +931,25 @@ class AdvancePaymentReceiptSerializer(serializers.ModelSerializer):
 
 class OrderPaymentSerializer(serializers.ModelSerializer):
     recived_payment = PaymentReceiptSerializer(many=True)
-    
-    # We will calculate the total paid amount by summing the amount from all related payment receipts
     total_paid = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
-        fields = ['id', 'invoice', 'order_date', 'payment_status', 'status', 'recived_payment', 'manage_staff', 'customer', 'total_paid']
+        fields = ['id', 'invoice', 'order_date', 'payment_status', 'status',
+                  'recived_payment', 'manage_staff', 'customer', 'total_paid']
 
     def get_total_paid(self, obj):
-        # Calculate the total paid amount from all related payment receipts for this order
-        total_paid = obj.recived_payment.aggregate(total_paid=Sum('amount'))['total_paid'] or 0
-        return total_paid
+        try:
+            return obj.recived_payment.annotate(
+                amount_decimal=Func(
+                    F('amount'),
+                    function='CAST',
+                    template='%(function)s(%(expressions)s AS DECIMAL)',
+                    output_field=DecimalField()
+                )
+            ).aggregate(total_paid=Sum('amount_decimal'))['total_paid'] or 0
+        except Exception as e:
+            return f"Error: {str(e)}"
     
 class PaymentReceiptSerializerView(serializers.ModelSerializer):
     bankname=serializers.CharField(source="bank.name")
