@@ -1604,6 +1604,43 @@ class OrderListView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class TrackingReport(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # Optimize Query and Order by order_date descending
+            orders = Order.objects.select_related(
+                "manage_staff", "customer", "state", "family"
+            ).prefetch_related("warehouse").order_by("-id")
+
+            # Optimize Count Queries
+            invoice_counts = orders.aggregate(
+                invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
+                invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
+            )
+
+            serializer = TrackingdetailsSerializer(orders, many=True)
+
+            # Add family_id and family_name to each order in results
+            results = serializer.data
+            response_data = {
+                "invoice_created_count": invoice_counts["invoice_created_count"],
+                "invoice_approved_count": invoice_counts["invoice_approved_count"],
+                "results": results
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except ObjectDoesNotExist:
+            return Response({"status": "error", "message": "Orders not found"}, status=status.HTTP_404_NOT_FOUND)
+        except DatabaseError:
+            return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class LockOrderView(BaseTokenView):
     def post(self, request, order_id):
         user, error_response = self.get_user_from_token(request)
@@ -3604,7 +3641,7 @@ class CODSalesReportView(BaseTokenView):
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response  
-            orders = Order.objects.filter(payment_status="COD")
+            orders = Order.objects.filter(payment_status="COD").order_by('-order_date')
             
             grouped_orders = defaultdict(list)
             for order in orders:

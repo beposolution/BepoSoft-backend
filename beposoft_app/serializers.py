@@ -970,6 +970,41 @@ class WarehouseDataSerializer(serializers.ModelSerializer):
         fields = [
             "box", "tracking_id"
         ]
+        
+
+class TrackingWarehouseDataSerializer(serializers.ModelSerializer):
+    volume_weight = serializers.SerializerMethodField()
+    average = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Warehousedata
+        fields = [
+            "box", "tracking_id", 
+            "parcel_amount", 
+            "actual_weight", "weight",
+            "length", "breadth", "height",
+            "postoffice_date", "shipped_date",
+            "volume_weight", "average",
+        ]
+
+    def get_volume_weight(self, obj):
+        try:
+            length = float(obj.length)
+            breadth = float(obj.breadth)
+            height = float(obj.height)
+            return round((length * breadth * height) / 6000, 2)
+        except (TypeError, ValueError):
+            return None
+
+    def get_average(self, obj):
+        try:
+            parcel_amount = float(obj.parcel_amount)
+            actual_weight = float(obj.actual_weight)
+            if actual_weight == 0:
+                return None
+            return round(parcel_amount / (actual_weight / 1000), 2)
+        except Exception as e:
+            return None
 
 
 
@@ -983,6 +1018,21 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
     state = serializers.CharField(source="state.name", read_only=True)
 
     warehouse_data = WarehouseDataSerializer(source="warehouse", many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = "__all__"
+        extra_fields = ['warehouse_data'] 
+        
+class TrackingdetailsSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
+    staffID = serializers.CharField(source="manage_staff.pk", read_only=True)
+    family = serializers.CharField(source="family.name", read_only=True)
+    customerID = serializers.IntegerField(source="customer.pk", read_only=True)
+    customerName = serializers.CharField(source="customer.name", read_only=True)
+    state = serializers.CharField(source="state.name", read_only=True)
+
+    warehouse_data = TrackingWarehouseDataSerializer(source="warehouse", many=True, read_only=True)
 
     class Meta:
         model = Order
