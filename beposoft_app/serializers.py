@@ -982,12 +982,13 @@ class WarehouseDataSerializer(serializers.ModelSerializer):
 class TrackingWarehouseDataSerializer(serializers.ModelSerializer):
     volume_weight = serializers.SerializerMethodField()
     average = serializers.SerializerMethodField()
+    parcel_service = serializers.CharField(source="parcel_service.name", read_only=True)
 
     class Meta:
         model = Warehousedata
         fields = [
             "box", "tracking_id", 
-            "parcel_amount", 
+            "parcel_amount", "parcel_service",
             "actual_weight", "weight",
             "length", "breadth", "height",
             "postoffice_date", "shipped_date",
