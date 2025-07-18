@@ -1051,6 +1051,7 @@ class ProductWiseReportSerializer(serializers.ModelSerializer):
     allocated_states = serializers.SerializerMethodField()
     order_date = serializers.CharField(source='order.order_date')
     order_state = serializers.CharField(source='order.state.name')
+    family_name = serializers.CharField(source='order.family.name')
 
     class Meta:
         model = OrderItem
@@ -1058,7 +1059,7 @@ class ProductWiseReportSerializer(serializers.ModelSerializer):
             'product_id', 'product_name',
             'order_id', 'invoice','order_state',
             'staff_id', 'staff_name','staff_family',
-            'allocated_states', 'order_date'
+            'allocated_states', 'order_date','family_name'
         ]
 
     def get_allocated_states(self, obj):
