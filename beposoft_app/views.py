@@ -2612,7 +2612,7 @@ class CustomerOrderLedgerdata(BaseTokenView):
             customer = get_object_or_404(Customers, pk=pk)
 
             # Fetch order ledger
-            ledger = Order.objects.filter(customer=customer.pk).order_by("-order_date")
+            ledger = Order.objects.filter(customer=customer.pk).order_by("order_date")
             ledger_serializer = LedgerSerializers(ledger, many=True)
 
             # Fetch advance receipts for the customer (if related to customer)
