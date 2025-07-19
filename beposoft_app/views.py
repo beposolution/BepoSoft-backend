@@ -2579,6 +2579,14 @@ class BankReceiptDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk):
+        try:
+            receipt = get_object_or_404(BankReceipt, pk=pk)
+            receipt.delete()
+            return Response({'message': 'Bank receipt deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class OrderReceiptDetailView(APIView):
     def get(self, request, pk):
