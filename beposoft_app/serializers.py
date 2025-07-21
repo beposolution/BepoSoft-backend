@@ -1064,7 +1064,7 @@ class ProductWiseReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'product_id', 'product_name',
+            'product_id', 'product_name','quantity',
             'order_id', 'invoice','order_state',
             'staff_id', 'staff_name','staff_family',
             'allocated_states', 'order_date','family_name'
