@@ -326,7 +326,6 @@ class Products(models.Model):
     purchase_type=models.CharField(max_length=100,choices=PURCHASE_TYPES,default='International')
     approval_status=models.CharField(max_length=100,choices=STATUS_TYPES,default='Disapproved')
     duty_charge=models.FloatField(null=True, blank=True, default=0.0)
-    rack_text = models.CharField(max_length=50, null=True, blank=True, default="A")
     
 
     def generate_variant_id(self):
