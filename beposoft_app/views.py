@@ -4815,6 +4815,32 @@ class ProductByWarehouseView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class LockedStockInvoicesView(APIView):
+    def get(self, request, product_id):
+        try:
+            # Only consider active orders that might lock stock
+            active_statuses = [
+                "Pending", "Waiting For Confirmation", "Packing under progress", "Packed", "Ready to ship"
+            ]
+
+            order_items = OrderItem.objects.filter(
+                product_id=product_id,
+                order__status__in=active_statuses
+            ).select_related('order')
+
+            data = [{
+                'invoice': item.order.invoice,
+                'quantity_locked': item.quantity,
+                'status': item.order.status,
+                'order_date': item.order.order_date,
+            } for item in order_items]
+
+            return Response({'locked_invoices': data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         
 
 class WareHouseOrdersView(BaseTokenView):
