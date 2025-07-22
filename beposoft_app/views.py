@@ -5239,7 +5239,6 @@ def send_shipping_id(name, phone_number, order_id, tracking_id):
         logger.error(f"RequestException: {e}", exc_info=True)
         return False
 
-
 class SendShippingIDView(APIView):
     def post(self, request):
         name = request.data.get('name')
@@ -5247,31 +5246,67 @@ class SendShippingIDView(APIView):
         order_id = request.data.get('order_id')
         tracking_id = request.data.get('tracking_id')
 
+        # Validate required fields
         if not all([name, phone_number, order_id, tracking_id]):
-            return Response({'error': 'All fields are required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': 'All fields are required',
+                'request_data': {
+                    'name': name,
+                    'phone': phone_number,
+                    'order_id': order_id,
+                    'tracking_id': tracking_id
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         phone_number = phone_number.strip()
 
         # Validate phone number format
         if not phone_number.isdigit() or len(phone_number) != 10:
-            return Response({'error': 'Invalid phone number format'}, status=status.HTTP_400_BAD_REQUEST)
-    
+            return Response({
+                'error': 'Invalid phone number format',
+                'request_data': {
+                    'name': name,
+                    'phone': phone_number,
+                    'order_id': order_id,
+                    'tracking_id': tracking_id
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         sms_response = send_shipping_id(name, phone_number, order_id, tracking_id)
-        
-        # Send Shipping ID via SMS
+
         if sms_response and sms_response.status_code == 200:
             return Response({
                 'message': 'Shipping ID sent successfully',
-                'sms_response': sms_response.json()  # or sms_response.text
+                'request_data': {
+                    'name': name,
+                    'phone': phone_number,
+                    'order_id': order_id,
+                    'tracking_id': tracking_id
+                },
+                'sms_response': sms_response.json()
             }, status=status.HTTP_200_OK)
         elif sms_response:
             return Response({
                 'error': 'Failed to send Shipping ID',
-                'sms_error': sms_response.text  # log error detail from SMS API
+                'request_data': {
+                    'name': name,
+                    'phone': phone_number,
+                    'order_id': order_id,
+                    'tracking_id': tracking_id
+                },
+                'sms_error': sms_response.text
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
-            return Response({'error': 'SMS API not reachable'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            return Response({
+                'error': 'SMS API not reachable',
+                'request_data': {
+                    'name': name,
+                    'phone': phone_number,
+                    'order_id': order_id,
+                    'tracking_id': tracking_id
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 def GeneratePerformaInvoice(request, invoice_number):
     # Fetch the order based on the passed invoice number
