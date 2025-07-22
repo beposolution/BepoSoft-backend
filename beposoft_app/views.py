@@ -5202,7 +5202,7 @@ logger = logging.getLogger(__name__)
 
 def send_shipping_id(name, phone_number, order_id, tracking_id):
     sms_alert_username = 'francisgoskates@gmail.com'  # Replace with actual SMSAlert username
-    sms_alert_password = 'xdr5IBU@'  # Replace with actual SMSAlert password
+    sms_alert_password = 'Need2open@123'  # Replace with actual SMSAlert password
     sms_alert_sender_id = 'BEPOST'  # Ensure this matches your approved Sender ID
     template_id = '1707164275994735387'  # ✅ Updated with your correct Template ID
 
