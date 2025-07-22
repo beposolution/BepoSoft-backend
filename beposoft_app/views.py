@@ -5256,12 +5256,22 @@ class SendShippingIDView(APIView):
         if not phone_number.isdigit() or len(phone_number) != 10:
             return Response({'error': 'Invalid phone number format'}, status=status.HTTP_400_BAD_REQUEST)
     
+        sms_response = send_shipping_id(name, phone_number, order_id, tracking_id)
+        
         # Send Shipping ID via SMS
-        if send_shipping_id(name, phone_number, order_id, tracking_id):
-            return Response({'message': 'Shipping ID sent successfully'}, status=status.HTTP_200_OK)
+        if sms_response and sms_response.status_code == 200:
+            return Response({
+                'message': 'Shipping ID sent successfully',
+                'sms_response': sms_response.json()  # or sms_response.text
+            }, status=status.HTTP_200_OK)
+        elif sms_response:
+            return Response({
+                'error': 'Failed to send Shipping ID',
+                'sms_error': sms_response.text  # log error detail from SMS API
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
-            return Response({'error': 'Failed to send Shipping ID'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response({'error': 'SMS API not reachable'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 def GeneratePerformaInvoice(request, invoice_number):
     # Fetch the order based on the passed invoice number
