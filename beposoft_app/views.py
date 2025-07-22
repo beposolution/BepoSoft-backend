@@ -5226,18 +5226,11 @@ def send_shipping_id(name, phone_number, order_id, tracking_id):
 
     try:
         response = requests.post(url, data=payload)
-        logger.info(f"SMSAlert API Response: {response.status_code} - {response.text}")  # Log full response
-
-        if response.status_code != 200:
-            logger.error(f"SMSAlert API Error: {response.text}")  # Log actual error message
-            return False
-
-        response_data = response.json()
-        return response_data.get('status') == 'success'
-
+        logger.info(f"SMSAlert API Response: {response.status_code} - {response.text}")
+        return response  # ✅ Return full Response object
     except requests.exceptions.RequestException as e:
         logger.error(f"RequestException: {e}", exc_info=True)
-        return False
+        return None  # ✅ Let the view handle this
 
 class SendShippingIDView(APIView):
     def post(self, request):
