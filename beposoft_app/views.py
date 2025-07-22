@@ -5238,8 +5238,8 @@ def send_shipping_id(name, phone_number, order_id, tracking_id):
     except requests.exceptions.RequestException as e:
         logger.error(f"RequestException: {e}", exc_info=True)
         return False
-
-
+    
+    
 class SendShippingIDView(APIView):
     def post(self, request):
         name = request.data.get('name')
@@ -5256,12 +5256,11 @@ class SendShippingIDView(APIView):
         if not phone_number.isdigit() or len(phone_number) != 10:
             return Response({'error': 'Invalid phone number format'}, status=status.HTTP_400_BAD_REQUEST)
     
-        # Send Shipping ID via SMS alert
+        # Send Shipping ID via SMS
         if send_shipping_id(name, phone_number, order_id, tracking_id):
             return Response({'message': 'Shipping ID sent successfully'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Failed to send Shipping ID'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 def GeneratePerformaInvoice(request, invoice_number):
     # Fetch the order based on the passed invoice number
