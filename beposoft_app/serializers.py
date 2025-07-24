@@ -643,6 +643,7 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
     checked_by = serializers.SerializerMethodField()
     verified_by = serializers.SerializerMethodField()
     cod_amount=serializers.IntegerField(source="order.cod_amount")
+    order_state = serializers.CharField(source="order.billing_address.state")
 
     def get_checked_by(self, obj):
         return obj.checked_by.name if obj.checked_by is not None else None
@@ -656,7 +657,7 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before','cod_amount',
             'parcel_service', 'tracking_id', 'shipping_charge', 'status', 'packed_by_id', 'parcel_service_id',
-            'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone',
+            'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','order_state',
             'zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
         ]
 
