@@ -4785,7 +4785,7 @@ class InternalTransferView(BaseTokenView):
             if error_response:
                 return error_response
 
-            transfers = InternalTransfer.objects.all().order_by('-created_at')
+            transfers = InternalTransfer.objects.all().order_by('-id')
             serializer = InternalTransferViewSerializer(transfers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
