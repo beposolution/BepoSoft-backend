@@ -1412,10 +1412,9 @@ class UnifiedPaymentSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     received_at = serializers.DateField()
 
-
 class FinanaceReceiptSerializer(serializers.ModelSerializer):
     payments = serializers.SerializerMethodField()
-    banks = CompanyExpenseSeriizers(read_only=True, many=True)
+    banks = serializers.SerializerMethodField()
 
     class Meta:
         model = Bank
@@ -1423,18 +1422,50 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
 
     def get_payments(self, bank):
         from itertools import chain
+        from .models import InternalTransfer  # import if not already
 
-        # BankbasedReceipt (assuming `payment_receipt`, `amount`, `received_at`)
+        # Normal receipts
         payments_qs = bank.payments.all().values('payment_receipt', 'amount', 'received_at')
-
-        # AdvanceReceipt (no payment_receipt)
         advance_qs = bank.advance_receipts.all().values('payment_receipt','amount', 'received_at')
-
-        # BankReceipt (has payment_receipt)
         bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
 
-        combined = chain(payments_qs, advance_qs, bank_receipt_qs)
+        # Add internal transfers where bank is receiver
+        internal_transfers = InternalTransfer.objects.filter(receiver_bank=bank).values(
+            payment_receipt=F('transactionID'),
+            amount=F('amount'),
+            received_at=F('created_at')
+        )
+
+        combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_transfers)
         return UnifiedPaymentSerializer(combined, many=True).data
+
+    def get_banks(self, bank):
+        from .models import InternalTransfer, CompanyExpense  # adjust as per location
+
+        # Get existing expense data
+        expenses = CompanyExpense.objects.filter(bank=bank)
+        expense_data = CompanyExpenseSeriizers(expenses, many=True).data
+
+        # Get internal transfers where this bank is sender
+        internal_transfers = InternalTransfer.objects.filter(sender_bank=bank).values(
+            'id', 'amount', 'created_at'
+        )
+        # Format internal transfers to match the expense schema partially
+        internal_transfer_data = [
+            {
+                "id": t["id"],
+                "amount": str(t["amount"]),
+                "expense_date": t["created_at"].strftime("%Y-%m-%d") if t["created_at"] else None,
+                "purpose_of_payment": {
+                    "id": 0,
+                    "name": "Bank Transfer"
+                }
+            }
+            for t in internal_transfers
+        ]
+
+        return expense_data + internal_transfer_data
+
     
 class InternalTransferSerializer(serializers.ModelSerializer):
     class Meta:
