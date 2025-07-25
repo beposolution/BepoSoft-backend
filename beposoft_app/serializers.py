@@ -1414,7 +1414,7 @@ class UnifiedPaymentSerializer(serializers.Serializer):
 
 class FinanaceReceiptSerializer(serializers.ModelSerializer):
     payments = serializers.SerializerMethodField()
-    banks = CompanyExpenseSeriizers(read_only=True, many=True)
+    banks = serializers.SerializerMethodField()  # changed to method field
 
     class Meta:
         model = Bank
@@ -1422,20 +1422,15 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
 
     def get_payments(self, bank):
         from itertools import chain
-
-        # BankbasedReceipt (assuming `payment_receipt`, `amount`, `received_at`)
-        payments_qs = bank.payments.all().values('payment_receipt', 'amount', 'received_at')
-
-        # AdvanceReceipt (no payment_receipt)
-        advance_qs = bank.advance_receipts.all().values('payment_receipt','amount', 'received_at')
-
-        # BankReceipt (has payment_receipt)
-        bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
-        
         from django.db.models import F
         from django.db.models.functions import TruncDate
 
-        internal_transfers = InternalTransfer.objects.filter(receiver_bank=bank).annotate(
+        payments_qs = bank.payments.all().values('payment_receipt', 'amount', 'received_at')
+        advance_qs = bank.advance_receipts.all().values('payment_receipt', 'amount', 'received_at')
+        bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
+
+        # Received transfers
+        internal_received = InternalTransfer.objects.filter(receiver_bank=bank).annotate(
             received_at=TruncDate('created_at')
         ).values(
             'amount',
@@ -1443,9 +1438,24 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
             payment_receipt=F('transactionID')
         )
 
-
-        combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_transfers)
+        combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_received)
         return UnifiedPaymentSerializer(combined, many=True).data
+
+    def get_banks(self, bank):
+        from django.db.models import F
+        from django.db.models.functions import TruncDate
+
+        # Sent transfers
+        sent_transfers = InternalTransfer.objects.filter(sender_bank=bank).annotate(
+            expense_date=TruncDate('created_at')
+        ).values(
+            'amount',
+            'expense_date',
+            purpose_of_payment=F('transactionID')
+        )
+
+        return CompanyExpenseSeriizers(sent_transfers, many=True).data
+
 
     
 class InternalTransferSerializer(serializers.ModelSerializer):
