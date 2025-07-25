@@ -437,6 +437,8 @@ class InternalTransfer(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(null=True, blank=True)
+    transactionID = models.CharField(max_length=50, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
 
     class Meta:
         db_table = "internal_transfer"
