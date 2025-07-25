@@ -1432,8 +1432,19 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         # BankReceipt (has payment_receipt)
         bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
         
+        from django.db.models import F
+        from django.db.models.functions import TruncDate
 
-        combined = chain(payments_qs, advance_qs, bank_receipt_qs)
+        internal_transfers = InternalTransfer.objects.filter(receiver_bank=bank).annotate(
+            received_at=TruncDate('created_at')
+        ).values(
+            'amount',
+            'received_at',
+            payment_receipt=F('transactionID')
+        )
+
+
+        combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_transfers)
         return UnifiedPaymentSerializer(combined, many=True).data
 
     
