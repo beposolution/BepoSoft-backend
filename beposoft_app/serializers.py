@@ -1445,16 +1445,39 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         from django.db.models import F
         from django.db.models.functions import TruncDate
 
-        # Sent transfers
-        sent_transfers = InternalTransfer.objects.filter(sender_bank=bank).annotate(
-            expense_date=TruncDate('created_at')
-        ).values(
-            'amount',
-            'expense_date',
-            purpose_of_payment=F('transactionID')
+        # Step 1: Get actual expenses
+        expenses_qs = ExpenseModel.objects.filter(bank=bank).values(
+            'id', 'amount', 'expense_date', 'purpose_of_payment'
         )
 
-        return CompanyExpenseSeriizers(sent_transfers, many=True).data
+        # Step 2: Get internal transfers (sent transfers)
+        transfers_qs = InternalTransfer.objects.filter(sender_bank=bank).annotate(
+            expense_date=TruncDate('created_at')
+        ).values(
+            'id',  # if InternalTransfer has an id field
+            'amount',
+            'expense_date',
+            'transactionID'
+        )
+
+        # Step 3: Convert transfers to match ExpenseModel format
+        transfers_as_expenses = [
+            {
+                'id': None,  # or use t['id'] if needed
+                'amount': t['amount'],
+                'expense_date': t['expense_date'],
+                'purpose_of_payment': t['transactionID'],
+            }
+            for t in transfers_qs
+        ]
+
+        # Step 4: Combine both
+        combined = list(expenses_qs) + transfers_as_expenses
+
+        # Step 5: Serialize
+        return CompanyExpenseSeriizers(combined, many=True).data
+
+
 
 
     
