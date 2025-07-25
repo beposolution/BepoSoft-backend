@@ -4755,32 +4755,40 @@ class WarehouseGetView(BaseTokenView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+   
         
-
-class InternalTransferView(APIView):
-    
+class InternalTransferView(BaseTokenView):
     def post(self, request):
         try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
             data = request.data.copy()
-            # Set current timestamp if not provided
-            if not data.get("created_at"):
-                data["created_at"] = datetime.now()
+            data["created_by"] = authUser.pk
 
             serializer = InternalTransferSerializer(data=data)
             if serializer.is_valid():
                 serializer.save()
-                return Response({"message": "Internal transfer created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+                return Response(
+                    {"message": "Internal transfer created successfully", "data": serializer.data},
+                    status=status.HTTP_201_CREATED
+                )
             return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request):
         try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
             transfers = InternalTransfer.objects.all().order_by('-created_at')
             serializer = InternalTransferSerializer(transfers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
