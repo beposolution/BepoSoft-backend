@@ -1431,9 +1431,16 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
 
         # Add internal transfers where bank is receiver
         internal_transfers = InternalTransfer.objects.filter(receiver_bank=bank).values(
+            'transactionID',
+            'amount',
+            'created_at'
+        ).annotate(
             payment_receipt=F('transactionID'),
-            amount=F('amount'),
             received_at=F('created_at')
+        ).values(
+            'payment_receipt',
+            'amount',
+            'received_at'
         )
 
         combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_transfers)
