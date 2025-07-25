@@ -1435,6 +1435,11 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
 
         combined = chain(payments_qs, advance_qs, bank_receipt_qs)
         return UnifiedPaymentSerializer(combined, many=True).data
+    
+class InternalTransferSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InternalTransfer
+        fields = '__all__'
 
 class AttendanceSummarySerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()

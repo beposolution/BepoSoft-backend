@@ -179,7 +179,7 @@ urlpatterns = [
     path('api/product/stock/report/',ProductStockReportView.as_view()),
     path('api/finance-report/',FinancereportAPIView.as_view()),
     path('api/receipts/get/',AllpaymentReceiptsView.as_view()),
-    
+    path('api/internal/transfers/', InternalTransferView.as_view(), name='internal_transfers'),
 
     
     
