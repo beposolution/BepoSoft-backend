@@ -431,6 +431,18 @@ class Bank(models.Model):
         return self.name
 
 
+class InternalTransfer(models.Model):
+    sender_bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='sent_transfers')
+    receiver_bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='received_transfers')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "internal_transfer"
+
+    def __str__(self):
+        return f"Transfer of {self.amount} from {self.sender_bank} to {self.receiver_bank}"
 
 
 
