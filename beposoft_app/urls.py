@@ -180,6 +180,7 @@ urlpatterns = [
     path('api/finance-report/',FinancereportAPIView.as_view()),
     path('api/receipts/get/',AllpaymentReceiptsView.as_view()),
     path('api/internal/transfers/', InternalTransferView.as_view(), name='internal_transfers'),
+    path('api/internal/transfers/<int:id>/', InternalTransferByIdView.as_view(), name='internal_transfer_by_id'),
 
     
     
