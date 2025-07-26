@@ -1493,7 +1493,7 @@ class InternalTransferViewSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = InternalTransfer
-        fields = ['sender_bank','sender_bank_name','receiver_bank',
+        fields = ['sender_bank','sender_bank_name','receiver_bank','id',
                   'receiver_bank_name','amount','description','created_at',
                   'transactionID','created_by','created_by_name']
 
