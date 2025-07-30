@@ -89,6 +89,7 @@ urlpatterns = [
     path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),
     path('api/order/images/upload/', OrderImageUploadView.as_view(), name='order-image-upload'),
     path('api/order/images/<int:order_id>/', OrderImageView.as_view(), name='order-image'),
+    path('api/order/images/delete/<int:image_id>/', DeleteOrderImageView.as_view(), name='delete-order-image'),
     # path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
     path('api/product-wise/report/', ProductWiseReportView.as_view(), name='product-wise-report'),
     
