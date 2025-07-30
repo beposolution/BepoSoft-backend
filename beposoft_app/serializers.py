@@ -701,7 +701,9 @@ class LedgerSerializers(serializers.ModelSerializer):
     company = serializers.CharField(source="company.name")
     class Meta :
         model = Order
-        fields = ["id","invoice","company","total_amount","order_date","recived_payment"]
+        fields = ["id","invoice","company",
+                  "total_amount","order_date",
+                  "recived_payment","status"]
 
         
 
