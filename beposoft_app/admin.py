@@ -32,6 +32,8 @@ admin.site.register(PerfomaInvoiceOrderItem)
 admin.site.register(CallLog)
 admin.site.register(AdvanceReceipt)
 admin.site.register(BankReceipt)
+admin.site.register(OrderImage)
+admin.site.register(InternalTransfer)
 
 
 

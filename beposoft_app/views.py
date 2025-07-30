@@ -444,6 +444,21 @@ class OrderImageView(BaseTokenView):
             "invoice": order.invoice,
             "images": image_serializer.data
         }, status=200)
+        
+
+class DeleteOrderImageView(BaseTokenView):
+    def delete(self, request, image_id):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            image = OrderImage.objects.get(pk=image_id)
+            image.image.delete(save=False)  # Deletes the file from storage
+            image.delete()  # Deletes the database record
+            return Response({"status": "success", "message": "Image deleted successfully."}, status=200)
+        except OrderImage.DoesNotExist:
+            return Response({"status": "error", "message": "Image not found."}, status=404)
 
 
 class UserDataUpdate(BaseTokenView):
