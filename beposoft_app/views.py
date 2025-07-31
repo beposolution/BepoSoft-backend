@@ -5425,3 +5425,17 @@ class CountryCodeView(APIView):
             serializer.save()
             return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_201_CREATED)
         return Response({'status': 'error', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+class CountryCodeDetailView(APIView):
+    def get(self, request, pk):
+        code = get_object_or_404(CountryCode, pk=pk)
+        serializer = CountryCodeSerializer(code)
+        return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        code = get_object_or_404(CountryCode, pk=pk)
+        serializer = CountryCodeSerializer(code, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_200_OK)
+        return Response({'status': 'error', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
