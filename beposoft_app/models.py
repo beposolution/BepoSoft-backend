@@ -68,6 +68,7 @@ class WareHouse(models.Model):
     name=models.CharField(max_length=200)
     address=models.CharField(max_length=500,null=True)
     location=models.CharField(max_length=200)
+    country_code = models.ForeignKey(CountryCode, on_delete=models.SET_NULL, null=True, blank=True)
     unique_id = models.CharField(max_length=10, unique=True, blank=True, null=True)
 
     def save(self, *args, **kwargs):
