@@ -1331,9 +1331,11 @@ class ProductStockviewSerializres(serializers.ModelSerializer):
         return total_stock
 
 class WarehouseDetailSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(source='CountryCode.country_code', read_only=True)
     class Meta:
         model = WareHouse
-        fields = "__all__"  
+        fields = ['id','name','address','location',
+                  'country_code','country','unique_id']  
 
 class OrderRequestSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
