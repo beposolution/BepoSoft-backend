@@ -5411,3 +5411,17 @@ def GeneratePerformaInvoice(request, invoice_number):
 
     # Render the HTML template and pass the context
     return render(request, 'performainvoice.html', context)
+
+
+class CountryCodeView(APIView):
+    def get(self, request):
+        codes = CountryCode.objects.all().order_by('id')
+        serializer = CountryCodeSerializer(codes, many=True)
+        return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = CountryCodeSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({'status': 'error', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)

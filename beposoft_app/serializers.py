@@ -219,11 +219,12 @@ class FamilySerializer(serializers.ModelSerializer):
         model = Family
         fields = "__all__"
         
-        
-        
 
-    
-    
+class CountryCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CountryCode
+        fields = ['id', 'country_code', 'country_name']     
+        
     
 class ProductSingleviewSerializres(serializers.ModelSerializer):
     variantIDs = serializers.SerializerMethodField()

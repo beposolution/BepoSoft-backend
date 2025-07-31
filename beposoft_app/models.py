@@ -51,6 +51,18 @@ class Family(models.Model):
 
     class Meta :
         db_table = "Family"
+        
+
+class CountryCode(models.Model):
+    country_code = models.CharField(max_length=50, blank=True, default="")
+    country_name = models.CharField(max_length=100, blank=True, default="")
+    
+    class Meta:
+        db_table = "CountryCode"
+        
+    def __str__(self):
+        return self.country_code
+    
 
 class WareHouse(models.Model):
     name=models.CharField(max_length=200)
