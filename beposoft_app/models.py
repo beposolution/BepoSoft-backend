@@ -84,6 +84,31 @@ class WareHouse(models.Model):
             unique_id = f"{prefix}-{location_code}-{random_number}"
             if not WareHouse.objects.filter(unique_id=unique_id).exists():
                 return unique_id
+            
+
+class RackDetailsModel(models.Model):
+    warehouse = models.ForeignKey(WareHouse, on_delete=models.SET_NULL, null=True, blank=True)
+    rack_name = models.CharField(max_length=50, null=True, blank=True)
+    number_of_columns = models.PositiveIntegerField(blank=True, null=True)
+    column_names = models.JSONField(blank=True, default=list)
+
+    def save(self, *args, **kwargs):
+        # Determine prefix like "KA" from warehouse and rack name
+        warehouse_initial = self.warehouse.name[0].upper() if self.warehouse and self.warehouse.name else 'W'
+        rack_prefix = f"{warehouse_initial}{self.rack_name.upper()}"
+
+        # Rebuild column list only if number increased
+        existing = self.column_names or []
+        existing_count = len(existing)
+        if self.number_of_columns and self.number_of_columns > existing_count:
+            for i in range(existing_count + 1, self.number_of_columns + 1):
+                existing.append(f"{rack_prefix}{i}")
+            self.column_names = existing
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.rack_name} ({self.warehouse.name if self.warehouse else 'No Warehouse'})"
     
 
 class User(models.Model):

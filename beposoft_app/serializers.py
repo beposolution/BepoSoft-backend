@@ -1336,6 +1336,16 @@ class WarehouseDetailSerializer(serializers.ModelSerializer):
         model = WareHouse
         fields = ['id','name','address','location',
                   'country_code','country','unique_id']  
+        
+class RackDetailsModelSerializer(serializers.ModelSerializer):
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    column_names = serializers.JSONField(read_only=True)  # Ensures it's not accepted on input
+
+    class Meta:
+        model = RackDetailsModel
+        fields = ['id', 'warehouse', 
+                  'warehouse_name', 'rack_name', 
+                  'number_of_columns', 'column_names']
 
 class OrderRequestSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
