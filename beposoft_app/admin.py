@@ -35,6 +35,7 @@ admin.site.register(BankReceipt)
 admin.site.register(OrderImage)
 admin.site.register(InternalTransfer)
 admin.site.register(CountryCode)
+admin.site.register(RackDetailsModel)
 
 
 

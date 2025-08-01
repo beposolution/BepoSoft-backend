@@ -5439,3 +5439,107 @@ class CountryCodeDetailView(APIView):
             serializer.save()
             return Response({'status': 'success', 'data': serializer.data}, status=status.HTTP_200_OK)
         return Response({'status': 'error', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class RackDetailsView(BaseTokenView):
+    
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = RackDetailsModelSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "message": "Rack created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            # Authenticate the user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            racks = RackDetailsModel.objects.all().order_by('-id')
+            serializer = RackDetailsModelSerializer(racks, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            
+class RackDetailByIdView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                rack = RackDetailsModel.objects.get(pk=pk)
+            except RackDetailsModel.DoesNotExist:
+                return Response({"error": "Rack not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = RackDetailsModelSerializer(rack)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                rack = RackDetailsModel.objects.get(pk=pk)
+            except RackDetailsModel.DoesNotExist:
+                return Response({"error": "Rack not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Optional: Prevent reducing column count
+            new_column_count = request.data.get('number_of_columns')
+            if new_column_count and int(new_column_count) < len(rack.column_names):
+                return Response(
+                    {"error": "Reducing number_of_columns is not allowed."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = RackDetailsModelSerializer(rack, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()  # This will trigger your model logic to append new column_names
+                return Response({
+                    "message": "Rack updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
