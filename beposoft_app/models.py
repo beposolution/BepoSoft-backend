@@ -143,7 +143,7 @@ class User(models.Model):
         blank=True,
         related_name="users"
     )
-  
+    country_code = models.ForeignKey(CountryCode, on_delete=models.SET_NULL, null=True, blank=True)
     signatur_up = models.ImageField(upload_to="signature/",max_length=100,null=True)
     APPROVAL_CHOICES = [
         ('approved', 'Approved'),

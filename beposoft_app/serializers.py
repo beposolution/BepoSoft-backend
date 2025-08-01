@@ -52,11 +52,23 @@ class UserLoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     family_id = serializers.IntegerField(source='family.id', read_only=True)
     family_name = serializers.CharField(source='family.name', read_only=True)
+    country_code_name = serializers.CharField(source='country_code.country_code', read_only=True)
     # department_name = serializers.CharField(source='department.name', read_only=True)
 
     class Meta:
         model = User
-        fields = "__all__"  # Or list all fields you want, including 'family_id' and 'family_name'
+        fields = [
+            'id', 'eid', 'name', 'username', 'email', 'phone',
+            'alternate_number', 'password', 'image', 'date_of_birth',
+            'allocated_states', 'gender', 'marital_status',
+            'driving_license', 'driving_license_exp_date',
+            'employment_status', 'designation', 'grade', 'address',
+            'state', 'country', 'join_date', 'confirmation_date',
+            'termination_date', 'supervisor_id', 'department_id',
+            'warehouse_id', 'country_code', 'signatur_up',
+            'approval_status', 'family', 'created_at', 'updated_at',
+            'family_id', 'family_name','country_code_name'
+        ]
 
     def validate(self, data):
         if User.objects.filter(email=data['email']).exists():
