@@ -615,6 +615,18 @@ class OrderImage(models.Model):
 
     class Meta:
         db_table = "order_images"
+        
+
+class OrderPaymentImages(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payment_images')
+    image = models.ImageField(upload_to='payment_images/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Payment Image for Order {self.order.invoice} - {self.id}"
+    
+    class Meta:
+        db_table = "order_payment_images"
     
 
 class OrderItem(models.Model):

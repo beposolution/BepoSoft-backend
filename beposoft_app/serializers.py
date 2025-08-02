@@ -1214,6 +1214,11 @@ class OrderImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderImage
         fields = ['id', 'order', 'image', 'uploaded_at']
+        
+class OrderPaymentImagesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderPaymentImages
+        fields = ['id', 'order', 'image', 'uploaded_at']
 
 
 class WareHouseSerializer(serializers.ModelSerializer):
