@@ -459,7 +459,73 @@ class DeleteOrderImageView(BaseTokenView):
             return Response({"status": "success", "message": "Image deleted successfully."}, status=200)
         except OrderImage.DoesNotExist:
             return Response({"status": "error", "message": "Image not found."}, status=404)
+        
 
+class OrderPaymentImageUploadView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        order_id = request.data.get('order')
+        images = request.FILES.getlist('images')
+
+        if not order_id:
+            return Response({"status": "error", "message": "Order ID is required."}, status=400)
+        if not images:
+            return Response({"status": "error", "message": "No images uploaded."}, status=400)
+
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return Response({"status": "error", "message": "Order not found."}, status=404)
+
+        saved_images = []
+        for img in images:
+            instance = OrderPaymentImages(order=order, image=img)
+            instance.save()
+            saved_images.append(instance)
+
+        serializer = OrderPaymentImagesSerializer(saved_images, many=True)
+        return Response({"message": "Images uploaded successfully", "data": serializer.data}, status=201)
+
+class OrderPaymentImageView(BaseTokenView):
+    def get(self, request, order_id):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            return Response({"status": "error", "message": "Order not found."}, status=404)
+
+        images = OrderPaymentImages.objects.filter(order=order)
+        image_serializer = OrderPaymentImagesSerializer(images, many=True)
+
+        return Response({
+            "order": order.id,
+            "invoice": order.invoice,
+            "images": image_serializer.data
+        }, status=200)
+        
+
+class DeleteOrderPaymentImageView(BaseTokenView):
+    def delete(self, request, image_id):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            image = OrderPaymentImages.objects.get(pk=image_id)
+            image.image.delete(save=False)  # Deletes the file from storage
+            image.delete()  # Deletes the database record
+            return Response({"status": "success", "message": "Image deleted successfully."}, status=200)
+        except OrderPaymentImages.DoesNotExist:
+            return Response({"status": "error", "message": "Image not found."}, status=404)
+        
 
 class UserDataUpdate(BaseTokenView):
     def get_user(self, pk):
