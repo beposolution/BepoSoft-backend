@@ -36,6 +36,7 @@ admin.site.register(OrderImage)
 admin.site.register(InternalTransfer)
 admin.site.register(CountryCode)
 admin.site.register(RackDetailsModel)
+admin.site.register(ProductCategoryModel)
 
 
 

@@ -1363,6 +1363,12 @@ class RackDetailsModelSerializer(serializers.ModelSerializer):
         fields = ['id', 'warehouse', 
                   'warehouse_name', 'rack_name', 
                   'number_of_columns', 'column_names']
+        
+        
+class ProductCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductCategoryModel
+        fields = '__all__'
 
 class OrderRequestSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)

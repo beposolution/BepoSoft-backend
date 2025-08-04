@@ -110,6 +110,17 @@ class RackDetailsModel(models.Model):
     def __str__(self):
         return f"{self.rack_name} ({self.warehouse.name if self.warehouse else 'No Warehouse'})"
     
+    
+class ProductCategoryModel(models.Model):
+    category_name = models.CharField(max_length=100, null=True, blank=True)
+    
+    def __str__(self):
+        return self.category_name
+    
+    class Meta:
+        db_table = "ProductCategoryModel"
+    
+    
 
 class User(models.Model):
 
