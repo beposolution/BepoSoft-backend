@@ -375,6 +375,10 @@ class Products(models.Model):
     purchase_type=models.CharField(max_length=100,choices=PURCHASE_TYPES,default='International')
     approval_status=models.CharField(max_length=100,choices=STATUS_TYPES,default='Disapproved')
     duty_charge=models.FloatField(null=True, blank=True, default=0.0)
+    product_category = models.ForeignKey(ProductCategoryModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    rack_details = models.JSONField(default=list, blank=True, null=True)
+    damaged_stock = models.IntegerField(default=0, null=True, blank=True)
+    partially_damaged_stock = models.IntegerField(default=0, null=True, blank=True)
     
 
     def generate_variant_id(self):
@@ -389,9 +393,25 @@ class Products(models.Model):
        
         if not self.variantID:
             self.variantID = self.generate_variant_id()
+            
+        # rack stock calculation
+        usable = 0
+        damaged = 0
+        partial = 0
+        for rack in self.rack_details or []:
+            usability = rack.get('usability')
+            qty = rack.get('rack_stock', 0)
+            if usability == 'usable':
+                usable += qty
+            elif usability == 'damaged':
+                damaged += qty
+            elif usability == 'partially_damaged':
+                partial += qty
+        self.stock = usable
+        self.damaged_stock = damaged
+        self.partially_damaged_stock = partial
+        super().save(*args, **kwargs) 
      
-        
-        super().save(*args, **kwargs)
 
     def lock_stock(self, quantity):
         """Locks stock without reducing actual stock"""
@@ -413,12 +433,14 @@ class Products(models.Model):
             self.locked_stock -= quantity
             self.save()
         else:
-            raise ValueError("Not enough stock to fulfill order.")    
+            raise ValueError("Not enough stock to fulfill order.")   
 
 
     def __str__(self):
         return self.name
-
+    
+    class Meta:
+        db_table = "Products"
 
 
 class SingleProducts(models.Model):
