@@ -202,6 +202,7 @@ urlpatterns = [
 
     path('api/rack/add/',RackDetailsView.as_view()),
     path('api/rack/add/<int:pk>/', RackDetailByIdView.as_view(), name='rack-detail-by-id'),
+    path('api/product/category/add/', ProductCategoryView.as_view()),
     path('api/warehouse/add/',WarehouseAddView.as_view()),
     path('api/warehouse/update/<int:pk>/',WarehouseGetView.as_view()),
     path('api/warehouse/products/<int:warehouse_id>/',ProductByWarehouseView.as_view()),
