@@ -198,6 +198,7 @@ class ProductsAddSerializer(serializers.ModelSerializer):
     family = serializers.PrimaryKeyRelatedField(many=True, queryset=Family.objects.all())
     created_user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     warehouses = serializers.PrimaryKeyRelatedField(queryset=WareHouse.objects.all(), required=False)
+    product_category = serializers.PrimaryKeyRelatedField(queryset=ProductCategoryModel.objects.all(), required=False)
     class Meta:
         model = Products
         exclude = ["exclude_price"]                 
