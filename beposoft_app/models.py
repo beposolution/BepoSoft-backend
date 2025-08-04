@@ -394,7 +394,7 @@ class Products(models.Model):
         if not self.variantID:
             self.variantID = self.generate_variant_id()
             
-        # rack stock calculation
+        # rack stock calculation for usable, damaged, and partially damaged
         usable = 0
         damaged = 0
         partial = 0
@@ -441,6 +441,7 @@ class Products(models.Model):
     
     class Meta:
         db_table = "Products"
+
 
 
 class SingleProducts(models.Model):
