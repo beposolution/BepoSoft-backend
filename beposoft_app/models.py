@@ -395,21 +395,21 @@ class Products(models.Model):
             self.variantID = self.generate_variant_id()
             
         # rack stock calculation for usable, damaged, and partially damaged
-        usable = 0
-        damaged = 0
-        partial = 0
-        for rack in self.rack_details or []:
-            usability = rack.get('usability')
-            qty = rack.get('rack_stock', 0)
-            if usability == 'usable':
-                usable += qty
-            elif usability == 'damaged':
-                damaged += qty
-            elif usability == 'partially_damaged':
-                partial += qty
-        self.stock = usable
-        self.damaged_stock = damaged
-        self.partially_damaged_stock = partial
+        # usable = 0
+        # damaged = 0
+        # partial = 0
+        # for rack in self.rack_details or []:
+        #     usability = rack.get('usability')
+        #     qty = rack.get('rack_stock', 0)
+        #     if usability == 'usable':
+        #         usable += qty
+        #     elif usability == 'damaged':
+        #         damaged += qty
+        #     elif usability == 'partially_damaged':
+        #         partial += qty
+        # self.stock = usable
+        # self.damaged_stock = damaged
+        # self.partially_damaged_stock = partial
         super().save(*args, **kwargs) 
      
 
