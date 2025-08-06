@@ -3474,26 +3474,38 @@ class GRVGetViewById(BaseTokenView):
 
 
 class GRVUpdateView(BaseTokenView):
-    
-    def put(self, request,pk):
+    def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
             grv = get_object_or_404(GRVModel, pk=pk)
-            grvdata = GRVModelSerializer(grv, data=request.data,partial=True)
+            old_status = grv.status  # Track old status
+            
+            grvdata = GRVModelSerializer(grv, data=request.data, partial=True)
             if grvdata.is_valid():
-                grvdata.save()
-                
+                with transaction.atomic():
+                    grvdata.save()
+                    # After saving, get the latest values
+                    grv.refresh_from_db()
+                    if grv.status == 'approved' and old_status != 'approved':
+                        if grv.product_id:
+                            product = grv.product_id
+                            qty = grv.quantity or 0
+                            reason = grv.returnreason
+                            if reason == 'damaged':
+                                product.damaged_stock = (product.damaged_stock or 0) + qty
+                            elif reason == 'partially_damaged':
+                                product.partially_damaged_stock = (product.partially_damaged_stock or 0) + qty
+                            elif reason == 'usable':
+                                product.stock = (product.stock or 0) + qty
+                            product.save()
                 return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
             return Response(grvdata.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    
+
             
-        
-                
 
             
 class SalesReportView(BaseTokenView):
