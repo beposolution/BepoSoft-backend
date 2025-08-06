@@ -1184,9 +1184,12 @@ class GRVSerializer(serializers.ModelSerializer):
            
 
 class GRVModelSerializer(serializers.ModelSerializer):
+    product_id = serializers.CharField(source="product_id.id")
     class Meta:
         model = GRVModel
-        fields = ['order', 'product', 'returnreason', 'price', 'quantity', 'remark', 'status', 'date', 'time', 'note', 'updated_at']
+        fields = ['order', 'product', 'returnreason', 
+                  'price', 'quantity', 'remark', 'status', 
+                  'date', 'time', 'note', 'updated_at','product_id']
 
 
 
