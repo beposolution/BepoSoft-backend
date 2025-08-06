@@ -1167,9 +1167,15 @@ class GRVSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source = "order.invoice")
     order_date = serializers.CharField(source="order.order_date")
     family=serializers.IntegerField(source="order.family.id")
+    product_id = serializers.CharField(source="product_id.id")
     class Meta:
         model=GRVModel
-        fields=['order','id','product','family','returnreason','price','quantity','remark','note','status','customer','invoice','staff',"order_date",'date','time','updated_at']
+        fields=['order','id','product','family',
+                'returnreason','price','quantity',
+                'remark','note','status','customer',
+                'invoice','staff',"order_date",'date',
+                'time','updated_at','product_id']
+        
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         if 'time' in representation and representation['time']:
