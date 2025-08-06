@@ -932,9 +932,14 @@ class GRVModel(models.Model):
         ('refund','Refund'),
         ('exchange','Exchange'),
     ]
+    REASON_CHOICES=[
+        ('damaged', 'damaged'),
+        ('partially_damaged','partially_damaged'),
+        ('usable','usable'),
+    ]
     order=models.ForeignKey(Order,on_delete=models.CASCADE)
     product=models.CharField(max_length=100)
-    returnreason=models.CharField(max_length=200)
+    returnreason=models.CharField(max_length=200, choices=REASON_CHOICES, default='usable')
     price=models.DecimalField(max_digits=10, decimal_places=2)
     quantity=models.IntegerField()
     remark=models.CharField(max_length=20,choices=REMARK_CHOICES,null=True)
@@ -958,9 +963,6 @@ class GRVModel(models.Model):
             print("No change in status.")
 
 
-
-
- 
 class OrderRequest(models.Model):
     product = models.ForeignKey(Products, on_delete=models.CASCADE)
     requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="order_requests")
