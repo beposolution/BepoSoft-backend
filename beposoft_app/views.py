@@ -3441,7 +3441,7 @@ class GRVaddView(BaseTokenView):
             if error_response:
                 return error_response
            
-            grvdata = GRVModel.objects.all()
+            grvdata = GRVModel.objects.all().order_by('-id')
 
             if not grvdata.exists():
                 return Response(
