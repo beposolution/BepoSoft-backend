@@ -925,10 +925,12 @@ class GRVModel(models.Model):
         ('pending', 'Pending'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
+        ('Waiting For Approval', 'Waiting For Approval'),
     ]
     REMARK_CHOICES=[
         ('return','Return'),
-        ('refund','Refund')
+        ('refund','Refund'),
+        ('exchange','Exchange'),
     ]
     order=models.ForeignKey(Order,on_delete=models.CASCADE)
     product=models.CharField(max_length=100)
@@ -936,11 +938,12 @@ class GRVModel(models.Model):
     price=models.DecimalField(max_digits=10, decimal_places=2)
     quantity=models.IntegerField()
     remark=models.CharField(max_length=20,choices=REMARK_CHOICES,null=True)
-    status=models.CharField(max_length=30,choices=STATUS_CHOICES,default='pending',null=True)
+    status=models.CharField(max_length=30,choices=STATUS_CHOICES,default='Waiting For Approval',null=True)
     date=models.DateField(null=True)
     time=models.TimeField(null=True)
     note=models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(null=True, blank=True)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, null=True, blank=True)
 
     def update_status(self, new_status):
         """112
