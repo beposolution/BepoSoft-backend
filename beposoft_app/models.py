@@ -435,7 +435,7 @@ class Products(models.Model):
     #     else:
     #         raise ValueError("Not enough stock to fulfill order.") 
         
-    def reduce_stock(self, quantity):
+    def reduce_rack_stock_on_ship(self, quantity):
         qty_to_reduce = quantity
         racks = self.rack_details or []
         # Sort or reorder racks if needed, or just loop as is
