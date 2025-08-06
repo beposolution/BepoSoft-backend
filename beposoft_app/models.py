@@ -395,22 +395,57 @@ class Products(models.Model):
             self.variantID = self.generate_variant_id()
             
         # rack stock calculation for usable, damaged, and partially damaged
-        usable = 0
-        damaged = 0
-        partial = 0
-        for rack in self.rack_details or []:
-            usability = rack.get('usability')
-            qty = rack.get('rack_stock', 0)
-            if usability == 'usable':
-                usable += qty
-            elif usability == 'damaged':
-                damaged += qty
-            elif usability == 'partially_damaged':
-                partial += qty
-        self.stock = usable
-        self.damaged_stock = damaged
-        self.partially_damaged_stock = partial
-        super().save(*args, **kwargs) 
+        # usable = 0
+        # damaged = 0
+        # partial = 0
+        # for rack in self.rack_details or []:
+        #     usability = rack.get('usability')
+        #     qty = rack.get('rack_stock', 0)
+        #     if usability == 'usable':
+        #         usable += qty
+        #     elif usability == 'damaged':
+        #         damaged += qty
+        #     elif usability == 'partially_damaged':
+        #         partial += qty
+        # self.stock = usable
+        # self.damaged_stock = damaged
+        # self.partially_damaged_stock = partial
+        # super().save(*args, **kwargs) 
+        
+        # --- Stock update only when rack_details changes ---
+        update_stock = False
+
+        if self.pk:
+            # Fetch the current (old) object from db
+            old = Products.objects.filter(pk=self.pk).first()
+            # Compare old and new rack_details (handle None as empty list)
+            old_rack = old.rack_details if old and old.rack_details is not None else []
+            new_rack = self.rack_details if self.rack_details is not None else []
+            if old_rack != new_rack:
+                update_stock = True
+        else:
+            # New product, always update
+            update_stock = True
+
+        # If rack_details changed or new object, update the stock fields
+        if update_stock:
+            usable = 0
+            damaged = 0
+            partial = 0
+            for rack in self.rack_details or []:
+                usability = rack.get('usability')
+                qty = rack.get('rack_stock', 0)
+                if usability == 'usable':
+                    usable += qty
+                elif usability == 'damaged':
+                    damaged += qty
+                elif usability == 'partially_damaged':
+                    partial += qty
+            self.stock = usable
+            self.damaged_stock = damaged
+            self.partially_damaged_stock = partial
+
+        super().save(*args, **kwargs)
      
 
     def lock_stock(self, quantity):
@@ -426,35 +461,46 @@ class Products(models.Model):
             self.locked_stock -= quantity
             self.save()
 
-    # def reduce_stock(self, quantity):
-    #     """Reduces stock after order is shipped"""
-    #     if self.stock >= quantity and self.locked_stock >= quantity:
-    #         self.stock -= quantity
-    #         self.locked_stock -= quantity
-    #         self.save()
-    #     else:
-    #         raise ValueError("Not enough stock to fulfill order.") 
+    def reduce_stock(self, quantity):
+        """Reduces stock after order is shipped"""
+        if self.stock >= quantity and self.locked_stock >= quantity:
+            self.stock -= quantity
+            self.locked_stock -= quantity
+            self.save()
+        else:
+            raise ValueError("Not enough stock to fulfill order.") 
         
-    def reduce_rack_stock_on_ship(self, quantity):
-        qty_to_reduce = quantity
-        racks = self.rack_details or []
-        # Sort or reorder racks if needed, or just loop as is
-        for rack in racks:
-            if rack.get('usability') == 'usable' and rack.get('rack_stock', 0) > 0:
-                available = rack['rack_stock']
-                if available >= qty_to_reduce:
-                    rack['rack_stock'] -= qty_to_reduce
-                    qty_to_reduce = 0
-                    break
-                else:
-                    rack['rack_stock'] = 0
-                    qty_to_reduce -= available
-        if qty_to_reduce > 0:
-            raise ValueError("Not enough usable stock in racks to ship this quantity.")
+    # def reduce_stock(self, quantity):
+    #     print("testing")
+    #     """Reduces stock after order is shipped (from usable racks and locked stock)."""
+    #     if self.stock >= quantity and self.locked_stock >= quantity:
+    #         print("Called with", quantity)
+    #         print("Initial rack_details:", self.rack_details)
+    #         qty_to_reduce = quantity
+    #         racks = self.rack_details or []
+    #         for rack in racks:
+    #             if rack.get('usability') == 'usable' and rack.get('rack_stock', 0) > 0:
+    #                 available = rack['rack_stock']
+    #                 if available >= qty_to_reduce:
+    #                     rack['rack_stock'] -= qty_to_reduce
+    #                     qty_to_reduce = 0
+    #                     break
+    #                 else:
+    #                     qty_to_reduce -= available
+    #                     rack['rack_stock'] = 0
+    #         print("Updated rack_details:", racks)
+    #         if qty_to_reduce > 0:
+    #             raise ValueError("Not enough usable stock in racks to ship this quantity.")
 
-        self.rack_details = racks
-        self.locked_stock = max(self.locked_stock - quantity, 0)  # prevent negative
-        self.save()
+    #         self.rack_details = racks
+    #         self.locked_stock -= quantity  # reduce locked stock as well
+    #         self.save()
+    #         print("Saved! New rack_details:", self.rack_details)
+    #         print("New locked_stock:", self.locked_stock)
+    #     else:
+    #         raise ValueError("Not enough stock or locked stock to fulfill order.")
+
+
   
     def __str__(self):
         return self.name
