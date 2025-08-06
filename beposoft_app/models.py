@@ -426,16 +426,16 @@ class Products(models.Model):
             self.locked_stock -= quantity
             self.save()
 
-    def reduce_stock(self, quantity):
-        """Reduces stock after order is shipped"""
-        if self.stock >= quantity and self.locked_stock >= quantity:
-            self.stock -= quantity
-            self.locked_stock -= quantity
-            self.save()
-        else:
-            raise ValueError("Not enough stock to fulfill order.") 
+    # def reduce_stock(self, quantity):
+    #     """Reduces stock after order is shipped"""
+    #     if self.stock >= quantity and self.locked_stock >= quantity:
+    #         self.stock -= quantity
+    #         self.locked_stock -= quantity
+    #         self.save()
+    #     else:
+    #         raise ValueError("Not enough stock to fulfill order.") 
         
-    def reduce_rack_stock_on_ship(self, quantity):
+    def reduce_stock(self, quantity):
         qty_to_reduce = quantity
         racks = self.rack_details or []
         # Sort or reorder racks if needed, or just loop as is
@@ -456,8 +456,6 @@ class Products(models.Model):
         self.locked_stock = max(self.locked_stock - quantity, 0)  # prevent negative
         self.save()
   
-
-
     def __str__(self):
         return self.name
     
