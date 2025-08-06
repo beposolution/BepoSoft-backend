@@ -1167,7 +1167,7 @@ class GRVSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source = "order.invoice")
     order_date = serializers.CharField(source="order.order_date")
     family=serializers.IntegerField(source="order.family.id")
-    product_id = serializers.CharField(source="product_id.id")
+    product_id = serializers.SerializerMethodField()
     class Meta:
         model=GRVModel
         fields=['order','id','product','family',
@@ -1175,6 +1175,9 @@ class GRVSerializer(serializers.ModelSerializer):
                 'remark','note','status','customer',
                 'invoice','staff',"order_date",'date',
                 'time','updated_at','product_id']
+        
+    def get_product_id(self, obj):
+        return obj.product_id.id if obj.product_id else None
         
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -1190,7 +1193,6 @@ class GRVSerializer(serializers.ModelSerializer):
            
 
 class GRVModelSerializer(serializers.ModelSerializer):
-    # product_id = serializers.CharField(source="product_id.id")
     class Meta:
         model = GRVModel
         fields = ['order', 'product', 'returnreason', 
