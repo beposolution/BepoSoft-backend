@@ -488,12 +488,49 @@ class OrderItemUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = "__all__"
-
+        
+class RackAllocationSerializer(serializers.Serializer):
+    rack_id = serializers.IntegerField()
+    column_name = serializers.CharField()
+    qty = serializers.IntegerField(min_value=1)
 
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ['product', 'name', 'description', 'rate', 'tax', 'quantity', 'price']
+        
+class OrderItemCreateSerializer(serializers.ModelSerializer):
+    rack_allocations = RackAllocationSerializer(many=True, write_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['product','variant','size','description','rate','discount','tax','quantity','rack_allocations']
+
+    def validate(self, data):
+        product = data['product']
+        allocs = data.get('rack_allocations', [])
+        if sum(a['qty'] for a in allocs) != data['quantity']:
+            raise serializers.ValidationError({"rack_allocations": "Sum of rack allocation qty must equal item quantity."})
+        for a in allocs:
+            r = product._find_rack(a['rack_id'], a['column_name'])
+            if not r:
+                raise serializers.ValidationError({"rack_allocations": f"Rack {a['rack_id']} / {a['column_name']} not found."})
+            if r.get('usability') != 'usable':
+                raise serializers.ValidationError({"rack_allocations": f"{a['column_name']} is not usable."})
+            available = int(r.get('rack_stock', 0)) - int(r.get('locked_qty', 0) or 0)
+            if a['qty'] > available:
+                raise serializers.ValidationError({"rack_allocations": f"Not enough in {a['column_name']} (available {available})."})
+        return data
+
+    def create(self, validated):
+        order = self.context.get('order')
+        if not order:
+            raise serializers.ValidationError("Order context is required.")
+        allocs = validated.pop('rack_allocations', [])
+        item = OrderItem(order=order, **validated)
+        item._payload_allocations = allocs
+        item.save()
+        return item
 
 class OrderSerializer(serializers.ModelSerializer):
     cod_amount = serializers.FloatField(required=False, allow_null=True)
