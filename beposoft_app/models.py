@@ -471,66 +471,66 @@ class Products(models.Model):
             raise ValueError("Not enough stock to fulfill order.") 
         
 
-    def _iter_racks(self):
-        for r in (self.rack_details or []):
-            r.setdefault('locked_qty', 0)  # backward compatible
-            yield r
+    # def _iter_racks(self):
+    #     for r in (self.rack_details or []):
+    #         r.setdefault('locked_qty', 0)  # backward compatible
+    #         yield r
 
-    def _find_rack(self, rack_id, column_name):
-        for r in self._iter_racks():
-            if r.get('rack_id') == rack_id and r.get('column_name') == column_name:
-                return r
-        return None
+    # def _find_rack(self, rack_id, column_name):
+    #     for r in self._iter_racks():
+    #         if r.get('rack_id') == rack_id and r.get('column_name') == column_name:
+    #             return r
+    #     return None
 
-    @transaction.atomic
-    def lock_from_rack(self, rack_id, column_name, qty):
-        if qty <= 0:
-            raise ValidationError("Quantity must be > 0")
-        r = self._find_rack(rack_id, column_name)
-        if not r:
-            raise ValidationError("Rack column not found on product")
-        available = int(r.get('rack_stock', 0)) - int(r.get('locked_qty', 0))
-        if qty > available:
-            raise ValidationError(f"Not enough stock in {column_name}. Available: {available}")
-        r['locked_qty'] = int(r.get('locked_qty', 0)) + qty
-        self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())  # keep legacy field
-        self.save(update_fields=['rack_details', 'locked_stock'])
+    # @transaction.atomic
+    # def lock_from_rack(self, rack_id, column_name, qty):
+    #     if qty <= 0:
+    #         raise ValidationError("Quantity must be > 0")
+    #     r = self._find_rack(rack_id, column_name)
+    #     if not r:
+    #         raise ValidationError("Rack column not found on product")
+    #     available = int(r.get('rack_stock', 0)) - int(r.get('locked_qty', 0))
+    #     if qty > available:
+    #         raise ValidationError(f"Not enough stock in {column_name}. Available: {available}")
+    #     r['locked_qty'] = int(r.get('locked_qty', 0)) + qty
+    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())  # keep legacy field
+    #     self.save(update_fields=['rack_details', 'locked_stock'])
 
-    @transaction.atomic
-    def unlock_from_rack(self, rack_id, column_name, qty):
-        r = self._find_rack(rack_id, column_name)
-        if not r:
-            raise ValidationError("Rack column not found on product")
-        if qty <= 0 or qty > int(r.get('locked_qty', 0)):
-            raise ValidationError("Invalid unlock quantity")
-        r['locked_qty'] = int(r['locked_qty']) - qty
-        self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
-        self.save(update_fields=['rack_details', 'locked_stock'])
+    # @transaction.atomic
+    # def unlock_from_rack(self, rack_id, column_name, qty):
+    #     r = self._find_rack(rack_id, column_name)
+    #     if not r:
+    #         raise ValidationError("Rack column not found on product")
+    #     if qty <= 0 or qty > int(r.get('locked_qty', 0)):
+    #         raise ValidationError("Invalid unlock quantity")
+    #     r['locked_qty'] = int(r['locked_qty']) - qty
+    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
+    #     self.save(update_fields=['rack_details', 'locked_stock'])
 
-    @transaction.atomic
-    def reduce_from_rack(self, rack_id, column_name, qty):
-        r = self._find_rack(rack_id, column_name)
-        if not r:
-            raise ValidationError("Rack column not found on product")
-        if qty <= 0:
-            raise ValidationError("Quantity must be > 0")
-        if qty > int(r.get('locked_qty', 0)):
-            raise ValidationError("Trying to ship more than locked from this rack")
-        if qty > int(r.get('rack_stock', 0)):
-            raise ValidationError("Rack stock insufficient")
-        r['locked_qty'] = int(r['locked_qty']) - qty
-        r['rack_stock'] = int(r['rack_stock']) - qty
+    # @transaction.atomic
+    # def reduce_from_rack(self, rack_id, column_name, qty):
+    #     r = self._find_rack(rack_id, column_name)
+    #     if not r:
+    #         raise ValidationError("Rack column not found on product")
+    #     if qty <= 0:
+    #         raise ValidationError("Quantity must be > 0")
+    #     if qty > int(r.get('locked_qty', 0)):
+    #         raise ValidationError("Trying to ship more than locked from this rack")
+    #     if qty > int(r.get('rack_stock', 0)):
+    #         raise ValidationError("Rack stock insufficient")
+    #     r['locked_qty'] = int(r['locked_qty']) - qty
+    #     r['rack_stock'] = int(r['rack_stock']) - qty
 
-        # Recompute aggregates so existing UI keeps working
-        usable = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'usable')
-        damaged = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'damaged')
-        partial = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'partially_damaged')
-        self.stock = usable
-        self.damaged_stock = damaged
-        self.partially_damaged_stock = partial
-        self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
+    #     # Recompute aggregates so existing UI keeps working
+    #     usable = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'usable')
+    #     damaged = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'damaged')
+    #     partial = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'partially_damaged')
+    #     self.stock = usable
+    #     self.damaged_stock = damaged
+    #     self.partially_damaged_stock = partial
+    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
 
-        self.save(update_fields=['rack_details', 'stock', 'damaged_stock', 'partially_damaged_stock', 'locked_stock'])
+    #     self.save(update_fields=['rack_details', 'stock', 'damaged_stock', 'partially_damaged_stock', 'locked_stock'])
             
     # def reduce_stock(self, quantity):
     #     print("testing")
@@ -712,66 +712,63 @@ class Order(models.Model):
 
     updated_at = models.DateTimeField(auto_now=True)
 
-    # def save(self, *args, **kwargs):
-    #     if not self.invoice:
-    #         self.invoice = self.generate_invoice_number()
-
-       
-    #     if self.pk: 
-    #         previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
-
-    #         if previous_status and previous_status != self.status:
-               
-    #             if self.status == 'Shipped':
-    #                 for item in self.items.all():
-    #                     product = item.product
-    #                     if product.locked_stock >= item.quantity:
-    #                         product.locked_stock -= item.quantity 
-    #                         product.stock -= item.quantity  
-    #                         product.save()
-    #                     else:
-    #                         raise ValueError("Locked stock inconsistency detected!")
-
-
-    #     super().save(*args, **kwargs)
-    
     def save(self, *args, **kwargs):
         if not self.invoice:
             self.invoice = self.generate_invoice_number()
 
-        if self.pk:  # updating an existing order
-            previous_status = (
-                Order.objects.filter(pk=self.pk)
-                .values_list("status", flat=True)
-                .first()
-            )
+       
+        if self.pk: 
+            previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
             if previous_status and previous_status != self.status:
+               
                 if self.status == 'Shipped':
-                    # Reduce stock from the exact rack columns that were locked
-                    with transaction.atomic():
-                        # Avoid N+1 queries
-                        items = self.items.select_related('product').prefetch_related('rack_allocations')
+                    for item in self.items.all():
+                        product = item.product
+                        if product.locked_stock >= item.quantity:
+                            product.locked_stock -= item.quantity 
+                            product.stock -= item.quantity  
+                            product.save()
+                        else:
+                            raise ValueError("Locked stock inconsistency detected!")
 
-                        for item in items:
-                            # Rack-based path (preferred)
-                            if item.rack_allocations.exists():
-                                for a in item.rack_allocations.all():
-                                    # consume from rack column and release lock
-                                    item.product.reduce_from_rack(
-                                        a.rack_id, a.column_name, a.qty_locked
-                                    )
-                            else:
-                                # LEGACY fallback: for old items that didn’t store rack allocations
-                                product = item.product
-                                if product.locked_stock >= item.quantity:
-                                    product.locked_stock -= item.quantity
-                                    product.stock = max(product.stock - item.quantity, 0)
-                                    product.save(update_fields=['locked_stock', 'stock'])
-                                else:
-                                    raise ValidationError("Locked stock inconsistency detected!")
 
         super().save(*args, **kwargs)
+    
+    # def save(self, *args, **kwargs):
+    #     if not self.invoice:
+    #         self.invoice = self.generate_invoice_number()
+
+    #     if self.pk: 
+    #         previous_status = (
+    #             Order.objects.filter(pk=self.pk)
+    #             .values_list("status", flat=True)
+    #             .first()
+    #         )
+
+    #         if previous_status and previous_status != self.status:
+    #             if self.status == 'Shipped':
+    #                 with transaction.atomic():
+    #                     items = self.items.select_related('product').prefetch_related('rack_allocations')
+
+    #                     for item in items:
+    #                         if item.rack_allocations.exists():
+    #                             for a in item.rack_allocations.all():
+                                  
+    #                                 item.product.reduce_from_rack(
+    #                                     a.rack_id, a.column_name, a.qty_locked
+    #                                 )
+    #                         else:
+                                
+    #                             product = item.product
+    #                             if product.locked_stock >= item.quantity:
+    #                                 product.locked_stock -= item.quantity
+    #                                 product.stock = max(product.stock - item.quantity, 0)
+    #                                 product.save(update_fields=['locked_stock', 'stock'])
+    #                             else:
+    #                                 raise ValidationError("Locked stock inconsistency detected!")
+
+    #     super().save(*args, **kwargs)
 
     def generate_invoice_number(self):
         if not self.company:
@@ -840,133 +837,124 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
     
-    def apply_rack_locks(self, allocations, delta_sign=+1):
-        for a in allocations:
-            if delta_sign > 0:
-                self.product.lock_from_rack(a['rack_id'], a['column_name'], a['qty'])
-            else:
-                self.product.unlock_from_rack(a['rack_id'], a['column_name'], a['qty'])
+    # def apply_rack_locks(self, allocations, delta_sign=+1):
+    #     for a in allocations:
+    #         if delta_sign > 0:
+    #             self.product.lock_from_rack(a['rack_id'], a['column_name'], a['qty'])
+    #         else:
+    #             self.product.unlock_from_rack(a['rack_id'], a['column_name'], a['qty'])
 
-    @transaction.atomic
-    def save(self, *args, **kwargs):
-        """
-        If creating and self._payload_allocations is present (list of dicts with rack_id/column_name/qty),
-        do rack-based locking and persist allocations.
-        Otherwise, fall back to legacy global locked_stock logic for backward compatibility.
-        """
-        creating = self.pk is None
-        allocations = getattr(self, '_payload_allocations', None) if creating else None
-
-        # Legacy path (no allocations provided)
-        if creating and not allocations:
-            product = self.product
-            available_stock = product.stock - product.locked_stock
-            if self.quantity > available_stock:
-                raise ValidationError("Not enough available stock to lock.")
-            product.locked_stock += self.quantity
-            product.save(update_fields=['locked_stock'])
-            return super().save(*args, **kwargs)
-
-        if not creating:
-            # For updates, either keep it simple (disallow without explicit API) or implement diffing.
-            # Here we forbid quantity changes unless you also update allocations via API.
-            original = OrderItem.objects.get(pk=self.pk)
-            if self.quantity != original.quantity:
-                raise ValidationError("Update quantity requires reallocating racks; use the allocations API.")
-            return super().save(*args, **kwargs)
-
-        # Rack-based path
-        # Basic sanity: sum of allocations must equal line quantity
-        if sum(a['qty'] for a in allocations) != self.quantity:
-            raise ValidationError("Sum of rack allocation qty must equal item quantity.")
-
-        # Persist the line first (need PK for allocation rows)
-        super().save(*args, **kwargs)
-
-        # Create allocation rows and lock per rack
-        for a in allocations:
-            OrderItemRackAllocation.objects.create(
-                order_item=self,
-                product=self.product,
-                rack_id=a['rack_id'],
-                column_name=a['column_name'],
-                qty_locked=a['qty'],
-            )
-        self.apply_rack_locks(allocations, delta_sign=+1)
-
-    @transaction.atomic
-    def delete(self, *args, **kwargs):
-        """
-        Unlock what we locked. Supports both paths:
-        - Rack-based: unlock each allocated rack.
-        - Legacy: decrement product.locked_stock.
-        """
-        # Rack-based?
-        allocs_qs = getattr(self, 'rack_allocations', None)
-        if allocs_qs and allocs_qs.exists():
-            allocs = list(allocs_qs.values('rack_id', 'column_name', 'qty_locked'))
-            self.apply_rack_locks(
-                [{"rack_id": a['rack_id'], "column_name": a['column_name'], "qty": a['qty_locked']} for a in allocs],
-                delta_sign=-1
-            )
-            return super().delete(*args, **kwargs)
-
-        # Legacy fallback
-        product = self.product
-        if product.locked_stock >= self.quantity:
-            product.locked_stock -= self.quantity
-            product.save(update_fields=['locked_stock'])
-        return super().delete(*args, **kwargs)
-    
+    # @transaction.atomic
     # def save(self, *args, **kwargs):
-    #     product = self.product
+    #     """
+    #     If creating and self._payload_allocations is present (list of dicts with rack_id/column_name/qty),
+    #     do rack-based locking and persist allocations.
+    #     Otherwise, fall back to legacy global locked_stock logic for backward compatibility.
+    #     """
+    #     creating = self.pk is None
+    #     allocations = getattr(self, '_payload_allocations', None) if creating else None
 
-    #     if self.pk: 
-    #         original_quantity = OrderItem.objects.get(pk=self.pk).quantity 
-            
-    #         if self.quantity != original_quantity: 
-    #             change_in_quantity = self.quantity - original_quantity 
-                
-               
-    #             if change_in_quantity > 0:  
-    #                 available_stock = product.stock - product.locked_stock
-    #                 if change_in_quantity > available_stock:
-    #                     raise ValueError("Not enough available stock to lock additional quantity.")
-    #                 product.locked_stock += change_in_quantity 
-
-    #             elif change_in_quantity < 0:  
-    #                 product.locked_stock += change_in_quantity 
-
-    #     else: 
+    #     if creating and not allocations:
+    #         product = self.product
     #         available_stock = product.stock - product.locked_stock
     #         if self.quantity > available_stock:
-    #             raise ValueError("Not enough available stock to lock.")
-    #         product.locked_stock += self.quantity 
+    #             raise ValidationError("Not enough available stock to lock.")
+    #         product.locked_stock += self.quantity
+    #         product.save(update_fields=['locked_stock'])
+    #         return super().save(*args, **kwargs)
 
-    #     product.save()
+    #     if not creating:
+    #         original = OrderItem.objects.get(pk=self.pk)
+    #         if self.quantity != original.quantity:
+    #             raise ValidationError("Update quantity requires reallocating racks; use the allocations API.")
+    #         return super().save(*args, **kwargs)
+
+    #     if sum(a['qty'] for a in allocations) != self.quantity:
+    #         raise ValidationError("Sum of rack allocation qty must equal item quantity.")
+
     #     super().save(*args, **kwargs)
 
-    # def delete(self, *args, **kwargs):
-    #     """Release locked stock if the order item is deleted"""
-    #     product = self.product
+    #     for a in allocations:
+    #         OrderItemRackAllocation.objects.create(
+    #             order_item=self,
+    #             product=self.product,
+    #             rack_id=a['rack_id'],
+    #             column_name=a['column_name'],
+    #             qty_locked=a['qty'],
+    #         )
+    #     self.apply_rack_locks(allocations, delta_sign=+1)
 
+    # @transaction.atomic
+    # def delete(self, *args, **kwargs):
+    #     """
+    #     Unlock what we locked. Supports both paths:
+    #     - Rack-based: unlock each allocated rack.
+    #     - Legacy: decrement product.locked_stock.
+    #     """
+    #     allocs_qs = getattr(self, 'rack_allocations', None)
+    #     if allocs_qs and allocs_qs.exists():
+    #         allocs = list(allocs_qs.values('rack_id', 'column_name', 'qty_locked'))
+    #         self.apply_rack_locks(
+    #             [{"rack_id": a['rack_id'], "column_name": a['column_name'], "qty": a['qty_locked']} for a in allocs],
+    #             delta_sign=-1
+    #         )
+    #         return super().delete(*args, **kwargs)
+
+    #     product = self.product
     #     if product.locked_stock >= self.quantity:
     #         product.locked_stock -= self.quantity
-    #         product.save()
+    #         product.save(update_fields=['locked_stock'])
+    #     return super().delete(*args, **kwargs)
+    
+    def save(self, *args, **kwargs):
+        product = self.product
 
-    #     super().delete(*args, **kwargs)
+        if self.pk: 
+            original_quantity = OrderItem.objects.get(pk=self.pk).quantity 
+            
+            if self.quantity != original_quantity: 
+                change_in_quantity = self.quantity - original_quantity 
+                
+               
+                if change_in_quantity > 0:  
+                    available_stock = product.stock - product.locked_stock
+                    if change_in_quantity > available_stock:
+                        raise ValueError("Not enough available stock to lock additional quantity.")
+                    product.locked_stock += change_in_quantity 
+
+                elif change_in_quantity < 0:  
+                    product.locked_stock += change_in_quantity 
+
+        else: 
+            available_stock = product.stock - product.locked_stock
+            if self.quantity > available_stock:
+                raise ValueError("Not enough available stock to lock.")
+            product.locked_stock += self.quantity 
+
+        product.save()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Release locked stock if the order item is deleted"""
+        product = self.product
+
+        if product.locked_stock >= self.quantity:
+            product.locked_stock -= self.quantity
+            product.save()
+
+        super().delete(*args, **kwargs)
         
 
-class OrderItemRackAllocation(models.Model):
-    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name='rack_allocations')
-    product = models.ForeignKey(Products, on_delete=models.CASCADE)
-    rack_id = models.IntegerField()
-    column_name = models.CharField(max_length=100)
-    qty_locked = models.PositiveIntegerField()
+# class OrderItemRackAllocation(models.Model):
+#     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name='rack_allocations')
+#     product = models.ForeignKey(Products, on_delete=models.CASCADE)
+#     rack_id = models.IntegerField()
+#     column_name = models.CharField(max_length=100)
+#     qty_locked = models.PositiveIntegerField()
     
-    class Meta:
-        db_table = "order_item_rack_allocation"
-        unique_together = ('order_item', 'rack_id', 'column_name')
+#     class Meta:
+#         db_table = "order_item_rack_allocation"
+#         unique_together = ('order_item', 'rack_id', 'column_name')
         
         
 class BeposoftCart(models.Model):
