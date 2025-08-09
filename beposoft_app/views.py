@@ -4777,6 +4777,10 @@ def generate_shipping_label(request, order_id):
     shipping_data = order.billing_address
     if not shipping_data:
         raise Http404("Shipping data not found.")
+    
+    customer_data = order.customer
+    if not customer_data:
+        raise Http404("Customer data not found.")
 
     warehouse = Warehousedata.objects.filter(order=order).first()
 
@@ -4798,6 +4802,7 @@ def generate_shipping_label(request, order_id):
         "volume_weight": round(volume_weight, 2) if isinstance(volume_weight, (int, float)) else volume_weight,
         "speed": "0000053866",
         "cod_amount": cod_amount,
+        "customer_data": customer_data,
     }
 
     return render(request, "address.html", context)
