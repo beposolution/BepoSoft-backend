@@ -177,10 +177,11 @@ class CustomerModelSerializerView(serializers.ModelSerializer):
 
 class CustomerModelSerializerLimited(serializers.ModelSerializer):
     family=serializers.CharField(source="manager.family.name")
+    state_name = serializers.CharField(source="state.name")
    
     class Meta:
         model = Customers
-        fields = ['id','name', 'email', 'created_at','manager','family','phone']          
+        fields = ['id','name', 'email', 'created_at','manager','family','phone','state_name']          
 
 
 
