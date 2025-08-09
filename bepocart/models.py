@@ -63,7 +63,13 @@ class ExpenseModel(models.Model):
         ('assets', 'Assets'),
         ('expenses', 'Expenses')
     ]
-
+    EXPENSE_TYPE_CHOICES = [
+        ('miscellaneous', 'Miscellaneous'),
+        ('permanent', 'Permanent'),
+        ('emi', 'EMI'),
+        ('cargo', 'Cargo'),
+        ('purchase', 'Purchase'),
+    ]
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="company")
     payed_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="payed_by")
     bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="banks")
@@ -78,6 +84,7 @@ class ExpenseModel(models.Model):
     added_by = models.CharField(max_length=30, null=True)
     loan = models.ForeignKey(Loan, on_delete=models.CASCADE, null=True, blank=True, related_name="loan_expenses")
     asset_types = models.CharField(max_length=100, choices=ASSET_CHOICES, null=True)
+    expense_type = models.CharField(max_length=100, choices=EXPENSE_TYPE_CHOICES, null=True, blank=True)
 
     def save(self, *args, **kwargs):
         """Ensure EMI payments are linked to a loan before saving."""
