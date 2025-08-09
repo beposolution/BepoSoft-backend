@@ -1312,15 +1312,20 @@ class ExpenseExpectEmiSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ExpenseModel
-        fields = ['id','company','payed_by','bank','name','quantity','purpose_of_payment','amount','expense_date','transaction_id','description','added_by']
+        fields = ['id','company','payed_by','bank',
+                  'name','quantity','purpose_of_payment',
+                  'amount','expense_date','transaction_id',
+                  'description','added_by','expense_type']
 
 
 class ExpenseSerializerAssest(serializers.ModelSerializer):
     
     class Meta:
         model = ExpenseModel
-        fields = ['id','company','category','payed_by','bank','name','quantity','purpose_of_payment','amount','expense_date','transaction_id','description','added_by','asset_types']
-
+        fields = ['id','company','category','payed_by','bank',
+                  'name','quantity','purpose_of_payment','amount',
+                  'expense_date','transaction_id','description',
+                  'added_by','asset_types','expense_type']
 
     
 
@@ -1336,7 +1341,7 @@ class ExpenseModelsSerializers(serializers.ModelSerializer):
         model = ExpenseModel
         fields = ['id', 'company', 'categoryname', 'payed_by', 'bank',
                   'purpose_of_payment', 'purpose_of_pay', 'amount',
-                  'expense_date', 'transaction_id', 'description',
+                  'expense_date', 'transaction_id', 'description','expense_type',
                   'added_by', 'loan', 'name', 'quantity', 'asset_types', 'loanname']
 
     def get_categoryname(self, obj):
