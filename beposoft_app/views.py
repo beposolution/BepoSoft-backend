@@ -1855,8 +1855,17 @@ class OrderUpdateView(BaseTokenView):
             return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
         
+
+class OrderItemCreateAPIView(BaseTokenView):
+    def post(self, request):
+        _, err = self.get_user_from_token(request)
+        if err: return err
+        ser = OrderItemCreateWithRacksSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        obj = ser.save()
+        return Response({"id": obj.id}, status=201)
+
 
 class CustomerOrderItems(BaseTokenView):
     def get(self, request, order_id):
@@ -1871,7 +1880,13 @@ class CustomerOrderItems(BaseTokenView):
                 return Response({"status": "error", "message": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
             
             # Use prefetch_related to fetch related order items in a single query
-            orderItems = OrderItem.objects.filter(order=order_id).select_related('product')
+            # orderItems = OrderItem.objects.filter(order=order_id).select_related('product')
+            orderItems = (
+                OrderItem.objects
+                .filter(order=order_id)
+                .select_related('product')
+                .prefetch_related('rack_allocations__product_rack')
+            )
             if not orderItems.exists():
                 return Response({"status": "error", "message": "No order items found"}, status=status.HTTP_404_NOT_FOUND)
             

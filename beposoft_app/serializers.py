@@ -616,6 +616,22 @@ class PaymentRecieptsViewSerializers(serializers.ModelSerializer):
     class Meta :
         model = PaymentReceipt
         fields = '__all__'
+        
+
+class ProductRackReadSerializer(serializers.ModelSerializer):
+    free = serializers.SerializerMethodField()
+    class Meta:
+        model = ProductRack
+        fields = ["id","rack_id","rack_name","column_name","usability","rack_stock","locked_stock","free"]
+    def get_free(self, obj):
+        return max(0, obj.rack_stock - obj.locked_stock)
+
+class OrderItemRackAllocationRead(serializers.ModelSerializer):
+    product_rack = ProductRackReadSerializer()
+    class Meta:
+        model = OrderItemRackAllocation
+        fields = ["id","quantity","product_rack"]
+        
 
 class OrderItemModelSerializer(serializers.ModelSerializer):
     products = serializers.CharField(source="product.rack_details")
@@ -624,6 +640,7 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
     actual_price = serializers.SerializerMethodField()
     exclude_price = serializers.SerializerMethodField()
     price_discount = serializers.SerializerMethodField()
+    rack_allocations = OrderItemRackAllocationRead(many=True, read_only=True)
   
     class Meta:
         model = OrderItem
@@ -643,7 +660,8 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
             "exclude_price",
             "price_discount",
             "image",
-            "products"
+            "products",
+            "rack_allocations"
         ]
     def get_name(self, obj):
         # Check if the product is a single or variant type
@@ -677,6 +695,55 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
     def get_actual_price(self, obj):
         # directly use exclude_price
         return self.get_exclude_price(obj)
+    
+class OrderItemRackAllocationWrite(serializers.Serializer):
+    rack_id = serializers.IntegerField()
+    column_name = serializers.CharField(allow_blank=True, required=False)
+    usability = serializers.ChoiceField(choices=["usable","damaged"])
+    quantity = serializers.IntegerField(min_value=1)
+
+class OrderItemCreateWithRacksSerializer(serializers.ModelSerializer):
+    rack_allocations = OrderItemRackAllocationWrite(many=True, write_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ["order","product","variant","size","description","rate","tax","discount","quantity","rack_allocations"]
+
+    def validate(self, data):
+        if sum(a["quantity"] for a in data["rack_allocations"]) != data["quantity"]:
+            raise serializers.ValidationError("Sum of rack allocations must equal item quantity.")
+        product = data["product"]
+        for a in data["rack_allocations"]:
+            pr = ProductRack.objects.filter(
+                product=product,
+                rack_id=a["rack_id"],
+                column_name=a.get("column_name",""),
+                usability=a["usability"],
+            ).first()
+            if not pr:
+                raise serializers.ValidationError(f"Rack {a['rack_id']}:{a.get('column_name','')} not found.")
+            free = pr.rack_stock - pr.locked_stock
+            if a["quantity"] > free:
+                raise serializers.ValidationError(f"Not enough free stock on rack {pr.rack_id}/{pr.column_name}. Free={free}")
+        return data
+
+    @transaction.atomic
+    def create(self, validated):
+        allocs = validated.pop("rack_allocations")
+        # creates OrderItem and triggers your product-level lock in OrderItem.save()
+        item = super().create(validated)
+        # lock per rack
+        for a in allocs:
+            pr = ProductRack.objects.select_for_update().get(
+                product=item.product,
+                rack_id=a["rack_id"],
+                column_name=a.get("column_name",""),
+                usability=a["usability"],
+            )
+            pr.locked_stock += a["quantity"]
+            pr.save(update_fields=["locked_stock"])
+            OrderItemRackAllocation.objects.create(order_item=item, product_rack=pr, quantity=a["quantity"])
+        return item
 
     
 class FamilyOrderWarehouseModelSerilizer(serializers.ModelSerializer):

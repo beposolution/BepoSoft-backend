@@ -37,6 +37,8 @@ admin.site.register(InternalTransfer)
 admin.site.register(CountryCode)
 admin.site.register(RackDetailsModel)
 admin.site.register(ProductCategoryModel)
+admin.site.register(ProductRack)
+admin.site.register(OrderItemRackAllocation)
 
 
 
