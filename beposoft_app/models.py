@@ -720,55 +720,57 @@ class Order(models.Model):
         if self.pk: 
             previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
-            if previous_status and previous_status != self.status:
+            # if previous_status and previous_status != self.status:
                
+            #     if self.status == 'Shipped':
+            #         for item in self.items.all():
+            #             product = item.product
+            #             if product.locked_stock >= item.quantity:
+            #                 product.locked_stock -= item.quantity 
+            #                 product.stock -= item.quantity  
+            #                 product.save()
+            #             else:
+            #                 raise ValueError("Locked stock inconsistency detected!")
+            
+            if previous_status and previous_status != self.status:
                 if self.status == 'Shipped':
-                    for item in self.items.all():
-                        product = item.product
-                        if product.locked_stock >= item.quantity:
-                            product.locked_stock -= item.quantity 
-                            product.stock -= item.quantity  
-                            product.save()
-                        else:
-                            raise ValueError("Locked stock inconsistency detected!")
+                    with transaction.atomic():
+                        # For each item, consume from its rack allocations first
+                        for item in (
+                            self.items
+                            .select_related("product")
+                            .prefetch_related("rack_allocations__product_rack")
+                        ):
+                            # Guardrail: ensure item has allocations totalling its qty
+                            alloc_total = sum(a.quantity for a in item.rack_allocations.all())
+                            if alloc_total != item.quantity:
+                                raise ValueError(
+                                    f"OrderItem {item.id} allocations ({alloc_total}) "
+                                    f"do not equal item quantity ({item.quantity})."
+                                )
+
+                            # Move per-rack: locked -> shipped and stock -> reduced
+                            for alloc in item.rack_allocations.all():
+                                pr = ProductRack.objects.select_for_update().get(pk=alloc.product_rack_id)
+
+                                if pr.locked_stock < alloc.quantity or pr.rack_stock < alloc.quantity:
+                                    raise ValueError("Rack stock inconsistency detected!")
+
+                                pr.locked_stock -= alloc.quantity
+                                pr.rack_stock   -= alloc.quantity
+                                pr.save(update_fields=["locked_stock", "rack_stock"])
+
+                            # Then keep your existing product-level movement
+                            product = item.product
+                            if product.locked_stock < item.quantity or product.stock < item.quantity:
+                                raise ValueError("Product stock inconsistency detected!")
+
+                            product.locked_stock -= item.quantity
+                            product.stock        -= item.quantity
+                            product.save(update_fields=["locked_stock", "stock"])
 
 
         super().save(*args, **kwargs)
-    
-    # def save(self, *args, **kwargs):
-    #     if not self.invoice:
-    #         self.invoice = self.generate_invoice_number()
-
-    #     if self.pk: 
-    #         previous_status = (
-    #             Order.objects.filter(pk=self.pk)
-    #             .values_list("status", flat=True)
-    #             .first()
-    #         )
-
-    #         if previous_status and previous_status != self.status:
-    #             if self.status == 'Shipped':
-    #                 with transaction.atomic():
-    #                     items = self.items.select_related('product').prefetch_related('rack_allocations')
-
-    #                     for item in items:
-    #                         if item.rack_allocations.exists():
-    #                             for a in item.rack_allocations.all():
-                                  
-    #                                 item.product.reduce_from_rack(
-    #                                     a.rack_id, a.column_name, a.qty_locked
-    #                                 )
-    #                         else:
-                                
-    #                             product = item.product
-    #                             if product.locked_stock >= item.quantity:
-    #                                 product.locked_stock -= item.quantity
-    #                                 product.stock = max(product.stock - item.quantity, 0)
-    #                                 product.save(update_fields=['locked_stock', 'stock'])
-    #                             else:
-    #                                 raise ValidationError("Locked stock inconsistency detected!")
-
-    #     super().save(*args, **kwargs)
 
     def generate_invoice_number(self):
         if not self.company:
@@ -837,75 +839,6 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
     
-    # def apply_rack_locks(self, allocations, delta_sign=+1):
-    #     for a in allocations:
-    #         if delta_sign > 0:
-    #             self.product.lock_from_rack(a['rack_id'], a['column_name'], a['qty'])
-    #         else:
-    #             self.product.unlock_from_rack(a['rack_id'], a['column_name'], a['qty'])
-
-    # @transaction.atomic
-    # def save(self, *args, **kwargs):
-    #     """
-    #     If creating and self._payload_allocations is present (list of dicts with rack_id/column_name/qty),
-    #     do rack-based locking and persist allocations.
-    #     Otherwise, fall back to legacy global locked_stock logic for backward compatibility.
-    #     """
-    #     creating = self.pk is None
-    #     allocations = getattr(self, '_payload_allocations', None) if creating else None
-
-    #     if creating and not allocations:
-    #         product = self.product
-    #         available_stock = product.stock - product.locked_stock
-    #         if self.quantity > available_stock:
-    #             raise ValidationError("Not enough available stock to lock.")
-    #         product.locked_stock += self.quantity
-    #         product.save(update_fields=['locked_stock'])
-    #         return super().save(*args, **kwargs)
-
-    #     if not creating:
-    #         original = OrderItem.objects.get(pk=self.pk)
-    #         if self.quantity != original.quantity:
-    #             raise ValidationError("Update quantity requires reallocating racks; use the allocations API.")
-    #         return super().save(*args, **kwargs)
-
-    #     if sum(a['qty'] for a in allocations) != self.quantity:
-    #         raise ValidationError("Sum of rack allocation qty must equal item quantity.")
-
-    #     super().save(*args, **kwargs)
-
-    #     for a in allocations:
-    #         OrderItemRackAllocation.objects.create(
-    #             order_item=self,
-    #             product=self.product,
-    #             rack_id=a['rack_id'],
-    #             column_name=a['column_name'],
-    #             qty_locked=a['qty'],
-    #         )
-    #     self.apply_rack_locks(allocations, delta_sign=+1)
-
-    # @transaction.atomic
-    # def delete(self, *args, **kwargs):
-    #     """
-    #     Unlock what we locked. Supports both paths:
-    #     - Rack-based: unlock each allocated rack.
-    #     - Legacy: decrement product.locked_stock.
-    #     """
-    #     allocs_qs = getattr(self, 'rack_allocations', None)
-    #     if allocs_qs and allocs_qs.exists():
-    #         allocs = list(allocs_qs.values('rack_id', 'column_name', 'qty_locked'))
-    #         self.apply_rack_locks(
-    #             [{"rack_id": a['rack_id'], "column_name": a['column_name'], "qty": a['qty_locked']} for a in allocs],
-    #             delta_sign=-1
-    #         )
-    #         return super().delete(*args, **kwargs)
-
-    #     product = self.product
-    #     if product.locked_stock >= self.quantity:
-    #         product.locked_stock -= self.quantity
-    #         product.save(update_fields=['locked_stock'])
-    #     return super().delete(*args, **kwargs)
-    
     def save(self, *args, **kwargs):
         product = self.product
 
@@ -944,17 +877,25 @@ class OrderItem(models.Model):
 
         super().delete(*args, **kwargs)
         
+class ProductRack(models.Model):
+    product = models.ForeignKey(Products, on_delete=models.CASCADE, related_name="racks")
+    rack_id = models.PositiveIntegerField()
+    rack_name = models.CharField(max_length=50, blank=True)
+    column_name = models.CharField(max_length=50, blank=True)
+    usability = models.CharField(max_length=20, choices=[("usable","usable"),("damaged","damaged")])
+    rack_stock = models.PositiveIntegerField(default=0)
+    locked_stock = models.PositiveIntegerField(default=0)
 
-# class OrderItemRackAllocation(models.Model):
-#     order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name='rack_allocations')
-#     product = models.ForeignKey(Products, on_delete=models.CASCADE)
-#     rack_id = models.IntegerField()
-#     column_name = models.CharField(max_length=100)
-#     qty_locked = models.PositiveIntegerField()
-    
-#     class Meta:
-#         db_table = "order_item_rack_allocation"
-#         unique_together = ('order_item', 'rack_id', 'column_name')
+    class Meta:
+        unique_together = ("product", "rack_id", "column_name", "usability")
+        
+class OrderItemRackAllocation(models.Model):
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="rack_allocations")
+    product_rack = models.ForeignKey("beposoft_app.ProductRack", on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        unique_together = ("order_item", "product_rack")
         
         
 class BeposoftCart(models.Model):
