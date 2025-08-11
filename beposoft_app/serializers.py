@@ -618,6 +618,7 @@ class PaymentRecieptsViewSerializers(serializers.ModelSerializer):
         fields = '__all__'
 
 class OrderItemModelSerializer(serializers.ModelSerializer):
+    products = serializers.CharField(source="product.rack_details")
     image=serializers.ImageField(source="product.image")
     name=serializers.CharField(source="product.name")
     actual_price = serializers.SerializerMethodField()
@@ -641,7 +642,8 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
             "actual_price",
             "exclude_price",
             "price_discount",
-            "image"
+            "image",
+            "products"
         ]
     def get_name(self, obj):
         # Check if the product is a single or variant type
