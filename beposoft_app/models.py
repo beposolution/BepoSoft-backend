@@ -797,6 +797,8 @@ class OrderItem(models.Model):
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True)
     tax = models.PositiveIntegerField()  # tax percentage
     quantity = models.PositiveIntegerField()
+    rack_details = models.JSONField(default=list, blank=True, null=True)
+    
 
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
