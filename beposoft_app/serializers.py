@@ -645,6 +645,7 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
             "price_discount",
             "image",
             "products",
+            "rack_details",
         ]
     def get_name(self, obj):
         # Check if the product is a single or variant type
