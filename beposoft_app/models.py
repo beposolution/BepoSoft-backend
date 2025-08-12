@@ -720,56 +720,18 @@ class Order(models.Model):
         if self.pk: 
             previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
-            # if previous_status and previous_status != self.status:
-               
-            #     if self.status == 'Shipped':
-            #         for item in self.items.all():
-            #             product = item.product
-            #             if product.locked_stock >= item.quantity:
-            #                 product.locked_stock -= item.quantity 
-            #                 product.stock -= item.quantity  
-            #                 product.save()
-            #             else:
-            #                 raise ValueError("Locked stock inconsistency detected!")
-            
             if previous_status and previous_status != self.status:
+               
                 if self.status == 'Shipped':
-                    with transaction.atomic():
-                        # For each item, consume from its rack allocations first
-                        for item in (
-                            self.items
-                            .select_related("product")
-                            .prefetch_related("rack_allocations__product_rack")
-                        ):
-                            # Guardrail: ensure item has allocations totalling its qty
-                            alloc_total = sum(a.quantity for a in item.rack_allocations.all())
-                            if alloc_total != item.quantity:
-                                raise ValueError(
-                                    f"OrderItem {item.id} allocations ({alloc_total}) "
-                                    f"do not equal item quantity ({item.quantity})."
-                                )
-
-                            # Move per-rack: locked -> shipped and stock -> reduced
-                            for alloc in item.rack_allocations.all():
-                                pr = ProductRack.objects.select_for_update().get(pk=alloc.product_rack_id)
-
-                                if pr.locked_stock < alloc.quantity or pr.rack_stock < alloc.quantity:
-                                    raise ValueError("Rack stock inconsistency detected!")
-
-                                pr.locked_stock -= alloc.quantity
-                                pr.rack_stock   -= alloc.quantity
-                                pr.save(update_fields=["locked_stock", "rack_stock"])
-
-                            # Then keep your existing product-level movement
-                            product = item.product
-                            if product.locked_stock < item.quantity or product.stock < item.quantity:
-                                raise ValueError("Product stock inconsistency detected!")
-
-                            product.locked_stock -= item.quantity
-                            product.stock        -= item.quantity
-                            product.save(update_fields=["locked_stock", "stock"])
-
-
+                    for item in self.items.all():
+                        product = item.product
+                        if product.locked_stock >= item.quantity:
+                            product.locked_stock -= item.quantity 
+                            product.stock -= item.quantity  
+                            product.save()
+                        else:
+                            raise ValueError("Locked stock inconsistency detected!")
+            
         super().save(*args, **kwargs)
 
     def generate_invoice_number(self):
