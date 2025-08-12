@@ -803,6 +803,31 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
     
+    def _update_product_rack_lock(self, diff=0):
+        """
+        Update the rack_lock in product.rack_details based on this order item's rack_details.
+        diff: +N to lock, -N to unlock
+        """
+        product = self.product
+        product_racks = product.rack_details or []
+        changed = False
+
+        for order_rack in self.rack_details or []:
+            for prod_rack in product_racks:
+                if (
+                    prod_rack.get("rack_id") == order_rack.get("rack_id")
+                    and prod_rack.get("column_name") == order_rack.get("column_name")
+                ):
+                    prod_rack["rack_lock"] = int(prod_rack.get("rack_lock", 0)) + diff * int(order_rack.get("quantity", 0))
+                    # Prevent negative lock
+                    if prod_rack["rack_lock"] < 0:
+                        prod_rack["rack_lock"] = 0
+                    changed = True
+        if changed:
+            product.rack_details = product_racks
+            product.save(update_fields=["rack_details"])
+
+    
     def save(self, *args, **kwargs):
         product = self.product
 
