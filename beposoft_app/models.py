@@ -881,6 +881,45 @@ def handle_orderitem_rack_lock(sender, instance, **kwargs):
 def handle_orderitem_rack_lock_delete(sender, instance, **kwargs):
     # Remove rack locks
     update_product_rack_lock(instance.product, instance.rack_details, diff=-1)
+    
+
+def reduce_rack_stock_and_lock(product, rack_details, quantity):
+    """
+    Reduce rack_stock and rack_lock in product.rack_details by quantity for each rack in rack_details.
+    """
+    racks = product.rack_details or []
+    changed = False
+    for order_rack in rack_details or []:
+        for prod_rack in racks:
+            if (
+                prod_rack.get("rack_id") == order_rack.get("rack_id")
+                and prod_rack.get("column_name") == order_rack.get("column_name")
+            ):
+                prod_rack["rack_stock"] = max(0, int(prod_rack.get("rack_stock", 0)) - quantity)
+                prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - quantity)
+                changed = True
+    if changed:
+        product.rack_details = racks
+        product.save(update_fields=["rack_details"])
+
+def reduce_rack_lock_only(product, rack_details, quantity):
+    """
+    Reduce only rack_lock in product.rack_details by quantity for each rack in rack_details.
+    """
+    racks = product.rack_details or []
+    changed = False
+    for order_rack in rack_details or []:
+        for prod_rack in racks:
+            if (
+                prod_rack.get("rack_id") == order_rack.get("rack_id")
+                and prod_rack.get("column_name") == order_rack.get("column_name")
+            ):
+                prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - quantity)
+                changed = True
+    if changed:
+        product.rack_details = racks
+        product.save(update_fields=["rack_details"])
+        
         
 class ProductRack(models.Model):
     product = models.ForeignKey(Products, on_delete=models.CASCADE, related_name="racks")
