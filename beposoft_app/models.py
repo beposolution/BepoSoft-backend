@@ -576,6 +576,28 @@ def reduce_product_rack_stock_on_ship(order):
             product.save(update_fields=["rack_details"])
 
 
+def release_product_rack_lock_on_invoice_reject(order):
+    """
+    For each OrderItem in the order, reduce the rack_lock in product.rack_details
+    by the quantity in the item's rack_details.
+    Call this when order status is set to 'Invoice Rejected'.
+    """
+    for item in order.items.all():
+        product = item.product
+        changed = False
+        for order_rack in item.rack_details or []:
+            for prod_rack in product.rack_details or []:
+                if (
+                    prod_rack.get("rack_id") == order_rack.get("rack_id")
+                    and prod_rack.get("column_name") == order_rack.get("column_name")
+                ):
+                    qty = int(order_rack.get("quantity", 0))
+                    prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - qty)
+                    changed = True
+        if changed:
+            product.save(update_fields=["rack_details"])
+
+
 class Order(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE)
     warehouses = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True)
@@ -660,6 +682,8 @@ class Order(models.Model):
                             product.save()
                         else:
                             raise ValueError("Locked stock inconsistency detected!")
+                elif self.status == 'Invoice Rejected':
+                    release_product_rack_lock_on_invoice_reject(self)
             
         super().save(*args, **kwargs)
 
