@@ -470,99 +470,6 @@ class Products(models.Model):
         else:
             raise ValueError("Not enough stock to fulfill order.") 
         
-
-    # def _iter_racks(self):
-    #     for r in (self.rack_details or []):
-    #         r.setdefault('locked_qty', 0)  # backward compatible
-    #         yield r
-
-    # def _find_rack(self, rack_id, column_name):
-    #     for r in self._iter_racks():
-    #         if r.get('rack_id') == rack_id and r.get('column_name') == column_name:
-    #             return r
-    #     return None
-
-    # @transaction.atomic
-    # def lock_from_rack(self, rack_id, column_name, qty):
-    #     if qty <= 0:
-    #         raise ValidationError("Quantity must be > 0")
-    #     r = self._find_rack(rack_id, column_name)
-    #     if not r:
-    #         raise ValidationError("Rack column not found on product")
-    #     available = int(r.get('rack_stock', 0)) - int(r.get('locked_qty', 0))
-    #     if qty > available:
-    #         raise ValidationError(f"Not enough stock in {column_name}. Available: {available}")
-    #     r['locked_qty'] = int(r.get('locked_qty', 0)) + qty
-    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())  # keep legacy field
-    #     self.save(update_fields=['rack_details', 'locked_stock'])
-
-    # @transaction.atomic
-    # def unlock_from_rack(self, rack_id, column_name, qty):
-    #     r = self._find_rack(rack_id, column_name)
-    #     if not r:
-    #         raise ValidationError("Rack column not found on product")
-    #     if qty <= 0 or qty > int(r.get('locked_qty', 0)):
-    #         raise ValidationError("Invalid unlock quantity")
-    #     r['locked_qty'] = int(r['locked_qty']) - qty
-    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
-    #     self.save(update_fields=['rack_details', 'locked_stock'])
-
-    # @transaction.atomic
-    # def reduce_from_rack(self, rack_id, column_name, qty):
-    #     r = self._find_rack(rack_id, column_name)
-    #     if not r:
-    #         raise ValidationError("Rack column not found on product")
-    #     if qty <= 0:
-    #         raise ValidationError("Quantity must be > 0")
-    #     if qty > int(r.get('locked_qty', 0)):
-    #         raise ValidationError("Trying to ship more than locked from this rack")
-    #     if qty > int(r.get('rack_stock', 0)):
-    #         raise ValidationError("Rack stock insufficient")
-    #     r['locked_qty'] = int(r['locked_qty']) - qty
-    #     r['rack_stock'] = int(r['rack_stock']) - qty
-
-    #     # Recompute aggregates so existing UI keeps working
-    #     usable = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'usable')
-    #     damaged = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'damaged')
-    #     partial = sum((rr.get('rack_stock', 0) or 0) for rr in self._iter_racks() if rr.get('usability') == 'partially_damaged')
-    #     self.stock = usable
-    #     self.damaged_stock = damaged
-    #     self.partially_damaged_stock = partial
-    #     self.locked_stock = sum((rr.get('locked_qty', 0) or 0) for rr in self._iter_racks())
-
-    #     self.save(update_fields=['rack_details', 'stock', 'damaged_stock', 'partially_damaged_stock', 'locked_stock'])
-            
-    # def reduce_stock(self, quantity):
-    #     print("testing")
-    #     """Reduces stock after order is shipped (from usable racks and locked stock)."""
-    #     if self.stock >= quantity and self.locked_stock >= quantity:
-    #         print("Called with", quantity)
-    #         print("Initial rack_details:", self.rack_details)
-    #         qty_to_reduce = quantity
-    #         racks = self.rack_details or []
-    #         for rack in racks:
-    #             if rack.get('usability') == 'usable' and rack.get('rack_stock', 0) > 0:
-    #                 available = rack['rack_stock']
-    #                 if available >= qty_to_reduce:
-    #                     rack['rack_stock'] -= qty_to_reduce
-    #                     qty_to_reduce = 0
-    #                     break
-    #                 else:
-    #                     qty_to_reduce -= available
-    #                     rack['rack_stock'] = 0
-    #         print("Updated rack_details:", racks)
-    #         if qty_to_reduce > 0:
-    #             raise ValueError("Not enough usable stock in racks to ship this quantity.")
-
-    #         self.rack_details = racks
-    #         self.locked_stock -= quantity  # reduce locked stock as well
-    #         self.save()
-    #         print("Saved! New rack_details:", self.rack_details)
-    #         print("New locked_stock:", self.locked_stock)
-    #     else:
-    #         raise ValueError("Not enough stock or locked stock to fulfill order.")
-
-
   
     def __str__(self):
         return self.name
@@ -647,6 +554,27 @@ class InternalTransfer(models.Model):
         return f"Transfer of {self.amount} from {self.sender_bank} to {self.receiver_bank}"
 
 
+def reduce_product_rack_stock_on_ship(order):
+    """
+    Reduce rack_stock and rack_lock in product.rack_details for each OrderItem in the order.
+    Call this after order status is set to 'Shipped'.
+    """
+    for item in order.items.all():
+        product = item.product
+        changed = False
+        for order_rack in item.rack_details or []:
+            for prod_rack in product.rack_details or []:
+                if (
+                    prod_rack.get("rack_id") == order_rack.get("rack_id")
+                    and prod_rack.get("column_name") == order_rack.get("column_name")
+                ):
+                    qty = int(order_rack.get("quantity", 0))
+                    prod_rack["rack_stock"] = max(0, int(prod_rack.get("rack_stock", 0)) - qty)
+                    prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - qty)
+                    changed = True
+        if changed:
+            product.save(update_fields=["rack_details"])
+
 
 class Order(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -723,6 +651,7 @@ class Order(models.Model):
             if previous_status and previous_status != self.status:
                
                 if self.status == 'Shipped':
+                    reduce_product_rack_stock_on_ship(self)
                     for item in self.items.all():
                         product = item.product
                         if product.locked_stock >= item.quantity:
@@ -882,44 +811,6 @@ def handle_orderitem_rack_lock_delete(sender, instance, **kwargs):
     # Remove rack locks
     update_product_rack_lock(instance.product, instance.rack_details, diff=-1)
     
-
-def reduce_rack_stock_and_lock(product, rack_details, quantity):
-    """
-    Reduce rack_stock and rack_lock in product.rack_details by quantity for each rack in rack_details.
-    """
-    racks = product.rack_details or []
-    changed = False
-    for order_rack in rack_details or []:
-        for prod_rack in racks:
-            if (
-                prod_rack.get("rack_id") == order_rack.get("rack_id")
-                and prod_rack.get("column_name") == order_rack.get("column_name")
-            ):
-                prod_rack["rack_stock"] = max(0, int(prod_rack.get("rack_stock", 0)) - quantity)
-                prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - quantity)
-                changed = True
-    if changed:
-        product.rack_details = racks
-        product.save(update_fields=["rack_details"])
-
-def reduce_rack_lock_only(product, rack_details, quantity):
-    """
-    Reduce only rack_lock in product.rack_details by quantity for each rack in rack_details.
-    """
-    racks = product.rack_details or []
-    changed = False
-    for order_rack in rack_details or []:
-        for prod_rack in racks:
-            if (
-                prod_rack.get("rack_id") == order_rack.get("rack_id")
-                and prod_rack.get("column_name") == order_rack.get("column_name")
-            ):
-                prod_rack["rack_lock"] = max(0, int(prod_rack.get("rack_lock", 0)) - quantity)
-                changed = True
-    if changed:
-        product.rack_details = racks
-        product.save(update_fields=["rack_details"])
-        
         
 class ProductRack(models.Model):
     product = models.ForeignKey(Products, on_delete=models.CASCADE, related_name="racks")
