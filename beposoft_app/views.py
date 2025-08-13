@@ -379,7 +379,7 @@ class StaffOrders(BaseTokenView):
                 return error_response
 
             # Assuming 'created_at' is the date field you want to sort by
-            orders = Order.objects.filter(manage_staff=user.pk).order_by('order_date')
+            orders = Order.objects.filter(manage_staff=user.pk).order_by('-id')
 
             serialized_orders = OrderModelSerilizer(orders, many=True)
 
