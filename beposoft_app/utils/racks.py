@@ -35,6 +35,7 @@ def allocate_racks_for_quantity(product, quantity_needed: int):
         if take > 0:
             allocations.append({
                 "rack_id":     r.get("rack_id"),
+                "rack_name":   r.get("rack_name"),
                 "column_name": r.get("column_name"),
                 "quantity":    take
             })
