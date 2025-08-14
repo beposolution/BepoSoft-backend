@@ -1211,8 +1211,8 @@ class GRVSerializer(serializers.ModelSerializer):
     family=serializers.IntegerField(source="order.family.id")
     # rack_products = serializers.SerializerMethodField()
     # product_id = serializers.SerializerMethodField()
-    rack_products = serializers.CharField(source="product_id.rack_details", read_only=True)
-    product_id = serializers.IntegerField(source="product_id.id", read_only=True)
+    rack_products = serializers.CharField(source="product_id.rack_details")
+    product_id = serializers.IntegerField(source="product_id.id")
     class Meta:
         model=GRVModel
         fields=['order','id','product','family',
