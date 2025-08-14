@@ -662,30 +662,69 @@ class Order(models.Model):
 
     updated_at = models.DateTimeField(auto_now=True)
 
+    # def save(self, *args, **kwargs):
+    #     if not self.invoice:
+    #         self.invoice = self.generate_invoice_number()
+
+       
+    #     if self.pk: 
+    #         previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+
+    #         if previous_status and previous_status != self.status:
+               
+    #             if self.status == 'Shipped':
+    #                 reduce_product_rack_stock_on_ship(self)
+    #                 for item in self.items.all():
+    #                     product = item.product
+    #                     if product.locked_stock >= item.quantity:
+    #                         product.locked_stock -= item.quantity 
+    #                         product.stock -= item.quantity  
+    #                         product.save()
+    #                     else:
+    #                         raise ValueError("Locked stock inconsistency detected!")
+    #             elif self.status == 'Invoice Rejected':
+    #                 release_product_rack_lock_on_invoice_reject(self)
+            
+    #     super().save(*args, **kwargs)
+    
     def save(self, *args, **kwargs):
         if not self.invoice:
             self.invoice = self.generate_invoice_number()
 
-       
-        if self.pk: 
+        if self.pk:
             previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
             if previous_status and previous_status != self.status:
-               
+                # Lock related products to avoid races while we mutate rack_details
+                items_qs = self.items.select_related("product").all()
+                product_ids = list(items_qs.values_list("product_id", flat=True))
+                products_map = {
+                    p.pk: p for p in Products.objects.select_for_update().filter(pk__in=product_ids)
+                }
+
                 if self.status == 'Shipped':
-                    reduce_product_rack_stock_on_ship(self)
-                    for item in self.items.all():
-                        product = item.product
+                    # 1) Move qty from rack_stock -> shipped and drop rack_lock (per rack)
+                    reduce_product_rack_stock_on_ship(self)  # this calls product.save(update_fields=["rack_details"])
+                    # 2) Only unlock the global locked_stock counter
+                    for item in items_qs:
+                        product = products_map[item.product_id]
                         if product.locked_stock >= item.quantity:
-                            product.locked_stock -= item.quantity 
-                            product.stock -= item.quantity  
-                            product.save()
+                            product.locked_stock -= item.quantity
+                            product.save(update_fields=["locked_stock"])
                         else:
                             raise ValueError("Locked stock inconsistency detected!")
+
                 elif self.status == 'Invoice Rejected':
+                    # 1) Release rack locks (JSON)
                     release_product_rack_lock_on_invoice_reject(self)
-            
+                    # 2) Release the global locked_stock counter
+                    for item in items_qs:
+                        product = products_map[item.product_id]
+                        product.locked_stock = max(0, (product.locked_stock or 0) - item.quantity)
+                        product.save(update_fields=["locked_stock"])
+
         super().save(*args, **kwargs)
+
 
     def generate_invoice_number(self):
         if not self.company:
