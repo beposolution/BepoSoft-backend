@@ -1088,6 +1088,8 @@ class GRVModel(models.Model):
     note=models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(null=True, blank=True)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, null=True, blank=True)
+    rack_details = models.JSONField(default=list, blank=True, null=True)
+    
 
     def update_status(self, new_status):
         """112
