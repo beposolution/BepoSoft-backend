@@ -1209,8 +1209,10 @@ class GRVSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source = "order.invoice")
     order_date = serializers.CharField(source="order.order_date")
     family=serializers.IntegerField(source="order.family.id")
-    rack_products = serializers.SerializerMethodField()
-    product_id = serializers.SerializerMethodField()
+    # rack_products = serializers.SerializerMethodField()
+    # product_id = serializers.SerializerMethodField()
+    rack_products = serializers.CharField(source="product_id.rack_details", read_only=True)
+    product_id = serializers.IntegerField(source="product_id.id", read_only=True)
     class Meta:
         model=GRVModel
         fields=['order','id','product','family',
@@ -1220,14 +1222,13 @@ class GRVSerializer(serializers.ModelSerializer):
                 'time','updated_at','product_id',
                 'rack_details','rack_products']
         
-    def get_product_id(self, obj):
-        return obj.product_id.id if obj.product_id else None
+    # def get_product_id(self, obj):
+    #     return obj.product_id.id if obj.product_id else None
     
-    def get_rack_products(self, obj):
-        # Return the product's rack_details or an empty list
-        if obj.product_id and obj.product_id.rack_details is not None:
-            return obj.product_id.rack_details
-        return []  # or None if you prefer
+    # def get_rack_products(self, obj):
+    #     if obj.product_id and obj.product_id.rack_details is not None:
+    #         return obj.product_id.rack_details
+    #     return [] 
         
     def to_representation(self, instance):
         representation = super().to_representation(instance)
