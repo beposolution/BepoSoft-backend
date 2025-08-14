@@ -1209,7 +1209,7 @@ class GRVSerializer(serializers.ModelSerializer):
     invoice = serializers.CharField(source = "order.invoice")
     order_date = serializers.CharField(source="order.order_date")
     family=serializers.IntegerField(source="order.family.id")
-    rack_products = serializers.CharField(source="product.rack_details")
+    rack_products = serializers.CharField(source="product_id.rack_details")
     product_id = serializers.SerializerMethodField()
     class Meta:
         model=GRVModel
