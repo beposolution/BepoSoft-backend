@@ -1826,22 +1826,28 @@ class OrderListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# views.py
+from rest_framework import status as drf_status
+from django.db.models import Q, Count
+
 class OrderByStatusView(BaseTokenView):
-    def get(self, request, status):
+    def get(self, request, status_value):  # rename param
         _, error_response = self.get_user_from_token(request)
         if error_response:
             return error_response
 
-        norm_status = status.replace("-", " ")
+        norm_status = status_value.replace("-", " ")
 
         valid = {c for c, _ in Order._meta.get_field("status").choices}
         if norm_status not in valid:
-            return Response({"status": "error", "message": f"Invalid status '{norm_status}'"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": "error", "message": f"Invalid status '{norm_status}'"},
+                status=drf_status.HTTP_400_BAD_REQUEST
+            )
 
         orders = (
             Order.objects
-            .select_related("manage_staff", "customer", "state", "family", "warehouses")  # <— FK: select_related
+            .select_related("manage_staff", "customer", "state", "family", "warehouses")  # FK => select_related
             .filter(status=norm_status)
             .order_by("-id")
         )
@@ -1865,7 +1871,7 @@ class OrderByStatusView(BaseTokenView):
             "invoice_created_count": invoice_counts["invoice_created_count"],
             "invoice_approved_count": invoice_counts["invoice_approved_count"],
             "results": results
-        }, status=status.HTTP_200_OK)
+        }, status=drf_status.HTTP_200_OK)
 
 
 class TrackingReport(BaseTokenView):
