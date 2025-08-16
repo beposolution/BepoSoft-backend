@@ -1091,6 +1091,22 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
         
+class OrderStatusSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
+    staffID = serializers.CharField(source="manage_staff.pk", read_only=True)
+    family = serializers.CharField(source="family.name", read_only=True)
+    billing_address = ShippingAddressView(read_only=True)
+    customer = CustomerOrderSerializer(read_only=True)
+    customerID = serializers.IntegerField(source="customer.pk", read_only=True)
+    state = serializers.CharField(source="state.name", read_only=True)
+
+    warehouse_data = WarehouseDataSerializer(source="warehouses", many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = "__all__"
+        extra_fields = ['warehouse_data'] 
+        
 class TrackingdetailsSerializer(serializers.ModelSerializer):
     manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
     staffID = serializers.CharField(source="manage_staff.pk", read_only=True)
