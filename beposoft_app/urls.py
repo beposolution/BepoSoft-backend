@@ -86,6 +86,7 @@ urlpatterns = [
 
     path('api/order/create/', CreateOrder.as_view(), name='create-order'),
     path('api/orders/', OrderListView.as_view(), name='orders'),
+    path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/orders/tracking/', TrackingReport.as_view(), name='orders-tracking'),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
     path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),
