@@ -1826,54 +1826,6 @@ class OrderListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# views.py
-from rest_framework import status as drf_status
-from django.db.models import Q, Count
-
-class OrderByStatusView(BaseTokenView):
-    def get(self, request, status_value):  # rename param
-        _, error_response = self.get_user_from_token(request)
-        if error_response:
-            return error_response
-
-        norm_status = status_value.replace("-", " ")
-
-        valid = {c for c, _ in Order._meta.get_field("status").choices}
-        if norm_status not in valid:
-            return Response(
-                {"status": "error", "message": f"Invalid status '{norm_status}'"},
-                status=drf_status.HTTP_400_BAD_REQUEST
-            )
-
-        orders = (
-            Order.objects
-            .select_related("manage_staff", "customer", "state", "family", "warehouses")  # FK => select_related
-            .filter(status=norm_status)
-            .order_by("-id")
-        )
-
-        invoice_counts = orders.aggregate(
-            invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
-            invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation")),
-        )
-
-        ser = OrderStatusSerializer(orders, many=True)
-        results = ser.data
-        for idx, o in enumerate(orders):
-            results[idx]["family_id"] = o.family.id if o.family else None
-            results[idx]["family_name"] = o.family.name if o.family else None
-            results[idx]["locked_by"] = o.locked_by.username if o.locked_by else None
-            results[idx]["locked_at"] = o.locked_at.isoformat() if o.locked_at else None
-
-        return Response({
-            "status": norm_status,
-            "count": orders.count(),
-            "invoice_created_count": invoice_counts["invoice_created_count"],
-            "invoice_approved_count": invoice_counts["invoice_approved_count"],
-            "results": results
-        }, status=drf_status.HTTP_200_OK)
-
-
 class TrackingReport(BaseTokenView):
     def get(self, request):
         try:
