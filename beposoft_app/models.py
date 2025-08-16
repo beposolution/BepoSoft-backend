@@ -8,6 +8,7 @@ import random
 from django.utils.timezone import now 
 from datetime import datetime
 from django.db import transaction
+from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
 
 
 # Create your models here.
@@ -779,6 +780,16 @@ class OrderPaymentImages(models.Model):
         db_table = "order_payment_images"
     
 
+def _auto_allocate_racks(product, quantity: int):
+    """Return rack allocations for `quantity` using product.rack_details."""
+    if quantity <= 0:
+        return []
+    # IMPORTANT: caller should be inside a transaction.atomic() block
+    # so select_for_update() actually locks the row.
+    locked_product = Products.objects.select_for_update().get(pk=product.pk)
+    return allocate_racks_for_quantity(locked_product, int(quantity))
+
+
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Products, on_delete=models.CASCADE)
@@ -794,6 +805,64 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
+    
+    def save(self, *args, **kwargs):
+        """
+        Auto-allocate racks whenever:
+          - creating a new item, or
+          - product/quantity changed, or
+          - rack_details is empty.
+        Then keep your existing locked_stock logic.
+        """
+        # Ensure we're in a transaction for row-level locking
+        if not transaction.get_connection().in_atomic_block:
+            # It will still work, but much safer if saves are wrapped by atomic()
+            pass
+
+        # Detect changes
+        is_create = self.pk is None
+        old_quantity = None
+        old_product_id = None
+        if not is_create:
+            old = OrderItem.objects.get(pk=self.pk)
+            old_quantity = old.quantity
+            old_product_id = old.product_id
+
+        # --- AUTO RACK ALLOCATION ---
+        must_auto_allocate = (
+            is_create
+            or (self.product_id != old_product_id)
+            or (old_quantity is not None and int(self.quantity) != int(old_quantity))
+            or not self.rack_details  # empty or None
+        )
+        if must_auto_allocate:
+            try:
+                self.rack_details = _auto_allocate_racks(self.product, int(self.quantity))
+            except RackAllocationError as e:
+                raise ValueError(str(e))
+
+        # --- Your existing locked_stock logic preserved ---
+        product = self.product
+
+        if self.pk:
+            original_quantity = OrderItem.objects.get(pk=self.pk).quantity
+            if self.quantity != original_quantity:
+                change_in_quantity = self.quantity - original_quantity
+                if change_in_quantity > 0:
+                    available_stock = product.stock - product.locked_stock
+                    if change_in_quantity > available_stock:
+                        raise ValueError("Not enough available stock to lock additional quantity.")
+                    product.locked_stock += change_in_quantity
+                elif change_in_quantity < 0:
+                    product.locked_stock += change_in_quantity  # reduce lock
+        else:
+            available_stock = product.stock - product.locked_stock
+            if self.quantity > available_stock:
+                raise ValueError("Not enough available stock to lock.")
+            product.locked_stock += self.quantity
+
+        product.save(update_fields=["locked_stock"])
+        super().save(*args, **kwargs)
     
 
     
