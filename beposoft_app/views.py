@@ -1828,57 +1828,44 @@ class OrderListView(BaseTokenView):
 
 class OrderByStatusView(BaseTokenView):
     def get(self, request, status):
-        try:
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
+        _, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
 
-            # Normalize status (optional)
-            status = status.replace("-", " ")
+        norm_status = status.replace("-", " ")
 
-            # Filter orders by status
-            orders = Order.objects.select_related(
-                "manage_staff", "customer", "state", "family"
-            ).prefetch_related("warehouse").filter(status=status).order_by("-id")
+        valid = {c for c, _ in Order._meta.get_field("status").choices}
+        if norm_status not in valid:
+            return Response({"status": "error", "message": f"Invalid status '{norm_status}'"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
-            if not orders.exists():
-                return Response(
-                    {"status": "error", "message": f"No orders found with status '{status}'"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        orders = (
+            Order.objects
+            .select_related("manage_staff", "customer", "state", "family", "warehouses")  # <— FK: select_related
+            .filter(status=norm_status)
+            .order_by("-id")
+        )
 
-            # Count stats for this status
-            invoice_counts = orders.aggregate(
-                invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
-                invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
-            )
+        invoice_counts = orders.aggregate(
+            invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
+            invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation")),
+        )
 
-            serializer = OrderdetailsSerializer(orders, many=True)
+        ser = OrderStatusSerializer(orders, many=True)
+        results = ser.data
+        for idx, o in enumerate(orders):
+            results[idx]["family_id"] = o.family.id if o.family else None
+            results[idx]["family_name"] = o.family.name if o.family else None
+            results[idx]["locked_by"] = o.locked_by.username if o.locked_by else None
+            results[idx]["locked_at"] = o.locked_at.isoformat() if o.locked_at else None
 
-            # Add family and lock info
-            results = serializer.data
-            for idx, order in enumerate(orders):
-                family = getattr(order, "family", None)
-                results[idx]["family_id"] = family.id if family else None
-                results[idx]["family_name"] = family.name if family else None
-                results[idx]["locked_by"] = order.locked_by.username if order.locked_by else None
-                results[idx]["locked_at"] = order.locked_at.isoformat() if order.locked_at else None
-
-            response_data = {
-                "status": status,
-                "count": orders.count(),
-                "invoice_created_count": invoice_counts["invoice_created_count"],
-                "invoice_approved_count": invoice_counts["invoice_approved_count"],
-                "results": results
-            }
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except ObjectDoesNotExist:
-            return Response({"status": "error", "message": "Orders not found"}, status=status.HTTP_404_NOT_FOUND)
-        except DatabaseError:
-            return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({
+            "status": norm_status,
+            "count": orders.count(),
+            "invoice_created_count": invoice_counts["invoice_created_count"],
+            "invoice_approved_count": invoice_counts["invoice_approved_count"],
+            "results": results
+        }, status=status.HTTP_200_OK)
 
 
 class TrackingReport(BaseTokenView):
