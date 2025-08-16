@@ -1100,7 +1100,7 @@ class OrderStatusSerializer(serializers.ModelSerializer):
     customerID = serializers.IntegerField(source="customer.pk", read_only=True)
     state = serializers.CharField(source="state.name", read_only=True)
 
-    warehouse_data = WarehouseDataSerializer(source="warehouses", many=True, read_only=True)
+    warehouse_data = WarehouseDataSerializer(source="warehouses", read_only=True)
 
     class Meta:
         model = Order
