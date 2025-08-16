@@ -807,88 +807,36 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
     
+    
+
+    
     def save(self, *args, **kwargs):
-        if not transaction.get_connection().in_atomic_block:
-            # strongly recommended to wrap updates in atomic() at the view level
-            pass
-
-        is_create = self.pk is None
-        old = None
-        old_quantity = None
-        old_product_id = None
-        old_rack_details = None
-
-        if not is_create:
-            old = OrderItem.objects.get(pk=self.pk)
-            old_quantity = int(old.quantity)
-            old_product_id = old.product_id
-            old_rack_details = old.rack_details or []
-
-        # --- AUTO RACK ALLOCATION ---
-        must_auto_allocate = (
-            is_create
-            or (self.product_id != old_product_id)
-            or (old_quantity is not None and int(self.quantity) != old_quantity)
-            or not self.rack_details
-        )
-        if must_auto_allocate:
-            try:
-                self.rack_details = _auto_allocate_racks(
-                    self.product,
-                    int(self.quantity),
-                    release_allocations=old_rack_details  # << key change
-                )
-            except RackAllocationError as e:
-                raise ValueError(str(e))
-
-        # --- locked_stock logic (unchanged) ---
         product = self.product
-        if is_create:
+
+        if self.pk: 
+            original_quantity = OrderItem.objects.get(pk=self.pk).quantity 
+            
+            if self.quantity != original_quantity: 
+                change_in_quantity = self.quantity - original_quantity 
+                
+               
+                if change_in_quantity > 0:  
+                    available_stock = product.stock - product.locked_stock
+                    if change_in_quantity > available_stock:
+                        raise ValueError("Not enough available stock to lock additional quantity.")
+                    product.locked_stock += change_in_quantity 
+
+                elif change_in_quantity < 0:  
+                    product.locked_stock += change_in_quantity 
+
+        else: 
             available_stock = product.stock - product.locked_stock
             if self.quantity > available_stock:
                 raise ValueError("Not enough available stock to lock.")
-            product.locked_stock += self.quantity
-        else:
-            if int(self.quantity) != old_quantity:
-                delta = int(self.quantity) - old_quantity
-                if delta > 0:
-                    available_stock = product.stock - product.locked_stock
-                    if delta > available_stock:
-                        raise ValueError("Not enough available stock to lock additional quantity.")
-                product.locked_stock += delta  # works for +ve and -ve
+            product.locked_stock += self.quantity 
 
-        product.save(update_fields=["locked_stock"])
+        product.save()
         super().save(*args, **kwargs)
-
-
-    
-    # def save(self, *args, **kwargs):
-    #     product = self.product
-
-    #     if self.pk: 
-    #         original_quantity = OrderItem.objects.get(pk=self.pk).quantity 
-            
-    #         if self.quantity != original_quantity: 
-    #             change_in_quantity = self.quantity - original_quantity 
-                
-               
-    #             if change_in_quantity > 0:  
-    #                 available_stock = product.stock - product.locked_stock
-    #                 if change_in_quantity > available_stock:
-    #                     raise ValueError("Not enough available stock to lock additional quantity.")
-    #                 product.locked_stock += change_in_quantity 
-
-    #             elif change_in_quantity < 0:  
-    #                 product.locked_stock += change_in_quantity 
-
-    #     else: 
-    #         available_stock = product.stock - product.locked_stock
-    #         if self.quantity > available_stock:
-    #             raise ValueError("Not enough available stock to lock.")
-    #         product.locked_stock += self.quantity 
-
-    #     product.save()
-    #     super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """Release locked stock if the order item is deleted"""
