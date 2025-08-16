@@ -5167,7 +5167,8 @@ class LockedStockInvoicesView(APIView):
         try:
             # Only consider active orders that might lock stock
             active_statuses = [
-                "Pending", "Waiting For Confirmation", "Packing under progress", "Packed", "Ready to ship"
+                "Pending", "Waiting For Confirmation", "Packing under progress", 
+                "Packed", "Ready to ship", "Invoice Created", "Invoice Approved"
             ]
 
             order_items = OrderItem.objects.filter(
