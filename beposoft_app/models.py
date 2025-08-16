@@ -808,6 +808,8 @@ class OrderItem(models.Model):
         return f"{self.product.name} (x{self.quantity})"
     
     
+
+    
     def save(self, *args, **kwargs):
         product = self.product
 
