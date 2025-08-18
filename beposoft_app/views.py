@@ -31,6 +31,7 @@ from datetime import date
 from rest_framework.pagination import PageNumberPagination
 from bepocart.models import *
 from django.core.files.base import ContentFile
+from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
 
@@ -1876,6 +1877,68 @@ class OrderListByStatusView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class FamilyOrderSummaryView(BaseTokenView):
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # Dates in IST (server tz if configured; else adjust as needed)
+            today = timezone.localdate()
+            month_start = today.replace(day=1)
+
+            today_str = today.strftime("%Y-%m-%d")
+            month_start_str = month_start.strftime("%Y-%m-%d")
+
+            qs = (
+                Order.objects.select_related("family")
+                .values("family_id", "family__name")
+                .annotate(
+                    today_count=Count("id", filter=Q(order_date=today_str)),
+                    today_total_amount=Coalesce(
+                        Sum("total_amount", filter=Q(order_date=today_str)), 0.0
+                    ),
+                    month_count=Count(
+                        "id",
+                        filter=Q(order_date__gte=month_start_str, order_date__lte=today_str),
+                    ),
+                    month_total_amount=Coalesce(
+                        Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str)),
+                        0.0,
+                    ),
+                )
+                .order_by("family__name")
+            )
+
+            results = []
+            for row in qs:
+                results.append({
+                    "family_id": row["family_id"],
+                    "family_name": row["family__name"],
+                    "today_count": row["today_count"],
+                    "today_total_amount": float(row["today_total_amount"] or 0),
+                    "month_count": row["month_count"],
+                    "month_total_amount": float(row["month_total_amount"] or 0),
+                })
+
+            # Optional: overall totals (remove if not needed)
+            overall = {
+                "today_count": sum(r["today_count"] for r in results),
+                "today_total_amount": float(sum(r["today_total_amount"] for r in results)),
+                "month_count": sum(r["month_count"] for r in results),
+                "month_total_amount": float(sum(r["month_total_amount"] for r in results)),
+            }
+
+            return Response(
+                {"date": today_str, "month_start": month_start_str, "overall": overall, "results": results},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
 class TrackingReport(BaseTokenView):
     def get(self, request):
         try:
