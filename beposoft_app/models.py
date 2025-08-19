@@ -650,6 +650,7 @@ class Order(models.Model):
     bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="bank")
     note = models.TextField(default="")
     accounts_note = models.TextField(default="", blank=True, null=True)
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='confirmed_orders', null=True, blank=True)
 
     payment_method = models.CharField(max_length=50, choices=[
         ('Credit Card', 'Credit Card'),
