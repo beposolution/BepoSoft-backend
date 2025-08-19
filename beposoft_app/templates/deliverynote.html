@@ -119,13 +119,13 @@
             <th rowspan="2">Image</th>
             <th rowspan="2">Product</th>
             <th rowspan="2">Quantity</th>
-            <th colspan="3">Rack Details</th>
+            <!-- <th colspan="3">Rack Details</th>
             </tr>
             <tr>
             <th>Rack</th>
             <th>Column</th>
             <th>Quantity</th>
-            </tr>
+            </tr> -->
         </thead>
         <tbody>
             {% for warehouse_item in warehouse_items %}
@@ -142,9 +142,9 @@
                     <td rowspan="{{ warehouse_item.rack_details|length }}">{{ warehouse_item.product.name }}</td>
                     <td rowspan="{{ warehouse_item.rack_details|length }}">{{ warehouse_item.quantity }} {{ warehouse_item.product.unit }}</td>
                 {% endif %}
-                <td>{{ rack.rack_name }}</td>
+                <!-- <td>{{ rack.rack_name }}</td>
                 <td>{{ rack.column_name }}</td>
-                <td>{{ rack.quantity }}</td>
+                <td>{{ rack.quantity }}</td> -->
                 </tr>
                 {% endfor %}
             {% else %}
