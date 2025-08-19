@@ -2185,50 +2185,6 @@ logger = logging.getLogger(__name__)
 #         except Exception as e:
 #             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# class ShippingManagementView(BaseTokenView):
-#     def put(self, request, pk):
-#         try:
-#             authUser, error_response = self.get_user_from_token(request)
-#             if error_response:
-#                 return error_response
-
-#             order = Order.objects.filter(pk=pk).first()
-#             if not order:
-#                 return Response({"status": "error", "message": "Order not found"},
-#                                 status=status.HTTP_404_NOT_FOUND)
-
-#             old_status = order.status
-#             new_status = request.data.get("status", old_status)
-
-#             # make the update atomic so Order.save() can use select_for_update()
-#             with transaction.atomic():
-#                 # If status is To Print, inject confirmed_by into request.data
-#                 data = request.data.copy()
-#                 if new_status == "To Print":
-#                     data["confirmed_by"] = authUser.id
-                    
-#                 serializer = OrderSerializer(order, data=request.data, partial=True)
-#                 if serializer.is_valid():
-#                     serializer.save()
-
-#                     # (Optional) you don't need this block anymore because your Order.save()
-#                     # already releases locked_stock when status becomes "Invoice Rejected".
-#                     # If you keep it, also keep it inside the same transaction.
-#                     # if old_status != "Invoice Rejected" and new_status == "Invoice Rejected":
-#                     #     for item in order.items.all():
-#                     #         product = item.product
-#                     #         product.locked_stock = max(product.locked_stock - item.quantity, 0)
-#                     #         product.save(update_fields=["locked_stock"])
-
-#                     return Response({"status": "success", "message": "Order updated successfully"},
-#                                     status=status.HTTP_200_OK)
-
-#                 return Response({"status": "error", "message": "Invalid data", "errors": serializer.errors},
-#                                 status=status.HTTP_400_BAD_REQUEST)
-
-#         except Exception as e:
-#             return Response({"status": "error", "message": str(e)},
-#                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class ShippingManagementView(BaseTokenView):
     def put(self, request, pk):
         try:
@@ -2241,27 +2197,34 @@ class ShippingManagementView(BaseTokenView):
                 return Response({"status": "error", "message": "Order not found"},
                                 status=status.HTTP_404_NOT_FOUND)
 
+            old_status = order.status
+            new_status = request.data.get("status", old_status)
+
+            # make the update atomic so Order.save() can use select_for_update()
             with transaction.atomic():
+                # If status is To Print, inject confirmed_by into request.data
+                data = request.data.copy()
+                if new_status == "To Print":
+                    data["confirmed_by"] = authUser.id
+                    
                 serializer = OrderSerializer(order, data=request.data, partial=True)
-                if not serializer.is_valid():
-                    return Response(
-                        {"status": "error", "message": "Invalid data", "errors": serializer.errors},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                # Determine the target status from validated data (or keep current)
-                target_status = serializer.validated_data.get("status", order.status)
-
-                if target_status == "To Print":
-                    # Force the confirmer to the authed user
-                    serializer.save(confirmed_by=authUser)
-                else:
+                if serializer.is_valid():
                     serializer.save()
 
-                return Response(
-                    {"status": "success", "message": "Order updated successfully"},
-                    status=status.HTTP_200_OK
-                )
+                    # (Optional) you don't need this block anymore because your Order.save()
+                    # already releases locked_stock when status becomes "Invoice Rejected".
+                    # If you keep it, also keep it inside the same transaction.
+                    # if old_status != "Invoice Rejected" and new_status == "Invoice Rejected":
+                    #     for item in order.items.all():
+                    #         product = item.product
+                    #         product.locked_stock = max(product.locked_stock - item.quantity, 0)
+                    #         product.save(update_fields=["locked_stock"])
+
+                    return Response({"status": "success", "message": "Order updated successfully"},
+                                    status=status.HTTP_200_OK)
+
+                return Response({"status": "error", "message": "Invalid data", "errors": serializer.errors},
+                                status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             return Response({"status": "error", "message": str(e)},
