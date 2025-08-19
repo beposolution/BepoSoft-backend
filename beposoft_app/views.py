@@ -3042,6 +3042,7 @@ class CreatePerfomaInvoice(BaseTokenView):
                 discount = Decimal(item_data.discount or 0)  # Handles None discount
                 tax = Decimal(item_data.product.tax or 0)
                 rate = Decimal(item_data.product.selling_price or 0)
+                price = Decimal(item_data.price or 0)
                
 
                 
@@ -3063,6 +3064,7 @@ class CreatePerfomaInvoice(BaseTokenView):
                     tax=tax,
                     rate=rate,
                     description=item_data.note,
+                    price=price,
                 )
             
             # Clear cart after successful order creation
