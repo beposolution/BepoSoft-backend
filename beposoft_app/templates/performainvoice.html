@@ -55,7 +55,7 @@
       </div>
       <div class="d-flex justify-content-between mt-2" style="font-size:12px;margin-top: 45px;">
         <p>Invoice Number: {{ order.invoice }}</p>
-        <p>Invoice Date: {{ original_order.updated_at|date:"d-M-Y" }}</p>
+        <p>Invoice Date: {{ order.order_date }}</p>
       </div>
 <hr>
 <br>
@@ -104,7 +104,7 @@
             <td>{{ item.tax_amount|floatformat:2 }}</td>
             <td>{{ item.final_price|floatformat:2 }}</td>
             <td>{{ item.discount|floatformat:2 }}</td>
-            <td>{{ item.product.selling_price|floatformat:2 }}</td>
+            <td>{{ item.rate|floatformat:2 }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.total|floatformat:2 }}</td>
           </tr>
