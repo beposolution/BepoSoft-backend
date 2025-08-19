@@ -873,14 +873,99 @@ def update_product_rack_lock(product, rack_details, diff=1):
         product.rack_details = product_racks
         product.save(update_fields=["rack_details"])
 
+# @receiver(pre_save, sender=OrderItem)
+# def handle_orderitem_rack_lock(sender, instance, **kwargs):
+#     if instance.pk:
+#         old = OrderItem.objects.get(pk=instance.pk)
+#         # Remove old rack locks
+#         update_product_rack_lock(old.product, old.rack_details, diff=-1)
+#     # Add new rack locks
+#     update_product_rack_lock(instance.product, instance.rack_details, diff=1)
+def _as_int(v):
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+def _qty_from_row(row):
+    # Accepts 'quantity' (preferred) but tolerates 'qty' or 'rack_lock' if your client sends those.
+    return _as_int(row.get('quantity') or row.get('qty') or row.get('rack_lock'))
+
 @receiver(pre_save, sender=OrderItem)
 def handle_orderitem_rack_lock(sender, instance, **kwargs):
+    """
+    Replace-style updates for rack locks:
+    - Compute per-rack delta = new_qty - old_qty
+    - Apply deltas to product.rack_details[*].rack_lock
+    - Validates only the positive deltas against available stock
+    - Works even if the OrderItem product changes
+    """
+    old_alloc = {}
+    old_product_id = None
+
     if instance.pk:
-        old = OrderItem.objects.get(pk=instance.pk)
-        # Remove old rack locks
-        update_product_rack_lock(old.product, old.rack_details, diff=-1)
-    # Add new rack locks
-    update_product_rack_lock(instance.product, instance.rack_details, diff=1)
+        old = OrderItem.objects.only('rack_details', 'product_id').get(pk=instance.pk)
+        old_product_id = old.product_id
+        for r in (old.rack_details or []):
+            key = (r.get('rack_id'), r.get('column_name'))
+            old_alloc[key] = _qty_from_row(r)
+
+    new_alloc = {}
+    for r in (instance.rack_details or []):
+        key = (r.get('rack_id'), r.get('column_name'))
+        new_alloc[key] = _qty_from_row(r)
+
+    # Build deltas (new - old)
+    all_keys = set(old_alloc) | set(new_alloc)
+    deltas = {k: new_alloc.get(k, 0) - old_alloc.get(k, 0) for k in all_keys}
+
+    def apply_deltas_to_product(product_id, deltas_map):
+        if not product_id:
+            return
+        with transaction.atomic():
+            product = Products.objects.select_for_update().get(pk=product_id)
+            product_racks = product.rack_details or []
+            index = {(pr.get("rack_id"), pr.get("column_name")): pr for pr in product_racks}
+
+            # validate positive deltas
+            for key, d in deltas_map.items():
+                if d <= 0:
+                    continue
+                pr = index.get(key)
+                if not pr:
+                    raise ValueError(f"Rack not found for key={key}")
+                rack_stock = _as_int(pr.get("rack_stock"))
+                rack_lock = _as_int(pr.get("rack_lock"))
+                available = max(0, rack_stock - rack_lock)
+                if d > available:
+                    raise ValueError(f"Not enough available in rack {key}: need {d}, available {available}")
+
+            changed = False
+            for key, d in deltas_map.items():
+                if d == 0:
+                    continue
+                pr = index.get(key)
+                if not pr:
+                    # If delta references a missing rack, ignore negative fixes gracefully, error on positives
+                    if d > 0:
+                        raise ValueError(f"Rack not found for key={key}")
+                    continue
+                pr["rack_lock"] = max(0, _as_int(pr.get("rack_lock")) + d)
+                changed = True
+
+            if changed:
+                product.rack_details = product_racks
+                product.save(update_fields=["rack_details"])
+
+    # If the product changed, split the deltas:
+    # - Remove old allocations from the old product (deltas = -old_alloc)
+    # - Add new allocations to the new product   (deltas =  new_alloc)
+    if old_product_id and old_product_id != instance.product_id:
+        remove_old = {k: -old_alloc.get(k, 0) for k in old_alloc}
+        apply_deltas_to_product(old_product_id, remove_old)
+        apply_deltas_to_product(instance.product_id, new_alloc)
+    else:
+        apply_deltas_to_product(instance.product_id, deltas)
 
 @receiver(post_delete, sender=OrderItem)
 def handle_orderitem_rack_lock_delete(sender, instance, **kwargs):
