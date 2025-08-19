@@ -1167,7 +1167,7 @@ class PerfomaInvoiceOrder(models.Model):
         if not self.company:
             raise ValueError("Company must be set to generate an invoice number.")
         
-        prefix = self.company.prefix  # Retrieve prefix from the associated Company
+        prefix = f"P{self.company.prefix}" # Retrieve prefix from the associated Company
         number = self.get_next_invoice_number(prefix)
         invoice_number = f"{prefix}{number}"
         return invoice_number
