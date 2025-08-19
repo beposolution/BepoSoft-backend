@@ -851,41 +851,41 @@ class OrderItem(models.Model):
 
 from django.db.models.signals import pre_save, post_delete
 from django.dispatch import receiver
-# def update_product_rack_lock(product, rack_details, diff=1):
-#     """
-#     Update the rack_lock in product.rack_details based on rack_details.
-#     diff: +1 to lock, -1 to unlock
-#     """
-#     product_racks = product.rack_details or []
-#     changed = False
+def update_product_rack_lock(product, rack_details, diff=1):
+    """
+    Update the rack_lock in product.rack_details based on rack_details.
+    diff: +1 to lock, -1 to unlock
+    """
+    product_racks = product.rack_details or []
+    changed = False
 
-#     for order_rack in rack_details or []:
-#         for prod_rack in product_racks:
-#             if (
-#                 prod_rack.get("rack_id") == order_rack.get("rack_id")
-#                 and prod_rack.get("column_name") == order_rack.get("column_name")
-#             ):
-#                 prod_rack["rack_lock"] = int(prod_rack.get("rack_lock", 0)) + diff * int(order_rack.get("quantity", 0))
-#                 if prod_rack["rack_lock"] < 0:
-#                     prod_rack["rack_lock"] = 0
-#                 changed = True
-#     if changed:
-#         product.rack_details = product_racks
-#         product.save(update_fields=["rack_details"])
+    for order_rack in rack_details or []:
+        for prod_rack in product_racks:
+            if (
+                prod_rack.get("rack_id") == order_rack.get("rack_id")
+                and prod_rack.get("column_name") == order_rack.get("column_name")
+            ):
+                prod_rack["rack_lock"] = int(prod_rack.get("rack_lock", 0)) + diff * int(order_rack.get("quantity", 0))
+                if prod_rack["rack_lock"] < 0:
+                    prod_rack["rack_lock"] = 0
+                changed = True
+    if changed:
+        product.rack_details = product_racks
+        product.save(update_fields=["rack_details"])
 
-# @receiver(pre_save, sender=OrderItem)
-# def handle_orderitem_rack_lock(sender, instance, **kwargs):
-#     if instance.pk:
-#         old = OrderItem.objects.get(pk=instance.pk)
-#         # Remove old rack locks
-#         update_product_rack_lock(old.product, old.rack_details, diff=-1)
-#     # Add new rack locks
-#     update_product_rack_lock(instance.product, instance.rack_details, diff=1)
+@receiver(pre_save, sender=OrderItem)
+def handle_orderitem_rack_lock(sender, instance, **kwargs):
+    if instance.pk:
+        old = OrderItem.objects.get(pk=instance.pk)
+        # Remove old rack locks
+        update_product_rack_lock(old.product, old.rack_details, diff=-1)
+    # Add new rack locks
+    update_product_rack_lock(instance.product, instance.rack_details, diff=1)
 
-# @receiver(post_delete, sender=OrderItem)
-# def handle_orderitem_rack_lock_delete(sender, instance, **kwargs):
-#     # Remove rack locks
-#     update_product_rack_lock(instance.product, instance.rack_details, diff=-1)
+@receiver(post_delete, sender=OrderItem)
+def handle_orderitem_rack_lock_delete(sender, instance, **kwargs):
+    # Remove rack locks
+    update_product_rack_lock(instance.product, instance.rack_details, diff=-1)
 
 def update_product_rack_lock(product, rack_details, diff=1):
     """
