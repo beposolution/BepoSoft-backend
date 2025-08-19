@@ -1593,78 +1593,6 @@ import traceback
 #                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
 #             )
             
-# class CreateOrder(BaseTokenView):
-#     @transaction.atomic
-#     def post(self, request):
-#         try:
-#             authUser, error_response = self.get_user_from_token(request)
-#             if error_response:
-#                 return error_response
-
-#             cart_items = BeposoftCart.objects.filter(user=authUser)
-#             if not cart_items.exists():
-#                 return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
-
-            
-#             serializer = OrderSerializer(data=request.data)
-#             if not serializer.is_valid():
-#                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-#             order = serializer.save()
-
-#             # Aggregate product quantities and other data
-#             product_data = {}
-#             product_ids = set()
-#             for item in cart_items:
-#                 product_id = item.product.pk
-#                 product_ids.add(product_id)
-#                 if product_id not in product_data:
-#                     product_data[product_id] = {
-#                         "product": item.product,
-#                         "quantity": Decimal(item.quantity),
-#                         "discount": Decimal(item.discount or 0),
-#                         "tax": Decimal(item.product.tax or 0),
-#                         "rate": Decimal(item.price or 0),
-#                         "description": item.note,
-#                     }
-#                 else:
-#                     product_data[product_id]["quantity"] += Decimal(item.quantity)
-#                     product_data[product_id]["discount"] += Decimal(item.discount or 0)
-
-#             # Lock all products in one go
-#             products = Products.objects.select_for_update().filter(pk__in=product_ids)
-#             products_map = {p.pk: p for p in products}
-
-#             # Create order items and update locked_stock once per product
-#             for product_id, data in product_data.items():
-#                 # Create order item
-#                 OrderItem.objects.create(
-#                     order=order,
-#                     product=data["product"],
-#                     quantity=int(data["quantity"]),
-#                     discount=data["discount"],
-#                     tax=data["tax"],
-#                     rate=data["rate"],
-#                     description=data["description"],
-                    
-#                 )
-#                 product = products_map[product_id]
-
-#                 old_locked_stock = product.locked_stock or 0
-#                 product.locked_stock = old_locked_stock + data["quantity"]
-#                 product.save()
-
-#             # Clear cart after order creation
-#             cart_items.delete()
-#             return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-
-#         except Exception as e:
-#             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
-#             traceback.print_exc()
-#             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
-
 class CreateOrder(BaseTokenView):
     @transaction.atomic
     def post(self, request):
@@ -1677,71 +1605,138 @@ class CreateOrder(BaseTokenView):
             if not cart_items.exists():
                 return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
+            
             serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
             order = serializer.save()
 
-            # Aggregate per-product
+            # Aggregate product quantities and other data
             product_data = {}
             product_ids = set()
             for item in cart_items:
-                pid = item.product.pk
-                product_ids.add(pid)
-                if pid not in product_data:
-                    product_data[pid] = {
+                product_id = item.product.pk
+                product_ids.add(product_id)
+                if product_id not in product_data:
+                    product_data[product_id] = {
                         "product": item.product,
-                        "quantity": int(item.quantity),
+                        "quantity": Decimal(item.quantity),
                         "discount": Decimal(item.discount or 0),
                         "tax": Decimal(item.product.tax or 0),
                         "rate": Decimal(item.price or 0),
                         "description": item.note,
                     }
                 else:
-                    product_data[pid]["quantity"] += int(item.quantity)
-                    product_data[pid]["discount"] += Decimal(item.discount or 0)
+                    product_data[product_id]["quantity"] += Decimal(item.quantity)
+                    product_data[product_id]["discount"] += Decimal(item.discount or 0)
 
-            # Lock products for concurrency safety
+            # Lock all products in one go
             products = Products.objects.select_for_update().filter(pk__in=product_ids)
             products_map = {p.pk: p for p in products}
 
-            # Create items with auto rack allocation
-            for pid, data in product_data.items():
-                product = products_map[pid]
-                qty = data["quantity"]
-
-                # 1) allocate racks
-                try:
-                    allocations = allocate_racks_for_quantity(product, qty)
-                except RackAllocationError as e:
-                    raise serializers.ValidationError({"rack_allocation": str(e)})
-
-                # 2) create order item WITH allocations so your pre_save signal locks racks
+            # Create order items and update locked_stock once per product
+            for product_id, data in product_data.items():
+                # Create order item
                 OrderItem.objects.create(
                     order=order,
-                    product=product,
-                    quantity=qty,
+                    product=data["product"],
+                    quantity=int(data["quantity"]),
                     discount=data["discount"],
                     tax=data["tax"],
                     rate=data["rate"],
                     description=data["description"],
-                    rack_details=allocations,      # <<< important
+                    
                 )
+                product = products_map[product_id]
 
-                # 3) DO NOT manually increment locked_stock here;
-                #     OrderItem.save() already updates product.locked_stock.
+                old_locked_stock = product.locked_stock or 0
+                product.locked_stock = old_locked_stock + data["quantity"]
+                product.save()
 
-            # Clear cart
+            # Clear cart after order creation
             cart_items.delete()
             return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
 
-        except serializers.ValidationError as ve:
-            return Response({"status": "error", "message": "Validation failed", "errors": ve.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
             traceback.print_exc()
             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
+
+# class CreateOrder(BaseTokenView):
+#     @transaction.atomic
+#     def post(self, request):
+#         try:
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+
+#             cart_items = BeposoftCart.objects.filter(user=authUser)
+#             if not cart_items.exists():
+#                 return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+
+#             serializer = OrderSerializer(data=request.data)
+#             if not serializer.is_valid():
+#                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+#             order = serializer.save()
+
+#             product_data = {}
+#             product_ids = set()
+#             for item in cart_items:
+#                 pid = item.product.pk
+#                 product_ids.add(pid)
+#                 if pid not in product_data:
+#                     product_data[pid] = {
+#                         "product": item.product,
+#                         "quantity": int(item.quantity),
+#                         "discount": Decimal(item.discount or 0),
+#                         "tax": Decimal(item.product.tax or 0),
+#                         "rate": Decimal(item.price or 0),
+#                         "description": item.note,
+#                     }
+#                 else:
+#                     product_data[pid]["quantity"] += int(item.quantity)
+#                     product_data[pid]["discount"] += Decimal(item.discount or 0)
+
+          
+#             products = Products.objects.select_for_update().filter(pk__in=product_ids)
+#             products_map = {p.pk: p for p in products}
+
+           
+#             for pid, data in product_data.items():
+#                 product = products_map[pid]
+#                 qty = data["quantity"]
+
+#                 try:
+#                     allocations = allocate_racks_for_quantity(product, qty)
+#                 except RackAllocationError as e:
+#                     raise serializers.ValidationError({"rack_allocation": str(e)})
+
+              
+#                 OrderItem.objects.create(
+#                     order=order,
+#                     product=product,
+#                     quantity=qty,
+#                     discount=data["discount"],
+#                     tax=data["tax"],
+#                     rate=data["rate"],
+#                     description=data["description"],
+#                     rack_details=allocations,   
+#                 )
+
+              
+#             cart_items.delete()
+#             return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+
+#         except serializers.ValidationError as ve:
+#             return Response({"status": "error", "message": "Validation failed", "errors": ve.detail}, status=status.HTTP_400_BAD_REQUEST)
+#         except Exception as e:
+#             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
+#             traceback.print_exc()
+#             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class OrderItemCreateView(APIView):
