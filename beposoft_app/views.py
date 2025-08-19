@@ -2202,11 +2202,6 @@ class ShippingManagementView(BaseTokenView):
 
             # make the update atomic so Order.save() can use select_for_update()
             with transaction.atomic():
-                # If status is To Print, inject confirmed_by into request.data
-                data = request.data.copy()
-                if new_status == "To Print":
-                    data["confirmed_by"] = authUser.id
-                    
                 serializer = OrderSerializer(order, data=request.data, partial=True)
                 if serializer.is_valid():
                     serializer.save()
