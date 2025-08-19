@@ -5718,39 +5718,49 @@ class SendShippingIDView(APIView):
         else:
             return Response({'error': 'Failed to send Shipping ID'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+from django.utils import timezone
+from django.shortcuts import render, get_object_or_404
+
 def GeneratePerformaInvoice(request, invoice_number):
-    # Fetch the order based on the passed invoice number
     order = get_object_or_404(PerfomaInvoiceOrder, invoice=invoice_number)
-    
-    # Fetch the items related to the order
-    items = PerfomaInvoiceOrderItem.objects.filter(order=order)
+
+    # Use the related_name to fetch items
+    items = order.perfoma_items.select_related("product").all()
+
+    # Ensure these are always defined
+    original_order = None
+    bank = None
+    exclude_price = 0.0  # in case there are no items
+
     try:
         original_order = Order.objects.get(invoice=invoice_number)
         bank = original_order.bank
     except Order.DoesNotExist:
-        bank = None 
+        pass
 
-    total_amount = 0
-    total_tax_amount = 0
-    total_discount = 0
-    net_amount_before_tax = 0
+    total_amount = 0.0
+    total_tax_amount = 0.0
+    total_discount = 0.0
+    net_amount_before_tax = 0.0
     total_quantity = 0
-    
+
     for item in items:
         tax_rate = item.product.tax or 0.0
         quantity = item.quantity or 0
         selling_price = item.product.selling_price or 0.0
         discount = item.discount or 0.0
-    
-        #exclude price
-        total_price = max(selling_price - discount, 0)
-        exclude_price = total_price / (1 + (tax_rate/ 100))
+        rate = item.rate or 0.0
+
+        total_price = max(rate - discount, 0.0)
+        exclude_price = total_price / (1 + (tax_rate / 100.0)) if tax_rate else total_price
         tax_amount = total_price - exclude_price
 
-        final_price = selling_price - discount
-        total = final_price * quantity
+        final_price = rate - discount
+        total = rate * quantity
         discount_total = discount * quantity
 
+        # annotate (not saved to DB)
         item.final_price = final_price
         item.total = total
         item.tax_amount = tax_amount
@@ -5758,16 +5768,22 @@ def GeneratePerformaInvoice(request, invoice_number):
         total_amount += total
         total_tax_amount += tax_amount * quantity
         total_discount += discount_total
-        net_amount_before_tax += (exclude_price * quantity)
+        net_amount_before_tax += (rate * quantity)
         total_quantity += quantity
 
     shipping_charge = order.shipping_charge or 0.0
     grand_total = total_amount + shipping_charge
 
+    # Pick a safe invoice date for the template
+    invoice_date = (
+        original_order.updated_at if original_order
+        else timezone.now()
+    )
+
     context = {
         "order": order,
         "items": items,
-        "bank": bank,   
+        "bank": bank,
         "totalamount": total_amount,
         "total_tax_amount": total_tax_amount,
         "total_quantity": total_quantity,
@@ -5775,12 +5791,11 @@ def GeneratePerformaInvoice(request, invoice_number):
         "net_amount_before_tax": net_amount_before_tax,
         "shipping_charge": shipping_charge,
         "grand_total": grand_total,
-        "exclude_price":exclude_price,
-        "original_order":original_order,
+        "exclude_price": exclude_price,
+        "original_order": original_order,  # may be None; template won’t depend on it now
+        "invoice_date": invoice_date,
     }
-
-    # Render the HTML template and pass the context
-    return render(request, 'performainvoice.html', context)
+    return render(request, "performainvoice.html", context)
 
 
 class CountryCodeView(APIView):
