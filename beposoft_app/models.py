@@ -396,57 +396,57 @@ class Products(models.Model):
             self.variantID = self.generate_variant_id()
             
         # rack stock calculation for usable, damaged, and partially damaged
-        # usable = 0
-        # damaged = 0
-        # partial = 0
-        # for rack in self.rack_details or []:
-        #     usability = rack.get('usability')
-        #     qty = rack.get('rack_stock', 0)
-        #     if usability == 'usable':
-        #         usable += qty
-        #     elif usability == 'damaged':
-        #         damaged += qty
-        #     elif usability == 'partially_damaged':
-        #         partial += qty
-        # self.stock = usable
-        # self.damaged_stock = damaged
-        # self.partially_damaged_stock = partial
-        # super().save(*args, **kwargs) 
+        usable = 0
+        damaged = 0
+        partial = 0
+        for rack in self.rack_details or []:
+            usability = rack.get('usability')
+            qty = rack.get('rack_stock', 0)
+            if usability == 'usable':
+                usable += qty
+            elif usability == 'damaged':
+                damaged += qty
+            elif usability == 'partially_damaged':
+                partial += qty
+        self.stock = usable
+        self.damaged_stock = damaged
+        self.partially_damaged_stock = partial
+        super().save(*args, **kwargs) 
         
         # --- Stock update only when rack_details changes ---
-        update_stock = False
+        # update_stock = False
 
-        if self.pk:
-            # Fetch the current (old) object from db
-            old = Products.objects.filter(pk=self.pk).first()
-            # Compare old and new rack_details (handle None as empty list)
-            old_rack = old.rack_details if old and old.rack_details is not None else []
-            new_rack = self.rack_details if self.rack_details is not None else []
-            if old_rack != new_rack:
-                update_stock = True
-        else:
-            # New product, always update
-            update_stock = True
+        # if self.pk:
+        #     # Fetch the current (old) object from db
+        #     old = Products.objects.filter(pk=self.pk).first()
+        #     # Compare old and new rack_details (handle None as empty list)
+        #     old_rack = old.rack_details if old and old.rack_details is not None else []
+        #     new_rack = self.rack_details if self.rack_details is not None else []
+        #     if old_rack != new_rack:
+        #         update_stock = True
+        # else:
+        #     # New product, always update
+        #     update_stock = True
 
-        # If rack_details changed or new object, update the stock fields
-        if update_stock:
-            usable = 0
-            damaged = 0
-            partial = 0
-            for rack in self.rack_details or []:
-                usability = rack.get('usability')
-                qty = rack.get('rack_stock', 0)
-                if usability == 'usable':
-                    usable += qty
-                elif usability == 'damaged':
-                    damaged += qty
-                elif usability == 'partially_damaged':
-                    partial += qty
-            self.stock = usable
-            self.damaged_stock = damaged
-            self.partially_damaged_stock = partial
+        # # If rack_details changed or new object, update the stock fields
+        # if update_stock:
+        #     usable = 0
+        #     damaged = 0
+        #     partial = 0
+        #     for rack in self.rack_details or []:
+        #         usability = rack.get('usability')
+        #         qty = rack.get('rack_stock', 0)
+        #         if usability == 'usable':
+        #             usable += qty
+        #         elif usability == 'damaged':
+        #             damaged += qty
+        #         elif usability == 'partially_damaged':
+        #             partial += qty
+        #     self.stock = usable
+        #     self.damaged_stock = damaged
+        #     self.partially_damaged_stock = partial
 
-        super().save(*args, **kwargs)
+        # super().save(*args, **kwargs)
      
 
     def lock_stock(self, quantity):
