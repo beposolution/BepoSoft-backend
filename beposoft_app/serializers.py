@@ -1221,7 +1221,7 @@ class GRVSerializer(serializers.ModelSerializer):
                 'remark','note','status','customer',
                 'invoice','staff',"order_date",'date',
                 'time','updated_at','product_id',
-                'rack_details','rack_products']
+                'rack_details','rack_products','selected_racks']
         
     # def get_product_id(self, obj):
     #     return obj.product_id.id if obj.product_id else None
@@ -1248,7 +1248,7 @@ class GRVModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = GRVModel
         fields = ['order', 'product', 'returnreason', 
-                  'price', 'quantity', 'remark', 'status', 
+                  'price', 'quantity', 'remark', 'status','selected_racks', 
                   'date', 'time', 'note', 'updated_at','product_id']
 
 
