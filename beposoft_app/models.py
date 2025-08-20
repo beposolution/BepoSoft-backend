@@ -386,32 +386,75 @@ class Products(models.Model):
         """Generates a unique variantID using UUID"""
         return str(uuid.uuid4())
     
-    def save(self, *args, **kwargs):
-        if self.selling_price is None:
-            self.selling_price = 0.0
+    # def save(self, *args, **kwargs):
+    #     if self.selling_price is None:
+    #         self.selling_price = 0.0
        
-        # Generate variantID if not already set
+    #     # Generate variantID if not already set
        
-        if not self.variantID:
-            self.variantID = self.generate_variant_id()
+    #     if not self.variantID:
+    #         self.variantID = self.generate_variant_id()
             
-        # rack stock calculation for usable, damaged, and partially damaged
-        usable = 0
-        damaged = 0
-        partial = 0
+    #     # rack stock calculation for usable, damaged, and partially damaged
+    #     usable = 0
+    #     damaged = 0
+    #     partial = 0
+    #     for rack in self.rack_details or []:
+    #         usability = rack.get('usability')
+    #         qty = rack.get('rack_stock', 0)
+    #         if usability == 'usable':
+    #             usable += qty
+    #         elif usability == 'damaged':
+    #             damaged += qty
+    #         elif usability == 'partially_damaged':
+    #             partial += qty
+    #     self.stock = usable
+    #     self.damaged_stock = damaged
+    #     self.partially_damaged_stock = partial
+    #     super().save(*args, **kwargs) 
+    
+    def _recompute_stock_fields(self):
+        usable = damaged = partial = 0
         for rack in self.rack_details or []:
-            usability = rack.get('usability')
-            qty = rack.get('rack_stock', 0)
-            if usability == 'usable':
+            qty = int(rack.get('rack_stock', 0) or 0)
+            u = rack.get('usability')
+            if u == 'usable':
                 usable += qty
-            elif usability == 'damaged':
+            elif u == 'damaged':
                 damaged += qty
-            elif usability == 'partially_damaged':
+            elif u == 'partially_damaged':
                 partial += qty
         self.stock = usable
         self.damaged_stock = damaged
         self.partially_damaged_stock = partial
-        super().save(*args, **kwargs) 
+        return {"stock", "damaged_stock", "partially_damaged_stock"}
+
+    def save(self, *args, **kwargs):
+        # Default selling_price
+        if self.selling_price is None:
+            self.selling_price = 0.0
+
+        # Ensure variantID
+        if not self.variantID:
+            self.variantID = self.generate_variant_id()
+
+        # Always recompute before saving
+        computed_fields = self._recompute_stock_fields()
+
+        # If caller uses update_fields, make sure computed fields are included
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            # normalize to a set
+            uf = set(update_fields)
+            # if rack_details is being updated, we must also update computed fields
+            if "rack_details" in uf:
+                uf |= computed_fields
+            # If we're saving for any reason, we can safely include computed fields
+            # (comment previous line and use next line instead if you want them always)
+            # uf |= computed_fields
+            kwargs["update_fields"] = list(uf)
+
+        super().save(*args, **kwargs)
         
         # --- Stock update only when rack_details changes ---
         # update_stock = False
