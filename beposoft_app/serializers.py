@@ -1213,7 +1213,6 @@ class GRVSerializer(serializers.ModelSerializer):
     # rack_products = serializers.SerializerMethodField()
     # product_id = serializers.SerializerMethodField()
     rack_products = serializers.JSONField(source='product_id.rack_details', read_only=True)
-    product_id = serializers.IntegerField(source='product_id.id', read_only=True)
     
     class Meta:
         model=GRVModel
@@ -1250,7 +1249,7 @@ class GRVModelSerializer(serializers.ModelSerializer):
         model = GRVModel
         fields = ['order', 'product', 'returnreason', 
                   'price', 'quantity', 'remark', 'status', 
-                  'date', 'time', 'note', 'updated_at']
+                  'date', 'time', 'note', 'updated_at','product_id']
 
 
 
