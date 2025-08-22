@@ -7,7 +7,7 @@ import requests
 import logging
 import itertools
 from .serializers import *
-from .models import User, _norm_usability, _qty_from_row
+from .models import User
 from django.contrib.auth.hashers import check_password, make_password
 from datetime import datetime, timedelta
 from django.db.models import Q
@@ -3842,33 +3842,12 @@ class GRVUpdateView(BaseTokenView):
                     # 2) remark == return: add selected_racks, subtract rack_details
                     # 3) remark == exchange: add selected_racks, subtract rack_details
 
-                    # Build normalized rows so keys and qty are consistent
-                    def _normalize_rows(rows):
-                        out = []
-                        for r in rows or []:
-                            out.append({
-                                "warehouse": r.get("warehouse"),
-                                "rack_id": r.get("rack_id"),
-                                "rack_name": r.get("rack_name"),
-                                "column_name": r.get("column_name"),
-                                "usability": _norm_usability(r.get("usability")),
-                                "quantity": _qty_from_row(r),
-                            })
-                        return out
-
                     remark = (grv.remark or "").lower()
-
-                    # Destination racks (where we place the returned/exchanged items)
-                    selected_racks = _normalize_rows(grv.selected_racks or [])
-
-                    # Source racks (where the shipped items originally came from)
-                    # GRV.rack_details is assumed to be the “original shipment racks”.
-                    source_racks   = _normalize_rows(grv.rack_details or [])
-
                     if remark == "refund":
                         mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=None)
                     elif remark in ("return", "exchange"):
                         mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=source_racks)
+                    # else: do nothing for other remarks
 
                 # IMPORTANT: remove the old block where you directly bump
                 # product.stock / damaged_stock / partially_damaged_stock based on grv.returnreason.
