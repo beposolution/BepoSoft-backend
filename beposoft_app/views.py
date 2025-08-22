@@ -32,8 +32,6 @@ from rest_framework.pagination import PageNumberPagination
 from bepocart.models import *
 from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
-from beposoft_app.utils.racks import mutate_product_rack_stocks
-
 
 logger = logging.getLogger(__name__)
 
@@ -3809,16 +3807,7 @@ class GRVGetViewById(BaseTokenView):
 #         except Exception as e:
 #             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class GRVUpdateView(BaseTokenView):
-    """
-    PUT /api/grv/<pk>/
-    Body: partial GRV fields.
-    On status transition to 'approved', mutates product rack stocks based on `remark`:
-      - remark == 'refund':        add to selected_racks
-      - remark in ('return','exchange'): add to selected_racks and subtract from source rack_details
-    """
-
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -3826,92 +3815,74 @@ class GRVUpdateView(BaseTokenView):
                 return error_response
 
             grv = get_object_or_404(GRVModel, pk=pk)
-            old_status = grv.status
+            old_status = grv.status  # Track old status
 
             serializer = GRVModelSerializer(grv, data=request.data, partial=True)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
-                serializer.save()  # persist fields
-                grv.refresh_from_db()
+                serializer.save()
+                grv.refresh_from_db()  # get latest values after save
 
-                # Only on transition to approved
+                # Only apply rack mutations the moment it transitions to 'approved'
                 if grv.status == 'approved' and old_status != 'approved':
                     if not grv.product_id:
                         return Response(
                             {"status": "error", "message": "No product linked to this GRV."},
-                            status=status.HTTP_400_BAD_REQUEST,
+                            status=status.HTTP_400_BAD_REQUEST
                         )
 
-                    product = grv.product_id  # FK points to Products instance
+                    product = grv.product_id
+                    selected_racks = grv.selected_racks or []  # rows to ADD (based on 'usability')
+                    source_racks   = grv.rack_details or []    # rows to SUBTRACT (from original shipment racks)
 
-                    # Helper to normalize rows with sensible defaults
-                    def _normalize_rows(rows, fallback_warehouse=None):
+                    # RULES:
+                    # 1) remark == refund: add selected_racks
+                    # 2) remark == return: add selected_racks, subtract rack_details
+                    # 3) remark == exchange: add selected_racks, subtract rack_details
+
+                    # Build normalized rows so keys and qty are consistent
+                    def _normalize_rows(rows):
                         out = []
                         for r in rows or []:
-                            q = _qty_from_row(r)
-                            if q <= 0:
-                                continue
                             out.append({
-                                "warehouse": r.get("warehouse") or fallback_warehouse,
+                                "warehouse": r.get("warehouse"),
                                 "rack_id": r.get("rack_id"),
                                 "rack_name": r.get("rack_name"),
                                 "column_name": r.get("column_name"),
                                 "usability": _norm_usability(r.get("usability")),
-                                "quantity": q,
+                                "quantity": _qty_from_row(r),
                             })
                         return out
 
-                    remark = (grv.remark or "").strip().lower()
+                    remark = (grv.remark or "").lower()
 
-                    # Fallback warehouse from product if available (adjust attribute name if different)
-                    fallback_wh = getattr(product, "warehouse_id", None)
+                    # Destination racks (where we place the returned/exchanged items)
+                    selected_racks = _normalize_rows(grv.selected_racks or [])
 
-                    # Destination racks (adds) chosen during GRV processing
-                    selected_racks = _normalize_rows(grv.selected_racks, fallback_warehouse=fallback_wh)
-                    # Source racks (subs) – where the original shipment/locking happened
-                    source_racks   = _normalize_rows(grv.rack_details,   fallback_warehouse=fallback_wh)
+                    # Source racks (where the shipped items originally came from)
+                    # GRV.rack_details is assumed to be the “original shipment racks”.
+                    source_racks   = _normalize_rows(grv.rack_details or [])
 
-                    # Basic validations by remark type
                     if remark == "refund":
-                        if not selected_racks:
-                            return Response(
-                                {"status": "error", "message": "Refund requires at least one destination rack in selected_racks."},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                        if settings.DEBUG:
-                            print(f"--- GRV {grv.id} ({getattr(grv, 'invoice', '')}) [refund] ---")
-                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=None, debug=True)
-
+                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=None)
                     elif remark in ("return", "exchange"):
-                        if not selected_racks:
-                            return Response(
-                                {"status": "error", "message": "Return/Exchange requires destination racks in selected_racks."},
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                        if settings.DEBUG:
-                            print(f"--- GRV {grv.id} ({getattr(grv, 'invoice', '')}) [{remark}] ---")
-                        # Subtract from source (undo), add to selected (restore)
-                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=source_racks, debug=True)
+                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=source_racks)
 
-                    else:
-                        # No rack mutation for other remarks; still succeed the GRV update
-                        if settings.DEBUG:
-                            print(f"--- GRV {grv.id} ({getattr(grv, 'invoice', '')}) [no rack mutation for remark='{remark}'] ---")
+                # IMPORTANT: remove the old block where you directly bump
+                # product.stock / damaged_stock / partially_damaged_stock based on grv.returnreason.
+                # The recomputation now happens automatically from rack_details in Products.save().
 
-            return Response(
-                {"status": "success", "message": "GRV updated successfully"},
-                status=status.HTTP_200_OK,
-            )
+            return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
 
         except ValueError as ve:
+            # Validation errors from rack mutations
             return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Optional: log exception details with Sentry/logging
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-               
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
+
+            
 class SalesReportView(BaseTokenView):
     def get(self, request):
         try:
