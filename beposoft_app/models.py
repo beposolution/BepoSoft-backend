@@ -1327,20 +1327,11 @@ class GRVModel(models.Model):
         else:
             print("No change in status.")
             
-from django.db import transaction
-
 def _norm_usability(v):
     v = (v or "").strip().lower()
     return v if v else "usable"
 
 def _qty_from_row(row):
-    """
-    Quantity precedence:
-      1) explicit 'quantity'
-      2) fallback to 'rack_stock'
-      3) else 0
-    Always returns a non-negative int.
-    """
     for k in ("quantity", "qty", "rack_quantity", "rack_stock"):
         if k in row:
             try:
@@ -1352,15 +1343,15 @@ def _qty_from_row(row):
 
 def _key_tuple(row):
     return (row.get("rack_id"), row.get("column_name"), _norm_usability(row.get("usability")))
+
 from collections import defaultdict
 def _coalesce(rows, sign=+1):
-    """
-    Sum quantities per key. sign = +1 for adds, -1 for subs.
-    Returns: dict[key_tuple] -> signed_qty
-    """
     acc = defaultdict(int)
     for r in rows or []:
-        acc[_key_tuple(r)] += sign * _qty_from_row(r)
+        q = _qty_from_row(r)
+        if q <= 0:
+            continue
+        acc[_key_tuple(r)] += sign * q
     return acc
 
 def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True):
@@ -1369,13 +1360,13 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
 
     if debug:
         print("\n================= mutate_product_rack_stocks =================")
-        print(f"Product ID: {product.pk}, Name: {product.name}")
+        print(f"Product ID: {product.pk}, Name: {getattr(product, 'name', '')}")
         print(f"Add rows (raw): {add_rows}")
         print(f"Sub rows (raw): {sub_rows}")
 
-    # 1) Coalesce and net per key
     adds = _coalesce(add_rows, +1)
     subs = _coalesce(sub_rows, -1)
+
     delta_map = defaultdict(int)
     for k, v in adds.items():
         delta_map[k] += v
@@ -1386,25 +1377,19 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
         p = Products.objects.select_for_update().get(pk=product.pk)
         racks = list(p.rack_details or [])
 
-        # Current index
         index = {
             (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
             for r in racks
         }
 
-        if debug:
-            print("\n--- Initial rack state ---")
-            for k, v in index.items():
-                print(f"Key={k}, rack_stock={int(v.get('rack_stock') or 0)}, rack_lock={int(v.get('rack_lock') or 0)}")
-
-        # 2) Create missing slots only for positive deltas
+        # Create missing slots for positive deltas only
         for key, d in delta_map.items():
             if key not in index and d > 0:
                 rack_id, col, usability = key
                 new_slot = {
-                    "warehouse": None,           # optional: fill if you carry it in rows
+                    "warehouse": None,
                     "rack_id": rack_id,
-                    "rack_name": None,           # optional
+                    "rack_name": None,
                     "column_name": col,
                     "usability": usability,
                     "rack_stock": 0,
@@ -1413,59 +1398,46 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
                 racks.append(new_slot)
                 index[key] = new_slot
                 if debug:
-                    print(f"[CREATE] missing slot {key} for positive delta {d}")
+                    print(f"[CREATE] missing slot {key} for +{d}")
 
-        # 3) Validate all keys against net effect
+        # Validate subtractions
         for key, d in delta_map.items():
             pr = index.get(key)
             if not pr:
-                # missing and negative/zero delta is invalid or no-op
                 if d < 0:
-                    raise ValueError(f"Rack not found for key={key} (net delta {d}).")
-                # d == 0 with missing key is harmless; skip
+                    raise ValueError(f"Rack not found for key={key} (net {d}).")
                 continue
             current = int(pr.get("rack_stock") or 0)
-            new_value = current + d
-            if new_value < 0:
-                raise ValueError(f"Insufficient stock in rack {key}: current {current}, net delta {d}.")
+            if current + d < 0:
+                raise ValueError(f"Insufficient stock in rack {key}: current {current}, net {d}.")
 
-        # 4) Apply deltas
+        # Apply deltas
         changed = False
         for key, d in delta_map.items():
             pr = index.get(key)
-            if not pr:
-                # only possible if d <= 0 (we don't create for negative)
+            if not pr or d == 0:
                 continue
-            if d != 0:
-                before = int(pr.get("rack_stock") or 0)
-                pr["rack_stock"] = before + d
-                changed = True
-                if debug:
-                    if d > 0:
-                        print(f"[ADD] {key}: {before} + {d} => {pr['rack_stock']}")
-                    else:
-                        print(f"[SUB] {key}: {before} {d} => {pr['rack_stock']}")
+            before = int(pr.get("rack_stock") or 0)
+            pr["rack_stock"] = before + d
+            changed = True
+            if debug:
+                action = "ADD" if d > 0 else "SUB"
+                print(f"[{action}] {key}: {before} {'+' if d>0 else ''}{d} => {pr['rack_stock']}")
 
         if changed:
-            if debug:
-                print("\n--- Final rack state (before save) ---")
-                for k, v in index.items():
-                    print(f"Key={k}, rack_stock={int(v.get('rack_stock') or 0)}, rack_lock={int(v.get('rack_lock') or 0)}")
-
             p.rack_details = racks
-            # This triggers Products.save() to recompute stock/damaged/partial
             p.save(update_fields=["rack_details"])
 
             if debug:
                 p.refresh_from_db()
-                print("\n--- Saved rack state (after save) ---")
+                print("\n--- Saved rack state ---")
                 for r in p.rack_details:
                     print(
                         f"rack_id={r.get('rack_id')}, col={r.get('column_name')}, "
-                        f"usability={r.get('usability')}, stock={int(r.get('rack_stock') or 0)}, lock={int(r.get('rack_lock') or 0)}"
+                        f"usability={r.get('usability')}, stock={int(r.get('rack_stock') or 0)}, "
+                        f"lock={int(r.get('rack_lock') or 0)}"
                     )
                 print("=============================================================\n")
-
 
 
 class OrderRequest(models.Model):
