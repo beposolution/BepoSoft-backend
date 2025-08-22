@@ -1326,6 +1326,85 @@ class GRVModel(models.Model):
             self.save()  
         else:
             print("No change in status.")
+            
+# utils for GRV rack mutations
+from django.db import transaction
+
+def _as_int_safe(v):
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+def _key_from_row(row):
+    # Key is (rack_id, column_name, usability). Default usability to 'usable' if missing.
+    return (
+        row.get("rack_id"),
+        row.get("column_name"),
+        (row.get("usability") or "usable"),
+    )
+
+def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
+    """
+    Mutates product.rack_details by:
+      - adding quantities in add_rows to rack_stock
+      - subtracting quantities in sub_rows from rack_stock (validated)
+    Keys must match on (rack_id, column_name, usability).
+    Raises ValueError if a referenced rack slot isn't found or subtraction would go negative.
+    """
+    add_rows = add_rows or []
+    sub_rows = sub_rows or []
+
+    with transaction.atomic():
+        # Lock product row while mutating JSON to avoid races
+        p = Products.objects.select_for_update().get(pk=product.pk)
+        racks = p.rack_details or []
+        index = { 
+            (r.get("rack_id"), r.get("column_name"), (r.get("usability") or "usable")): r
+            for r in racks
+        }
+
+        # Validate: all targets exist; subtractions non-negative
+        for row in add_rows:
+            key = _key_from_row(row)
+            if key not in index:
+                raise ValueError(f"Rack not found for key={key} (add).")
+        for row in sub_rows:
+            key = _key_from_row(row)
+            if key not in index:
+                raise ValueError(f"Rack not found for key={key} (subtract).")
+            pr = index[key]
+            qty = _as_int_safe(row.get("quantity"))
+            current = _as_int_safe(pr.get("rack_stock"))
+            if qty > current:
+                raise ValueError(
+                    f"Insufficient stock in rack {key}: trying to subtract {qty}, available {current}."
+                )
+
+        # Apply additions
+        changed = False
+        for row in add_rows:
+            key = _key_from_row(row)
+            pr = index[key]
+            qty = _as_int_safe(row.get("quantity"))
+            if qty > 0:
+                pr["rack_stock"] = _as_int_safe(pr.get("rack_stock")) + qty
+                changed = True
+
+        # Apply subtractions
+        for row in sub_rows:
+            key = _key_from_row(row)
+            pr = index[key]
+            qty = _as_int_safe(row.get("quantity"))
+            if qty > 0:
+                pr["rack_stock"] = _as_int_safe(pr.get("rack_stock")) - qty
+                changed = True
+
+        if changed:
+            p.rack_details = racks
+            # IMPORTANT: this triggers recomputation of stock/damaged/partial via your Products.save()
+            p.save(update_fields=["rack_details"])
+
 
 
 class OrderRequest(models.Model):
