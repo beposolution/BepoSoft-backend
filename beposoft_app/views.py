@@ -3691,6 +3691,10 @@ class GRVaddView(BaseTokenView):
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
+            
+            # Print/log the raw incoming request data
+            print("Incoming data:", request.data)
+            logger.info(f"Incoming data: {request.data}")
 
             # Ensure the request data is a list of dictionaries
             data = request.data if isinstance(request.data, list) else [request.data]
@@ -3700,14 +3704,24 @@ class GRVaddView(BaseTokenView):
 
             # Validate and save the data
             if grvdata.is_valid():
+                
+                print("Validated data (before save):", grvdata.validated_data)
+                logger.info(f"Validated data (before save): {grvdata.validated_data}")
+                
                 grvdata.save()
+                
+                print("Serialized data (after save):", grvdata.data)
+                logger.info(f"Serialized data (after save): {grvdata.data}")
+                
                 return Response({
                     "status": "success",
                     "message": "Added successfully",
                     "data": grvdata.data
                 }, status=status.HTTP_200_OK)
-
+                
             logger.error(f"Validation failed: {grvdata.errors}")
+            print("Validation errors:", grvdata.errors)
+
             return Response({
                 "status": "error",
                 "message": "Validation failed",
@@ -3716,6 +3730,7 @@ class GRVaddView(BaseTokenView):
 
         except Exception as e:
             logger.error(f"Error occurred in GRVaddView: {str(e)}")
+            print("Exception in GRVaddView:", str(e))
             return Response({
                 "status": "error",
                 "message": "An error occurred while processing the request",
