@@ -8,7 +8,7 @@ import random
 from django.utils.timezone import now 
 from datetime import datetime
 from django.db import transaction
-from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
+# from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
 
 
 # Create your models here.
