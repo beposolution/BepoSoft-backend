@@ -1336,20 +1336,11 @@ def _as_int_safe(v):
         return 0
 
 def _key_from_row(row):
-    return (
-        row.get("rack_id"),
-        row.get("column_name"),
-        (row.get("usability") or "usable"),
-    )
+    return (row.get("rack_id"),
+            row.get("column_name"),
+            (row.get("usability") or "usable"))
 
 def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True):
-    """
-    Mutates product.rack_details by:
-      - adding quantities in add_rows to rack_stock
-      - subtracting quantities in sub_rows from rack_stock (validated)
-    Keys must match on (rack_id, column_name, usability).
-    Raises ValueError if a referenced rack slot isn't found or subtraction would go negative.
-    """
     add_rows = add_rows or []
     sub_rows = sub_rows or []
 
@@ -1361,8 +1352,8 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
 
     with transaction.atomic():
         p = Products.objects.select_for_update().get(pk=product.pk)
-        racks = p.rack_details or []
-        index = { 
+        racks = list(p.rack_details or [])
+        index = {
             (r.get("rack_id"), r.get("column_name"), (r.get("usability") or "usable")): r
             for r in racks
         }
@@ -1372,15 +1363,34 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
             for k, v in index.items():
                 print(f"Key={k}, rack_stock={v.get('rack_stock')}, rack_lock={v.get('rack_lock')}")
 
-        # Validate
+        # 1) For ADD rows, auto-create rack slots if missing
         for row in add_rows:
             key = _key_from_row(row)
             if key not in index:
-                raise ValueError(f"Rack not found for key={key} (add).")
+                # create a new slot with provided metadata
+                new_slot = {
+                    "warehouse": row.get("warehouse"),
+                    "rack_id": row.get("rack_id"),
+                    "rack_name": row.get("rack_name"),
+                    "column_name": row.get("column_name"),
+                    "usability": (row.get("usability") or "usable"),
+                    "rack_stock": 0,
+                    "rack_lock": 0,
+                }
+                racks.append(new_slot)
+                index[key] = new_slot
+                if debug:
+                    print(f"[CREATE] missing add-slot {key}")
+
+        # 2) Validate SUB rows: must exist and have stock
         for row in sub_rows:
             key = _key_from_row(row)
             if key not in index:
-                raise ValueError(f"Rack not found for key={key} (subtract).")
+                available_keys = ", ".join(str(k) for k in index.keys())
+                raise ValueError(
+                    f"Rack not found for key={key} (subtract). "
+                    f"Existing keys: [{available_keys}]"
+                )
             pr = index[key]
             qty = _as_int_safe(row.get("quantity"))
             current = _as_int_safe(pr.get("rack_stock"))
@@ -1389,7 +1399,7 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
                     f"Insufficient stock in rack {key}: trying to subtract {qty}, available {current}."
                 )
 
-        # Apply additions
+        # 3) Apply additions
         changed = False
         for row in add_rows:
             key = _key_from_row(row)
@@ -1402,7 +1412,7 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
                 if debug:
                     print(f"[ADD] {key}: {before} + {qty} => {pr['rack_stock']}")
 
-        # Apply subtractions
+        # 4) Apply subtractions
         for row in sub_rows:
             key = _key_from_row(row)
             pr = index[key]
@@ -1424,11 +1434,13 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True
             p.save(update_fields=["rack_details"])
 
             if debug:
-                # reload to confirm
                 p.refresh_from_db()
                 print("\n--- Saved rack state (after save) ---")
                 for r in p.rack_details:
-                    print(f"rack_id={r.get('rack_id')}, col={r.get('column_name')}, usability={r.get('usability')}, stock={r.get('rack_stock')}, lock={r.get('rack_lock')}")
+                    print(
+                        f"rack_id={r.get('rack_id')}, col={r.get('column_name')}, "
+                        f"usability={r.get('usability')}, stock={r.get('rack_stock')}, lock={r.get('rack_lock')}"
+                    )
                 print("=============================================================\n")
 
 
