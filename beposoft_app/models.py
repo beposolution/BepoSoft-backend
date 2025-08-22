@@ -1327,7 +1327,6 @@ class GRVModel(models.Model):
         else:
             print("No change in status.")
             
-# utils for GRV rack mutations
 from django.db import transaction
 
 def _as_int_safe(v):
@@ -1337,14 +1336,13 @@ def _as_int_safe(v):
         return 0
 
 def _key_from_row(row):
-    # Key is (rack_id, column_name, usability). Default usability to 'usable' if missing.
     return (
         row.get("rack_id"),
         row.get("column_name"),
         (row.get("usability") or "usable"),
     )
 
-def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
+def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None, debug=True):
     """
     Mutates product.rack_details by:
       - adding quantities in add_rows to rack_stock
@@ -1355,8 +1353,13 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
     add_rows = add_rows or []
     sub_rows = sub_rows or []
 
+    if debug:
+        print("\n================= mutate_product_rack_stocks =================")
+        print(f"Product ID: {product.pk}, Name: {product.name}")
+        print(f"Add rows: {add_rows}")
+        print(f"Sub rows: {sub_rows}")
+
     with transaction.atomic():
-        # Lock product row while mutating JSON to avoid races
         p = Products.objects.select_for_update().get(pk=product.pk)
         racks = p.rack_details or []
         index = { 
@@ -1364,7 +1367,12 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
             for r in racks
         }
 
-        # Validate: all targets exist; subtractions non-negative
+        if debug:
+            print("\n--- Initial rack state ---")
+            for k, v in index.items():
+                print(f"Key={k}, rack_stock={v.get('rack_stock')}, rack_lock={v.get('rack_lock')}")
+
+        # Validate
         for row in add_rows:
             key = _key_from_row(row)
             if key not in index:
@@ -1388,8 +1396,11 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
             pr = index[key]
             qty = _as_int_safe(row.get("quantity"))
             if qty > 0:
-                pr["rack_stock"] = _as_int_safe(pr.get("rack_stock")) + qty
+                before = _as_int_safe(pr.get("rack_stock"))
+                pr["rack_stock"] = before + qty
                 changed = True
+                if debug:
+                    print(f"[ADD] {key}: {before} + {qty} => {pr['rack_stock']}")
 
         # Apply subtractions
         for row in sub_rows:
@@ -1397,13 +1408,28 @@ def mutate_product_rack_stocks(product, add_rows=None, sub_rows=None):
             pr = index[key]
             qty = _as_int_safe(row.get("quantity"))
             if qty > 0:
-                pr["rack_stock"] = _as_int_safe(pr.get("rack_stock")) - qty
+                before = _as_int_safe(pr.get("rack_stock"))
+                pr["rack_stock"] = before - qty
                 changed = True
+                if debug:
+                    print(f"[SUB] {key}: {before} - {qty} => {pr['rack_stock']}")
 
         if changed:
+            if debug:
+                print("\n--- Final rack state (before save) ---")
+                for k, v in index.items():
+                    print(f"Key={k}, rack_stock={v.get('rack_stock')}, rack_lock={v.get('rack_lock')}")
+
             p.rack_details = racks
-            # IMPORTANT: this triggers recomputation of stock/damaged/partial via your Products.save()
             p.save(update_fields=["rack_details"])
+
+            if debug:
+                # reload to confirm
+                p.refresh_from_db()
+                print("\n--- Saved rack state (after save) ---")
+                for r in p.rack_details:
+                    print(f"rack_id={r.get('rack_id')}, col={r.get('column_name')}, usability={r.get('usability')}, stock={r.get('rack_stock')}, lock={r.get('rack_lock')}")
+                print("=============================================================\n")
 
 
 
