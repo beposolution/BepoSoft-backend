@@ -3839,6 +3839,79 @@ class GRVGetViewById(BaseTokenView):
 #         except Exception as e:
 #             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+def _norm_usability(v):
+    v = (v or "").strip().lower()
+    return v if v else "usable"
+
+def _as_int(v):
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+def _qty_from_row(row):
+    for k in ("quantity", "qty", "rack_quantity", "rack_stock"):
+        if k in row:
+            return max(_as_int(row.get(k)), 0)
+    return 0
+
+def _key_tuple(row):
+    return (row.get("rack_id"), row.get("column_name"), _norm_usability(row.get("usability")))
+
+def _coalesce_additions(rows):
+    acc = defaultdict(int)
+    for r in rows or []:
+        q = _qty_from_row(r)
+        if q > 0:
+            acc[_key_tuple(r)] += q
+    return acc
+
+def _add_grv_racks_to_product(product, rows):
+    """
+    Add 'rows' (from GRV.rack_details) into product.rack_details by (rack_id, column_name, usability).
+    Creates missing slots; increments rack_stock; leaves rack_lock unchanged.
+    """
+    adds = _coalesce_additions(rows)
+    if not adds:
+        return
+
+    with transaction.atomic():
+        # Ensure we have an instance (GRV.product_id is already a Products instance)
+        p = Products.objects.select_for_update().get(pk=product.pk)
+        racks = list(p.rack_details or [])
+        index = {
+            (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
+            for r in racks
+        }
+
+        changed = False
+
+        # Create missing slots
+        for key, inc in adds.items():
+            if key not in index:
+                rack_id, col, usability = key
+                new_slot = {
+                    "warehouse": None,
+                    "rack_id": rack_id,
+                    "rack_name": None,
+                    "column_name": col,
+                    "usability": usability,
+                    "rack_stock": 0,
+                    "rack_lock": 0,
+                }
+                racks.append(new_slot)
+                index[key] = new_slot
+
+        # Apply increments
+        for key, inc in adds.items():
+            pr = index[key]
+            pr["rack_stock"] = _as_int(pr.get("rack_stock")) + inc
+            changed = True
+
+        if changed:
+            p.rack_details = racks
+            p.save(update_fields=["rack_details"])  # your Products.save() will recompute stock fields
+            
 class GRVUpdateView(BaseTokenView):
     # def put(self, request, pk):
     #     try:
