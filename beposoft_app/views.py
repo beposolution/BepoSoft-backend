@@ -3841,14 +3841,12 @@ class GRVGetViewById(BaseTokenView):
 
 
 from collections import defaultdict
-from django.db import transaction
 
 def _norm_usability(v):
     v = (v or "").strip().lower()
     return v if v else "usable"
 
 def _norm_id(v):
-    # normalize rack_id so "7" and 7 match
     try:
         return int(v)
     except (TypeError, ValueError):
@@ -3867,7 +3865,6 @@ def _qty_from_row(row):
     return 0
 
 def _key_tuple(row):
-    # normalize all parts to avoid misses due to types/whitespace/case
     return (
         _norm_id(row.get("rack_id")),
         (row.get("column_name") or "").strip(),
@@ -3882,13 +3879,14 @@ def _coalesce(rows, sign):
             acc[_key_tuple(r)] += sign * q
     return acc
 
-def _apply_rack_deltas(product, add_rows=None, sub_rows=None):
+def _apply_rack_deltas_on_locked_product(p, *, add_rows=None, sub_rows=None, debug=False):
     """
-    Net-apply racks to product.rack_details:
+    Mutates p.rack_details in-memory (p is already locked/selected_for_update()):
+
       + add_rows (e.g., GRV.rack_details)
       - sub_rows (e.g., GRV.selected_racks)
-    Creates missing slots for positive net deltas; validates negatives.
-    Saves once and lets Products.save recompute stock fields.
+
+    Creates missing slots for positive nets; validates negatives; saves once.
     """
     add_rows = add_rows or []
     sub_rows = sub_rows or []
@@ -3896,69 +3894,74 @@ def _apply_rack_deltas(product, add_rows=None, sub_rows=None):
     adds = _coalesce(add_rows, +1)
     subs = _coalesce(sub_rows, -1)
 
-    # Build net deltas
     net = defaultdict(int)
     for k, v in adds.items():
         net[k] += v
     for k, v in subs.items():
-        net[k] += v  # v is negative
+        net[k] += v  # negative
+
+    if debug:
+        print("ADDs:", dict(adds))
+        print("SUBs:", dict(subs))
+        print("NET :", dict(net))
 
     if not net:
         return
 
-    # Import here if this code lives outside models.py
-    from beposoft_app.models import Products
+    racks = list(p.rack_details or [])
+    index = {
+        (_norm_id(r.get("rack_id")), (r.get("column_name") or "").strip(), _norm_usability(r.get("usability"))): r
+        for r in racks
+    }
 
-    with transaction.atomic():
-        p = Products.objects.select_for_update().get(pk=product.pk)
-        racks = list(p.rack_details or [])
-        index = {
-            (_norm_id(r.get("rack_id")), (r.get("column_name") or "").strip(), _norm_usability(r.get("usability"))): r
-            for r in racks
-        }
+    # Create slots for +ve deltas
+    for key, d in net.items():
+        if d > 0 and key not in index:
+            rack_id, col, usability = key
+            slot = {
+                "warehouse": None,
+                "rack_id": rack_id,
+                "rack_name": None,
+                "column_name": col,
+                "usability": usability,
+                "rack_stock": 0,
+                "rack_lock": 0,
+            }
+            racks.append(slot)
+            index[key] = slot
+            if debug:
+                print(f"[CREATE] {key}")
 
-        # Create missing slots for positive deltas only
-        for key, d in net.items():
-            if d > 0 and key not in index:
-                rack_id, col, usability = key
-                slot = {
-                    "warehouse": None,
-                    "rack_id": rack_id,
-                    "rack_name": None,
-                    "column_name": col,
-                    "usability": usability,
-                    "rack_stock": 0,
-                    "rack_lock": 0,
-                }
-                racks.append(slot)
-                index[key] = slot
+    # Validate negatives
+    for key, d in net.items():
+        if d >= 0:
+            continue
+        slot = index.get(key)
+        if not slot:
+            raise ValueError(f"Rack not found for key={key} (cannot subtract).")
+        cur = _as_int(slot.get("rack_stock"))
+        if cur + d < 0:
+            raise ValueError(f"Insufficient stock in rack {key}: have {cur}, need {-d}.")
 
-        # Validate negatives
-        for key, d in net.items():
-            if d >= 0:
-                continue
-            slot = index.get(key)
-            if not slot:
-                raise ValueError(f"Rack not found for key={key} (cannot subtract).")
-            cur = _as_int(slot.get("rack_stock"))
-            if cur + d < 0:  # d is negative
-                raise ValueError(f"Insufficient stock in rack {key}: have {cur}, need {-d}.")
+    # Apply net
+    changed = False
+    for key, d in net.items():
+        if d == 0:
+            continue
+        slot = index.get(key)
+        if not slot:
+            continue
+        before = _as_int(slot.get("rack_stock"))
+        slot["rack_stock"] = before + d
+        changed = True
+        if debug:
+            action = "ADD" if d > 0 else "SUB"
+            print(f"[{action}] {key}: {before} -> {slot['rack_stock']}")
 
-        # Apply net
-        changed = False
-        for key, d in net.items():
-            if d == 0:
-                continue
-            slot = index.get(key)
-            if not slot:
-                # only possible for negative d (already validated to exist), but safe-guard anyway
-                continue
-            slot["rack_stock"] = _as_int(slot.get("rack_stock")) + d
-            changed = True
-
-        if changed:
-            p.rack_details = racks
-            p.save(update_fields=["rack_details"])  # triggers recompute in Products.save()
+    if changed:
+        p.rack_details = racks
+        # Single save -> your Products.save() will recompute stock/damaged/partial
+        p.save(update_fields=["rack_details"])
 
 
 # def _coalesce_additions(rows):
@@ -4143,25 +4146,6 @@ class GRVUpdateView(BaseTokenView):
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # with transaction.atomic():
-            #     serializer.save()
-            #     grv.refresh_from_db()
-
-            #     # --- NEW SIMPLE RULE ---
-            #     # If remark is 'return' or 'exchange' and the GRV just became 'approved',
-            #     # add GRV.rack_details quantities into Product.rack_details.
-            #     remark = (grv.remark or "").strip().lower()
-            #     new_status = (grv.status or "").lower()
-
-            #     if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
-            #         if not grv.product_id:
-            #             raise ValidationError("No product linked to this GRV.")  # triggers rollback
-
-            #         _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
-
-            #         if grv.selected_racks:
-            #             _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
-
             with transaction.atomic():
                 serializer.save()
                 grv.refresh_from_db()
@@ -4171,22 +4155,66 @@ class GRVUpdateView(BaseTokenView):
 
                 if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
                     if not grv.product_id:
-                        raise ValidationError("No product linked to this GRV.")  # ensure rollback
+                        raise ValidationError("No product linked to this GRV.")
 
-                    # Net apply: +rack_details, -selected_racks
-                    _apply_rack_deltas(
-                        grv.product_id,
+                    # Lock the product ONCE
+                    p = Products.objects.select_for_update().get(pk=grv.product_id_id)
+
+                    # Net: +rack_details, -selected_racks (set debug=True if needed)
+                    _apply_rack_deltas_on_locked_product(
+                        p,
                         add_rows=grv.rack_details or [],
-                        sub_rows=grv.selected_racks or []
+                        sub_rows=grv.selected_racks or [],
+                        debug=False,  # flip to True to print adds/subs/net
                     )
-
 
             return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
 
         except ValueError as ve:
             return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as ve:
+            return Response({"status": "error", "message": ve.detail if hasattr(ve, "detail") else str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    # def put(self, request, pk):
+    #     try:
+    #         authUser, error_response = self.get_user_from_token(request)
+    #         if error_response:
+    #             return error_response
+
+    #         grv = get_object_or_404(GRVModel, pk=pk)
+    #         old_status = (grv.status or "").lower()
+
+    #         serializer = GRVModelSerializer(grv, data=request.data, partial=True)
+    #         if not serializer.is_valid():
+    #             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    #         with transaction.atomic():
+    #             serializer.save()
+    #             grv.refresh_from_db()
+
+    #             # --- NEW SIMPLE RULE ---
+    #             # If remark is 'return' or 'exchange' and the GRV just became 'approved',
+    #             # add GRV.rack_details quantities into Product.rack_details.
+    #             remark = (grv.remark or "").strip().lower()
+    #             new_status = (grv.status or "").lower()
+
+    #             if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
+    #                 if not grv.product_id:
+    #                     raise ValidationError("No product linked to this GRV.")  # triggers rollback
+
+    #                 _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
+
+    #                 if grv.selected_racks:
+    #                     _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
+
+    #         return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
+
+    #     except ValueError as ve:
+    #         return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+    #     except Exception as e:
+    #         return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 class SalesReportView(BaseTokenView):
     def get(self, request):
