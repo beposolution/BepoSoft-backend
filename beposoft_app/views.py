@@ -3839,9 +3839,20 @@ class GRVGetViewById(BaseTokenView):
 #         except Exception as e:
 #             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+from collections import defaultdict
+from django.db import transaction
+
 def _norm_usability(v):
     v = (v or "").strip().lower()
     return v if v else "usable"
+
+def _norm_id(v):
+    # normalize rack_id so "7" and 7 match
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return v
 
 def _as_int(v):
     try:
@@ -3856,41 +3867,61 @@ def _qty_from_row(row):
     return 0
 
 def _key_tuple(row):
-    return (row.get("rack_id"), row.get("column_name"), _norm_usability(row.get("usability")))
+    # normalize all parts to avoid misses due to types/whitespace/case
+    return (
+        _norm_id(row.get("rack_id")),
+        (row.get("column_name") or "").strip(),
+        _norm_usability(row.get("usability")),
+    )
 
-def _coalesce_additions(rows):
+def _coalesce(rows, sign):
     acc = defaultdict(int)
     for r in rows or []:
         q = _qty_from_row(r)
         if q > 0:
-            acc[_key_tuple(r)] += q
+            acc[_key_tuple(r)] += sign * q
     return acc
 
-def _add_grv_racks_to_product(product, rows):
+def _apply_rack_deltas(product, add_rows=None, sub_rows=None):
     """
-    Add 'rows' (from GRV.rack_details) into product.rack_details by (rack_id, column_name, usability).
-    Creates missing slots; increments rack_stock; leaves rack_lock unchanged.
+    Net-apply racks to product.rack_details:
+      + add_rows (e.g., GRV.rack_details)
+      - sub_rows (e.g., GRV.selected_racks)
+    Creates missing slots for positive net deltas; validates negatives.
+    Saves once and lets Products.save recompute stock fields.
     """
-    adds = _coalesce_additions(rows)
-    if not adds:
+    add_rows = add_rows or []
+    sub_rows = sub_rows or []
+
+    adds = _coalesce(add_rows, +1)
+    subs = _coalesce(sub_rows, -1)
+
+    # Build net deltas
+    net = defaultdict(int)
+    for k, v in adds.items():
+        net[k] += v
+    for k, v in subs.items():
+        net[k] += v  # v is negative
+
+    if not net:
         return
 
+    # Import here if this code lives outside models.py
+    from beposoft_app.models import Products
+
     with transaction.atomic():
-        # Ensure we have an instance (GRV.product_id is already a Products instance)
         p = Products.objects.select_for_update().get(pk=product.pk)
         racks = list(p.rack_details or [])
         index = {
-            (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
+            (_norm_id(r.get("rack_id")), (r.get("column_name") or "").strip(), _norm_usability(r.get("usability"))): r
             for r in racks
         }
 
-        changed = False
-
-        # Create missing slots
-        for key, inc in adds.items():
-            if key not in index:
+        # Create missing slots for positive deltas only
+        for key, d in net.items():
+            if d > 0 and key not in index:
                 rack_id, col, usability = key
-                new_slot = {
+                slot = {
                     "warehouse": None,
                     "rack_id": rack_id,
                     "rack_name": None,
@@ -3899,77 +3930,149 @@ def _add_grv_racks_to_product(product, rows):
                     "rack_stock": 0,
                     "rack_lock": 0,
                 }
-                racks.append(new_slot)
-                index[key] = new_slot
+                racks.append(slot)
+                index[key] = slot
 
-        # Apply increments
-        for key, inc in adds.items():
-            pr = index[key]
-            pr["rack_stock"] = _as_int(pr.get("rack_stock")) + inc
-            changed = True
-
-        if changed:
-            p.rack_details = racks
-            p.save(update_fields=["rack_details"])  # your Products.save() will recompute stock fields
-
-
-from django.db import transaction
-
-def _coalesce_subtractions(rows):
-    """
-    Build { (rack_id, column_name, usability): total_qty_to_subtract } with positive ints.
-    """
-    acc = defaultdict(int)
-    for r in rows or []:
-        q = _qty_from_row(r)  # uses your existing helper
-        if q > 0:
-            acc[_key_tuple(r)] += q  # _key_tuple uses normalized usability
-    return acc
-
-def _subtract_grv_selected_racks_from_product(product, rows):
-    """
-    Subtract 'rows' (from GRV.selected_racks) from product.rack_details by (rack_id, column_name, usability).
-    - Validates existence and sufficient rack_stock for every referenced slot.
-    - Decrements rack_stock only (rack_lock unchanged).
-    - Raises ValueError on missing slot or insufficient stock.
-    """
-    subs = _coalesce_subtractions(rows)
-    if not subs:
-        return
-
-    with transaction.atomic():
-        # If you don't already have Products imported in this module, you can do:
-        # from beposoft_app.models import Products
-        p = Products.objects.select_for_update().get(pk=product.pk)
-        racks = list(p.rack_details or [])
-
-        # index: (rack_id, column_name, usability) -> rack dict
-        index = {
-            (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
-            for r in racks
-        }
-
-        # Validate all subtractions first
-        for key, dec in subs.items():
-            pr = index.get(key)
-            if not pr:
+        # Validate negatives
+        for key, d in net.items():
+            if d >= 0:
+                continue
+            slot = index.get(key)
+            if not slot:
                 raise ValueError(f"Rack not found for key={key} (cannot subtract).")
-            current = _as_int(pr.get("rack_stock"))
-            if dec > current:
-                raise ValueError(
-                    f"Insufficient stock in rack {key}: have {current}, need {dec}."
-                )
+            cur = _as_int(slot.get("rack_stock"))
+            if cur + d < 0:  # d is negative
+                raise ValueError(f"Insufficient stock in rack {key}: have {cur}, need {-d}.")
 
-        # Apply subtractions
+        # Apply net
         changed = False
-        for key, dec in subs.items():
-            pr = index[key]
-            pr["rack_stock"] = _as_int(pr.get("rack_stock")) - dec
+        for key, d in net.items():
+            if d == 0:
+                continue
+            slot = index.get(key)
+            if not slot:
+                # only possible for negative d (already validated to exist), but safe-guard anyway
+                continue
+            slot["rack_stock"] = _as_int(slot.get("rack_stock")) + d
             changed = True
 
         if changed:
             p.rack_details = racks
-            p.save(update_fields=["rack_details"])  # triggers recompute of stock fields
+            p.save(update_fields=["rack_details"])  # triggers recompute in Products.save()
+
+
+# def _coalesce_additions(rows):
+#     acc = defaultdict(int)
+#     for r in rows or []:
+#         q = _qty_from_row(r)
+#         if q > 0:
+#             acc[_key_tuple(r)] += q
+#     return acc
+
+# def _add_grv_racks_to_product(product, rows):
+#     """
+#     Add 'rows' (from GRV.rack_details) into product.rack_details by (rack_id, column_name, usability).
+#     Creates missing slots; increments rack_stock; leaves rack_lock unchanged.
+#     """
+#     adds = _coalesce_additions(rows)
+#     if not adds:
+#         return
+
+#     with transaction.atomic():
+#         # Ensure we have an instance (GRV.product_id is already a Products instance)
+#         p = Products.objects.select_for_update().get(pk=product.pk)
+#         racks = list(p.rack_details or [])
+#         index = {
+#             (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
+#             for r in racks
+#         }
+
+#         changed = False
+
+#         # Create missing slots
+#         for key, inc in adds.items():
+#             if key not in index:
+#                 rack_id, col, usability = key
+#                 new_slot = {
+#                     "warehouse": None,
+#                     "rack_id": rack_id,
+#                     "rack_name": None,
+#                     "column_name": col,
+#                     "usability": usability,
+#                     "rack_stock": 0,
+#                     "rack_lock": 0,
+#                 }
+#                 racks.append(new_slot)
+#                 index[key] = new_slot
+
+#         # Apply increments
+#         for key, inc in adds.items():
+#             pr = index[key]
+#             pr["rack_stock"] = _as_int(pr.get("rack_stock")) + inc
+#             changed = True
+
+#         if changed:
+#             p.rack_details = racks
+#             p.save(update_fields=["rack_details"])  # your Products.save() will recompute stock fields
+
+
+# from django.db import transaction
+
+# def _coalesce_subtractions(rows):
+#     """
+#     Build { (rack_id, column_name, usability): total_qty_to_subtract } with positive ints.
+#     """
+#     acc = defaultdict(int)
+#     for r in rows or []:
+#         q = _qty_from_row(r)  # uses your existing helper
+#         if q > 0:
+#             acc[_key_tuple(r)] += q  # _key_tuple uses normalized usability
+#     return acc
+
+# def _subtract_grv_selected_racks_from_product(product, rows):
+#     """
+#     Subtract 'rows' (from GRV.selected_racks) from product.rack_details by (rack_id, column_name, usability).
+#     - Validates existence and sufficient rack_stock for every referenced slot.
+#     - Decrements rack_stock only (rack_lock unchanged).
+#     - Raises ValueError on missing slot or insufficient stock.
+#     """
+#     subs = _coalesce_subtractions(rows)
+#     if not subs:
+#         return
+
+#     with transaction.atomic():
+#         # If you don't already have Products imported in this module, you can do:
+#         # from beposoft_app.models import Products
+#         p = Products.objects.select_for_update().get(pk=product.pk)
+#         racks = list(p.rack_details or [])
+
+#         # index: (rack_id, column_name, usability) -> rack dict
+#         index = {
+#             (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
+#             for r in racks
+#         }
+
+#         # Validate all subtractions first
+#         for key, dec in subs.items():
+#             pr = index.get(key)
+#             if not pr:
+#                 raise ValueError(f"Rack not found for key={key} (cannot subtract).")
+#             current = _as_int(pr.get("rack_stock"))
+#             if dec > current:
+#                 raise ValueError(
+#                     f"Insufficient stock in rack {key}: have {current}, need {dec}."
+#                 )
+
+#         # Apply subtractions
+#         changed = False
+#         for key, dec in subs.items():
+#             pr = index[key]
+#             pr["rack_stock"] = _as_int(pr.get("rack_stock")) - dec
+#             changed = True
+
+#         if changed:
+#             p.rack_details = racks
+#             p.save(update_fields=["rack_details"])  # triggers recompute of stock fields
 
 
 
@@ -4040,24 +4143,42 @@ class GRVUpdateView(BaseTokenView):
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+            # with transaction.atomic():
+            #     serializer.save()
+            #     grv.refresh_from_db()
+
+            #     # --- NEW SIMPLE RULE ---
+            #     # If remark is 'return' or 'exchange' and the GRV just became 'approved',
+            #     # add GRV.rack_details quantities into Product.rack_details.
+            #     remark = (grv.remark or "").strip().lower()
+            #     new_status = (grv.status or "").lower()
+
+            #     if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
+            #         if not grv.product_id:
+            #             raise ValidationError("No product linked to this GRV.")  # triggers rollback
+
+            #         _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
+
+            #         if grv.selected_racks:
+            #             _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
+
             with transaction.atomic():
                 serializer.save()
                 grv.refresh_from_db()
 
-                # --- NEW SIMPLE RULE ---
-                # If remark is 'return' or 'exchange' and the GRV just became 'approved',
-                # add GRV.rack_details quantities into Product.rack_details.
                 remark = (grv.remark or "").strip().lower()
                 new_status = (grv.status or "").lower()
 
                 if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
                     if not grv.product_id:
-                        raise ValidationError("No product linked to this GRV.")  # triggers rollback
+                        raise ValidationError("No product linked to this GRV.")  # ensure rollback
 
-                    _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
-
-                    if grv.selected_racks:
-                        _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
+                    # Net apply: +rack_details, -selected_racks
+                    _apply_rack_deltas(
+                        grv.product_id,
+                        add_rows=grv.rack_details or [],
+                        sub_rows=grv.selected_racks or []
+                    )
 
 
             return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
