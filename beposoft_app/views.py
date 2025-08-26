@@ -4054,12 +4054,12 @@ class GRVUpdateView(BaseTokenView):
                     if not grv.product_id:
                         raise ValidationError("No product linked to this GRV.")  # triggers rollback
 
+                    if grv.selected_racks:
+                        _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
+
                     _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
 
-                    apply_selected_subtract = str(request.data.get('subtract_selected', '')).lower() in ('1','true','yes')
-                    if apply_selected_subtract and (grv.selected_racks or []):
-                        _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
-                        
+
             return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
 
         except ValueError as ve:
