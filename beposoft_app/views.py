@@ -3687,55 +3687,87 @@ class ExpenseUpdate(BaseTokenView):
 class GRVaddView(BaseTokenView):
     def post(self, request):
         try:
-            # Authenticate the user using the token
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
-            
-            # Print/log the raw incoming request data
-            print("Incoming data:", request.data)
-            logger.info(f"Incoming data: {request.data}")
 
-            # Ensure the request data is a list of dictionaries
-            data = request.data if isinstance(request.data, list) else [request.data]
+            logger.info("Incoming data: %s", request.data)
 
-            # Use the serializer with `many=True` for lists
-            grvdata = GRVModelSerializer(data=data, many=True)
+            # accept list or single object
+            payload = request.data if isinstance(request.data, list) else [request.data]
 
-            # Validate and save the data
-            if grvdata.is_valid():
-                
-                print("Validated data (before save):", grvdata.validated_data)
-                logger.info(f"Validated data (before save): {grvdata.validated_data}")
-                
-                grvdata.save()
-                
-                print("Serialized data (after save):", grvdata.data)
-                logger.info(f"Serialized data (after save): {grvdata.data}")
-                
-                return Response({
-                    "status": "success",
-                    "message": "Added successfully",
-                    "data": grvdata.data
-                }, status=status.HTTP_200_OK)
-                
-            logger.error(f"Validation failed: {grvdata.errors}")
-            print("Validation errors:", grvdata.errors)
+            ser = GRVModelSerializer(data=payload, many=True)
+            if ser.is_valid():
+                ser.save()
+                logger.info("Serialized data (after save): %s", ser.data)
+                return Response(
+                    {"status": "success", "message": "Added successfully", "data": ser.data},
+                    status=status.HTTP_201_CREATED
+                )
 
-            return Response({
-                "status": "error",
-                "message": "Validation failed",
-                "errors": grvdata.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Validation failed: %s", ser.errors)
+            return Response(
+                {"status": "error", "message": "Validation failed", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         except Exception as e:
-            logger.error(f"Error occurred in GRVaddView: {str(e)}")
-            print("Exception in GRVaddView:", str(e))
-            return Response({
-                "status": "error",
-                "message": "An error occurred while processing the request",
-                "error": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception("Error occurred in GRVaddView")
+            return Response(
+                {"status": "error", "message": "An error occurred while processing the request", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    # def post(self, request):
+    #     try:
+    #         # Authenticate the user using the token
+    #         authUser, error_response = self.get_user_from_token(request)
+    #         if error_response:
+    #             return error_response
+            
+    #         # Print/log the raw incoming request data
+    #         print("Incoming data:", request.data)
+    #         logger.info(f"Incoming data: {request.data}")
+
+    #         # Ensure the request data is a list of dictionaries
+    #         data = request.data if isinstance(request.data, list) else [request.data]
+
+    #         # Use the serializer with `many=True` for lists
+    #         grvdata = GRVModelSerializer(data=data, many=True)
+
+    #         # Validate and save the data
+    #         if grvdata.is_valid():
+                
+    #             print("Validated data (before save):", grvdata.validated_data)
+    #             logger.info(f"Validated data (before save): {grvdata.validated_data}")
+                
+    #             grvdata.save()
+                
+    #             print("Serialized data (after save):", grvdata.data)
+    #             logger.info(f"Serialized data (after save): {grvdata.data}")
+                
+    #             return Response({
+    #                 "status": "success",
+    #                 "message": "Added successfully",
+    #                 "data": grvdata.data
+    #             }, status=status.HTTP_200_OK)
+                
+    #         logger.error(f"Validation failed: {grvdata.errors}")
+    #         print("Validation errors:", grvdata.errors)
+
+    #         return Response({
+    #             "status": "error",
+    #             "message": "Validation failed",
+    #             "errors": grvdata.errors
+    #         }, status=status.HTTP_400_BAD_REQUEST)
+
+    #     except Exception as e:
+    #         logger.error(f"Error occurred in GRVaddView: {str(e)}")
+    #         print("Exception in GRVaddView:", str(e))
+    #         return Response({
+    #             "status": "error",
+    #             "message": "An error occurred while processing the request",
+    #             "error": str(e)
+    #         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def get(self,request):
         try:

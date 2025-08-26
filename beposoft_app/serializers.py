@@ -1244,12 +1244,38 @@ class GRVSerializer(serializers.ModelSerializer):
         # Customize the output format of the time field
            
 
+# class GRVModelSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = GRVModel
+#         fields = ['order', 'product', 'returnreason', 'rack_details',
+#                   'price', 'quantity', 'remark', 'status','selected_racks', 
+#                   'date', 'time', 'note', 'updated_at','product_id']
+
+
 class GRVModelSerializer(serializers.ModelSerializer):
+    # Accept a plain integer for product_id (FK to Products)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Products.objects.all(),
+        required=False, allow_null=True
+    )
+
     class Meta:
         model = GRVModel
-        fields = ['order', 'product', 'returnreason', 'rack_details',
-                  'price', 'quantity', 'remark', 'status','selected_racks', 
-                  'date', 'time', 'note', 'updated_at','product_id']
+        fields = [
+            'order', 'product', 'returnreason', 'rack_details',
+            'price', 'quantity', 'remark', 'status', 'selected_racks',
+            'date', 'time', 'note', 'updated_at', 'product_id'
+        ]
+        extra_kwargs = {
+            'remark': {'required': False, 'allow_null': True},
+            'status': {'required': False, 'allow_null': True},
+            'date':   {'required': False, 'allow_null': True},
+            'time':   {'required': False, 'allow_null': True},
+            'note':   {'required': False, 'allow_null': True},
+            'updated_at': {'read_only': True},
+            'rack_details': {'required': False},
+            'selected_racks': {'required': False},
+        }
 
 
 
