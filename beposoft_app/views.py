@@ -3911,7 +3911,68 @@ def _add_grv_racks_to_product(product, rows):
         if changed:
             p.rack_details = racks
             p.save(update_fields=["rack_details"])  # your Products.save() will recompute stock fields
-            
+
+
+from django.db import transaction
+
+def _coalesce_subtractions(rows):
+    """
+    Build { (rack_id, column_name, usability): total_qty_to_subtract } with positive ints.
+    """
+    acc = defaultdict(int)
+    for r in rows or []:
+        q = _qty_from_row(r)  # uses your existing helper
+        if q > 0:
+            acc[_key_tuple(r)] += q  # _key_tuple uses normalized usability
+    return acc
+
+def _subtract_grv_selected_racks_from_product(product, rows):
+    """
+    Subtract 'rows' (from GRV.selected_racks) from product.rack_details by (rack_id, column_name, usability).
+    - Validates existence and sufficient rack_stock for every referenced slot.
+    - Decrements rack_stock only (rack_lock unchanged).
+    - Raises ValueError on missing slot or insufficient stock.
+    """
+    subs = _coalesce_subtractions(rows)
+    if not subs:
+        return
+
+    with transaction.atomic():
+        # If you don't already have Products imported in this module, you can do:
+        # from beposoft_app.models import Products
+        p = Products.objects.select_for_update().get(pk=product.pk)
+        racks = list(p.rack_details or [])
+
+        # index: (rack_id, column_name, usability) -> rack dict
+        index = {
+            (r.get("rack_id"), r.get("column_name"), _norm_usability(r.get("usability"))): r
+            for r in racks
+        }
+
+        # Validate all subtractions first
+        for key, dec in subs.items():
+            pr = index.get(key)
+            if not pr:
+                raise ValueError(f"Rack not found for key={key} (cannot subtract).")
+            current = _as_int(pr.get("rack_stock"))
+            if dec > current:
+                raise ValueError(
+                    f"Insufficient stock in rack {key}: have {current}, need {dec}."
+                )
+
+        # Apply subtractions
+        changed = False
+        for key, dec in subs.items():
+            pr = index[key]
+            pr["rack_stock"] = _as_int(pr.get("rack_stock")) - dec
+            changed = True
+
+        if changed:
+            p.rack_details = racks
+            p.save(update_fields=["rack_details"])  # triggers recompute of stock fields
+
+
+
 class GRVUpdateView(BaseTokenView):
     # def put(self, request, pk):
     #     try:
@@ -3991,13 +4052,14 @@ class GRVUpdateView(BaseTokenView):
 
                 if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
                     if not grv.product_id:
-                        return Response(
-                            {"status": "error", "message": "No product linked to this GRV."},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+                        raise ValidationError("No product linked to this GRV.")  # triggers rollback
 
                     _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
 
+                    apply_selected_subtract = str(request.data.get('subtract_selected', '')).lower() in ('1','true','yes')
+                    if apply_selected_subtract and (grv.selected_racks or []):
+                        _subtract_grv_selected_racks_from_product(grv.product_id, grv.selected_racks)
+                        
             return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
 
         except ValueError as ve:
