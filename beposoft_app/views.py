@@ -3840,6 +3840,59 @@ class GRVGetViewById(BaseTokenView):
 #             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class GRVUpdateView(BaseTokenView):
+    # def put(self, request, pk):
+    #     try:
+    #         authUser, error_response = self.get_user_from_token(request)
+    #         if error_response:
+    #             return error_response
+
+    #         grv = get_object_or_404(GRVModel, pk=pk)
+    #         old_status = grv.status  # Track old status
+
+    #         serializer = GRVModelSerializer(grv, data=request.data, partial=True)
+    #         if not serializer.is_valid():
+    #             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    #         with transaction.atomic():
+    #             serializer.save()
+    #             grv.refresh_from_db()  # get latest values after save
+
+    #             # Only apply rack mutations the moment it transitions to 'approved'
+    #             if grv.status == 'approved' and old_status != 'approved':
+    #                 if not grv.product_id:
+    #                     return Response(
+    #                         {"status": "error", "message": "No product linked to this GRV."},
+    #                         status=status.HTTP_400_BAD_REQUEST
+    #                     )
+
+    #                 product = grv.product_id
+    #                 selected_racks = grv.selected_racks or []  # rows to ADD (based on 'usability')
+    #                 source_racks   = grv.rack_details or []    # rows to SUBTRACT (from original shipment racks)
+
+    #                 # RULES:
+    #                 # 1) remark == refund: add selected_racks
+    #                 # 2) remark == return: add selected_racks, subtract rack_details
+    #                 # 3) remark == exchange: add selected_racks, subtract rack_details
+
+    #                 remark = (grv.remark or "").lower()
+    #                 if remark == "refund":
+    #                     mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=None)
+    #                 elif remark in ("return", "exchange"):
+    #                     mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=source_racks)
+    #                 # else: do nothing for other remarks
+
+    #             # IMPORTANT: remove the old block where you directly bump
+    #             # product.stock / damaged_stock / partially_damaged_stock based on grv.returnreason.
+    #             # The recomputation now happens automatically from rack_details in Products.save().
+
+    #         return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
+
+    #     except ValueError as ve:
+    #         # Validation errors from rack mutations
+    #         return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+    #     except Exception as e:
+    #         return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+        
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -3847,7 +3900,7 @@ class GRVUpdateView(BaseTokenView):
                 return error_response
 
             grv = get_object_or_404(GRVModel, pk=pk)
-            old_status = grv.status  # Track old status
+            old_status = (grv.status or "").lower()
 
             serializer = GRVModelSerializer(grv, data=request.data, partial=True)
             if not serializer.is_valid():
@@ -3855,44 +3908,29 @@ class GRVUpdateView(BaseTokenView):
 
             with transaction.atomic():
                 serializer.save()
-                grv.refresh_from_db()  # get latest values after save
+                grv.refresh_from_db()
 
-                # Only apply rack mutations the moment it transitions to 'approved'
-                if grv.status == 'approved' and old_status != 'approved':
+                # --- NEW SIMPLE RULE ---
+                # If remark is 'return' or 'exchange' and the GRV just became 'approved',
+                # add GRV.rack_details quantities into Product.rack_details.
+                remark = (grv.remark or "").strip().lower()
+                new_status = (grv.status or "").lower()
+
+                if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
                     if not grv.product_id:
                         return Response(
                             {"status": "error", "message": "No product linked to this GRV."},
                             status=status.HTTP_400_BAD_REQUEST
                         )
 
-                    product = grv.product_id
-                    selected_racks = grv.selected_racks or []  # rows to ADD (based on 'usability')
-                    source_racks   = grv.rack_details or []    # rows to SUBTRACT (from original shipment racks)
-
-                    # RULES:
-                    # 1) remark == refund: add selected_racks
-                    # 2) remark == return: add selected_racks, subtract rack_details
-                    # 3) remark == exchange: add selected_racks, subtract rack_details
-
-                    remark = (grv.remark or "").lower()
-                    if remark == "refund":
-                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=None)
-                    elif remark in ("return", "exchange"):
-                        mutate_product_rack_stocks(product, add_rows=selected_racks, sub_rows=source_racks)
-                    # else: do nothing for other remarks
-
-                # IMPORTANT: remove the old block where you directly bump
-                # product.stock / damaged_stock / partially_damaged_stock based on grv.returnreason.
-                # The recomputation now happens automatically from rack_details in Products.save().
+                    _add_grv_racks_to_product(grv.product_id, grv.rack_details or [])
 
             return Response({"status": "success", "message": "GRV updated successfully"}, status=status.HTTP_200_OK)
 
         except ValueError as ve:
-            # Validation errors from rack mutations
             return Response({"status": "error", "message": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
-
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 class SalesReportView(BaseTokenView):
     def get(self, request):
