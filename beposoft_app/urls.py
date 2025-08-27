@@ -12,7 +12,8 @@ urlpatterns = [
 
     path('api/profile/',UserProfileData.as_view(),name="UserProfileData"),
 
-    
+    path("api/customer-types/", CustomerTypeView.as_view(), name="customer-type-list-create"),
+    path("api/customer-types/<int:pk>/", CustomerTypeView.as_view(), name="customer-type-detail"),
     
     path('api/add/customer/', UserCustomerAddingView.as_view(), name='add-customer'),
     path('api/customers/', CustomerView.as_view(), name='customer-list'),

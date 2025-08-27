@@ -107,6 +107,12 @@ class StaffSerializer(serializers.ModelSerializer):
         fields = ['id','eid','name','department','join_date','phone','email','designation','family','approval_status']
 
 
+class CustomerTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomerType
+        fields = ["id", "type_name"]
+
+
 class CustomerSerilizers(serializers.ModelSerializer):
     state_name = serializers.CharField(source='State.name', read_only=True)
     manager_name = serializers.CharField(source='User.name', read_only=True)

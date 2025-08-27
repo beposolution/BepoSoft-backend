@@ -245,6 +245,13 @@ class ProductAttribute(models.Model):
         db_table = "product_attributes" 
 
 
+class CustomerType(models.Model):
+    type_name = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return self.type_name
+
+
 class Customers(models.Model):
     CUSTOMER_STATUS = [
         ('customer', 'customer'),
