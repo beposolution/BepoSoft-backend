@@ -275,7 +275,8 @@ class Customers(models.Model):
     comment = models.CharField(max_length=500, null=True, blank=True)
     created_at = models.DateField(auto_now_add=True)
     customer_status = models.CharField(max_length=200, choices=CUSTOMER_STATUS, default='customer')
-    family = models.ForeignKey(Family, on_delete=models.SET_NULL, null=True, blank=True)  # <-- Add this line
+    family = models.ForeignKey(Family, on_delete=models.SET_NULL, null=True, blank=True) 
+    customer_type = models.ForeignKey(CustomerType, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return self.name
