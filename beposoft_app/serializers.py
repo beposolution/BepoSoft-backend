@@ -184,10 +184,11 @@ class CustomerModelSerializerView(serializers.ModelSerializer):
 class CustomerModelSerializerLimited(serializers.ModelSerializer):
     family=serializers.CharField(source="manager.family.name")
     state_name = serializers.CharField(source="state.name")
-   
+    customer_type = serializers.CharField(source="customer_type.type_name", read_only=True)
+
     class Meta:
         model = Customers
-        fields = ['id','name', 'email', 'created_at','manager','family','phone','state_name']          
+        fields = ['id','name', 'email', 'created_at','manager','family','phone','state_name','customer_type']          
 
 
 
@@ -214,6 +215,8 @@ class ProductsAddSerializer(serializers.ModelSerializer):
 class CustomerSerilizers(serializers.ModelSerializer):
     state = serializers.CharField(source='state.name', read_only=True)
     manager = serializers.CharField(source ='manager.name',read_only=True)
+    customer_type = serializers.CharField(source='customer_type.type_name', read_only=True)
+
     class Meta :
         model = Customers
         fields = "__all__"
