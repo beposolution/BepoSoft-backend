@@ -1673,4 +1673,21 @@ class AttendanceAbsenceSerializer(serializers.Serializer):
         ).order_by("date")
 
         # Serialize the filtered attendance records
-        return AttendanceDetailSerializer(attendance_records, many=True).data          
+        return AttendanceDetailSerializer(attendance_records, many=True).data    
+
+
+class DataLogCreateSerializer(serializers.ModelSerializer):
+    """
+    Frontend supplies fields below; server injects user + created_at.
+    """
+    class Meta:
+        model = DataLog
+        # user & created_at are server-managed
+        exclude = ['id', 'user', 'created_at']
+
+class DataLogViewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.name', read_only=True)
+
+    class Meta:
+        model = DataLog
+        fields = '__all__'      
