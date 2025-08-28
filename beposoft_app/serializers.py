@@ -1687,6 +1687,7 @@ class DataLogCreateSerializer(serializers.ModelSerializer):
 
 class DataLogViewSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.name', read_only=True)
+    order_name = serializers.CharField(source='order.invoice', read_only=True)
 
     class Meta:
         model = DataLog
