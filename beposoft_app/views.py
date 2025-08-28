@@ -6143,3 +6143,69 @@ class ProductCategoryView(BaseTokenView):
                 "message": "An error occurred",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DataLogCreateView(BaseTokenView):
+    """
+    POST: create a log entry.
+    The frontend sends any of: action, endpoint, view_name, model_name, object_id,
+    before_data, after_data, request_body, query_params, headers, status_code,
+    notes, extra. Server sets user and created_at.
+    """
+    def post(self, request):
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        serializer = DataLogCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            ip = request.META.get('REMOTE_ADDR') or request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            ua = request.META.get('HTTP_USER_AGENT', '')
+
+            log = DataLog.objects.create(
+                user=auth_user,
+                **serializer.validated_data,
+                ip_address=ip or None,
+                user_agent=ua[:512] if ua else "",
+            )
+            return Response(DataLogViewSerializer(log).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DataLogListView(BaseTokenView):
+    """
+    GET: list/filter logs.
+    Optional query params:
+      - model_name
+      - object_id
+      - action (GET/POST/PUT/PATCH/DELETE/OTHER)
+      - from (YYYY-MM-DD)
+      - to   (YYYY-MM-DD)
+    """
+    def get(self, request):
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        qs = DataLog.objects.all().order_by('-created_at')
+
+        model_name = request.GET.get('model_name')
+        object_id = request.GET.get('object_id')
+        action = request.GET.get('action')
+        dt_from = request.GET.get('from')
+        dt_to   = request.GET.get('to')
+
+        if model_name:
+            qs = qs.filter(model_name=model_name)
+        if object_id:
+            qs = qs.filter(object_id=object_id)
+        if action:
+            qs = qs.filter(action=action)
+
+        # date filtering on created_at (inclusive)
+        if dt_from:
+            qs = qs.filter(created_at__date__gte=dt_from)
+        if dt_to:
+            qs = qs.filter(created_at__date__lte=dt_to)
+
+        return Response(DataLogViewSerializer(qs, many=True).data, status=status.HTTP_200_OK)

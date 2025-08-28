@@ -40,6 +40,7 @@ admin.site.register(ProductCategoryModel)
 admin.site.register(ProductRack)
 admin.site.register(OrderItemRackAllocation)
 admin.site.register(CustomerType)
+admin.site.register(DataLog)
 
 
 
