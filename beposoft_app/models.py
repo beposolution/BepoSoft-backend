@@ -1363,69 +1363,20 @@ class Attendance(models.Model):
         return f"{self.staff.name} - {self.date} - {self.attendance_status}"
 
 
-class TestModel(models.Model):
-    name = models.CharField(max_length=100)
-    description = models.TextField()
-    
-    def __str__(self):
-        return self.name
-    
-    class Meta:
-        db_table = "test_model"
-    
-
 class DataLog(models.Model):
     """
-    Generic, append-only log for any API action.
-    Frontend sends payload; backend resolves user from token and stamps time.
+    Minimal append-only log for any API action.
+    Stores user (from token), before/after data snapshots, and timestamp.
     """
-    ACTION_CHOICES = [
-        ('GET', 'GET'),
-        ('POST', 'POST'),
-        ('PUT', 'PUT'),
-        ('PATCH', 'PATCH'),
-        ('DELETE', 'DELETE'),
-        ('OTHER', 'OTHER'),
-    ]
-
-    # Who did it (resolved server-side from token)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='data_logs')
-
-    # What happened
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES, default='OTHER')
-    endpoint = models.CharField(max_length=255, blank=True, default="")      # e.g. /api/orders/123/
-    view_name = models.CharField(max_length=255, blank=True, default="")     # optional: DRF view name/route name
-    model_name = models.CharField(max_length=100, blank=True, default="")    # e.g. "Order"
-    object_id = models.CharField(max_length=50, blank=True, default="")      # e.g. "123"
-
-    # What changed
     before_data = models.JSONField(null=True, blank=True, default=dict)
     after_data  = models.JSONField(null=True, blank=True, default=dict)
-
-    # Request context (optional)
-    request_body  = models.JSONField(null=True, blank=True, default=dict)
-    query_params  = models.JSONField(null=True, blank=True, default=dict)
-    headers       = models.JSONField(null=True, blank=True, default=dict)
-    status_code   = models.PositiveIntegerField(null=True, blank=True)
-    ip_address    = models.GenericIPAddressField(null=True, blank=True)
-    user_agent    = models.CharField(max_length=512, blank=True, default="")
-
-    # Misc
-    notes = models.TextField(blank=True, default="")
-    extra = models.JSONField(null=True, blank=True, default=dict)
-
-    # When it happened (server-side)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "data_log"
-        indexes = [
-            models.Index(fields=['created_at']),
-            models.Index(fields=['action']),
-            models.Index(fields=['model_name', 'object_id']),
-            models.Index(fields=['endpoint']),
-        ]
+        indexes = [models.Index(fields=['created_at'])]
 
     def __str__(self):
         u = self.user.name if self.user else "anonymous"
-        return f"[{self.action}] {self.endpoint} by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S}"
+        return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"
