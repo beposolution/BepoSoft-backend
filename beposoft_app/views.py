@@ -2043,42 +2043,179 @@ class FamilyOrderSummaryView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-class TrackingReport(BaseTokenView):
-    def get(self, request):
-        try:
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
 
-            # Optimize Query and Order by order_date descending
-            orders = Order.objects.select_related(
-                "manage_staff", "customer", "state", "family"
-            ).prefetch_related("warehouse").order_by("-id")
+class ParcelServiceGroupedView(BaseTokenView):
+    """
+    GET /api/warehouse/parcel-service-grouped/?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...&message_status=...
+    Groups results by parcel_service.
 
-            # Optimize Count Queries
-            invoice_counts = orders.aggregate(
-                invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
-                invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
+    Each item includes:
+      - shipped_date
+      - invoice
+      - customerName
+      - total_amount (2 decimals)
+      - parcel_amount
+      - tracking_id
+      - parcel_service
+      - weight
+      - actual_weight
+      - volume_weight = (length * breadth * height) / 6000
+      - box
+      - average = parcel_amount per kg (uses actual_weight if >0, else volume_weight)
+    """
+
+    def get(self, request, *args, **kwargs):
+        # ---- Base queryset + filters ----
+        qs = Warehousedata.objects.all()
+
+        date_from = request.query_params.get("from")
+        date_to = request.query_params.get("to")
+        status = request.query_params.get("status")
+        message_status = request.query_params.get("message_status")
+        parcel_service_id = request.query_params.get("parcel_service_id")
+        parcel_service_name = request.query_params.get("parcel_service")
+
+        if date_from:
+            qs = qs.filter(shipped_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(shipped_date__lte=date_to)
+        if status:
+            qs = qs.filter(status=status)
+        if message_status:
+            qs = qs.filter(message_status=message_status)
+        if parcel_service_id:
+            qs = qs.filter(parcel_service_id=parcel_service_id)
+        if parcel_service_name:
+            qs = qs.filter(parcel_service__name__iexact=parcel_service_name)
+
+        # Efficiently pull related order data
+        qs = qs.select_related(
+            "parcel_service",
+            "order",
+            "order__billing_address",
+            "order__customer",
+            "order__company",
+            "order__family",
+            "order__manage_staff",
+        ).order_by("-shipped_date", "-id")
+
+        # ---- Helpers ----
+        def _to_decimal(v):
+            if v is None:
+                return None
+            try:
+                return Decimal(str(v))
+            except (InvalidOperation, ValueError, TypeError):
+                return None
+
+        def _to_float(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return 0.0
+
+        def _volume_weight(w):
+            # length, breadth, height are strings in model; treat missing as 0
+            L = _to_float(w.length)
+            B = _to_float(w.breadth)
+            H = _to_float(w.height)
+            if L <= 0 or B <= 0 or H <= 0:
+                return None
+            return round((L * B * H) / 6000.0, 2)
+
+        def _customer_name(w):
+            # Prefer shipping/billing name if present; else fallback to Customer.name
+            if w.order and w.order.billing_address and w.order.billing_address.name:
+                return w.order.billing_address.name
+            if w.order and w.order.customer and w.order.customer.name:
+                return w.order.customer.name
+            return None
+
+        def _average_per_kg(parcel_amount, actual_weight, vol_weight):
+            amt = _to_decimal(parcel_amount) or Decimal("0")
+            # Prefer actual weight; if missing/zero, use volume weight
+            base_wt = _to_decimal(actual_weight) or None
+            if (base_wt is None) or (base_wt <= 0):
+                base_wt = _to_decimal(vol_weight) if vol_weight is not None else None
+            if base_wt is None or base_wt <= 0:
+                return None
+            try:
+                avg = amt / base_wt
+                # return as 2-decimal string to mirror toFixed(2) vibe
+                return f"{avg:.2f}"
+            except (InvalidOperation, ZeroDivisionError):
+                return None
+
+        # ---- Build grouped payload ----
+        grouped = []
+        services = (
+            qs.values("parcel_service__id", "parcel_service__name")
+              .distinct()
+              .order_by("parcel_service__name")
+        )
+
+        # Overall summary
+        overall = qs.aggregate(
+            total_boxes=Count("id"),
+            total_actual_weight=Sum("actual_weight"),
+            total_parcel_amount=Sum("parcel_amount"),
+        )
+
+        for svc in services:
+            svc_id = svc["parcel_service__id"]
+            svc_name = svc["parcel_service__name"] or None
+            svc_qs = qs.filter(parcel_service_id=svc_id)
+
+            # Per-service summary
+            svc_summary = svc_qs.aggregate(
+                boxes=Count("id"),
+                actual_weight=Sum("actual_weight"),
+                parcel_amount=Sum("parcel_amount"),
             )
 
-            serializer = TrackingdetailsSerializer(orders, many=True)
+            items = []
+            for w in svc_qs:
+                vol_wt = _volume_weight(w)
+                inv = w.order.invoice if (w.order and w.order.invoice) else None
+                total_amount = (
+                    f"{_to_decimal(w.order.total_amount) or Decimal('0'):.2f}"
+                    if w.order else "0.00"
+                )
+                customerName = _customer_name(w)
 
-            # Add family_id and family_name to each order in results
-            results = serializer.data
-            response_data = {
-                "invoice_created_count": invoice_counts["invoice_created_count"],
-                "invoice_approved_count": invoice_counts["invoice_approved_count"],
-                "results": results
-            }
-            return Response(response_data, status=status.HTTP_200_OK)
+                item = {
+                    "shipped_date": w.shipped_date,
+                    "invoice": inv,
+                    "customerName": customerName,
+                    "total_amount": total_amount,
+                    "parcel_amount": w.parcel_amount,
+                    "tracking_id": w.tracking_id,
+                    "parcel_service": svc_name,
+                    "weight": w.weight,
+                    "actual_weight": w.actual_weight,
+                    "volume_weight": vol_wt,
+                    "box": w.box,
+                    "average": _average_per_kg(
+                        w.parcel_amount, w.actual_weight, vol_wt
+                    ),
+                }
+                items.append(item)
 
-        except ObjectDoesNotExist:
-            return Response({"status": "error", "message": "Orders not found"}, status=status.HTTP_404_NOT_FOUND)
-        except DatabaseError:
-            return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            grouped.append({
+                "parcel_service_id": svc_id,
+                "parcel_service_name": svc_name,
+                "summary": {
+                    "boxes": svc_summary["boxes"],
+                    "actual_weight": svc_summary["actual_weight"],
+                    "parcel_amount": svc_summary["parcel_amount"],
+                },
+                "items": items,
+            })
 
+        return Response({
+            "summary": overall,
+            "services": grouped,
+        })
 
 class LockOrderView(BaseTokenView):
     def post(self, request, order_id):
