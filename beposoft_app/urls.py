@@ -89,7 +89,7 @@ urlpatterns = [
     path('api/orders/', OrderListView.as_view(), name='orders'),
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
-    path('api/orders/tracking/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
+    path('api/orders/parcel/service/data/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
     path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),
     path('api/order/images/upload/', OrderImageUploadView.as_view(), name='order-image-upload'),
