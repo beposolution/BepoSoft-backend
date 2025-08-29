@@ -1922,15 +1922,18 @@ class FamilyOrderSummaryView(BaseTokenView):
             if error_response:
                 return error_response
 
-            # Dates in IST (server tz if configured; else adjust as needed)
+            # Dates in IST
             today = timezone.localdate()
             month_start = today.replace(day=1)
 
             today_str = today.strftime("%Y-%m-%d")
             month_start_str = month_start.strftime("%Y-%m-%d")
 
+            # Base queryset (exclude Invoice Rejected)
+            base_qs = Order.objects.filter(~Q(status="Invoice Rejected"))
+
             qs = (
-                Order.objects.select_related("family")
+                base_qs.select_related("family")
                 .values("family_id", "family__name")
                 .annotate(
                     today_count=Count("id", filter=Q(order_date=today_str)),
@@ -1945,6 +1948,22 @@ class FamilyOrderSummaryView(BaseTokenView):
                         Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str)),
                         0.0,
                     ),
+
+                    # ---- Payment status filters ----
+                    paid_count=Count("id", filter=Q(payment_status="paid")),
+                    paid_total=Coalesce(Sum("total_amount", filter=Q(payment_status="paid")), 0.0),
+
+                    cod_count=Count("id", filter=Q(payment_status="COD")),
+                    cod_total=Coalesce(Sum("total_amount", filter=Q(payment_status="COD")), 0.0),
+
+                    credit_count=Count("id", filter=Q(payment_status="credit")),
+                    credit_total=Coalesce(Sum("total_amount", filter=Q(payment_status="credit")), 0.0),
+
+                    pending_count=Count("id", filter=Q(payment_status="PENDING")),
+                    pending_total=Coalesce(Sum("total_amount", filter=Q(payment_status="PENDING")), 0.0),
+
+                    voided_count=Count("id", filter=Q(payment_status="VOIDED")),
+                    voided_total=Coalesce(Sum("total_amount", filter=Q(payment_status="VOIDED")), 0.0),
                 )
                 .order_by("family__name")
             )
@@ -1954,18 +1973,66 @@ class FamilyOrderSummaryView(BaseTokenView):
                 results.append({
                     "family_id": row["family_id"],
                     "family_name": row["family__name"],
+
                     "today_count": row["today_count"],
                     "today_total_amount": float(row["today_total_amount"] or 0),
                     "month_count": row["month_count"],
                     "month_total_amount": float(row["month_total_amount"] or 0),
+
+                    # Payment status breakdown
+                    "payment_status_summary": {
+                        "paid": {
+                            "count": row["paid_count"],
+                            "total": float(row["paid_total"] or 0)
+                        },
+                        "COD": {
+                            "count": row["cod_count"],
+                            "total": float(row["cod_total"] or 0)
+                        },
+                        "credit": {
+                            "count": row["credit_count"],
+                            "total": float(row["credit_total"] or 0)
+                        },
+                        "PENDING": {
+                            "count": row["pending_count"],
+                            "total": float(row["pending_total"] or 0)
+                        },
+                        "VOIDED": {
+                            "count": row["voided_count"],
+                            "total": float(row["voided_total"] or 0)
+                        },
+                    }
                 })
 
-            # Optional: overall totals (remove if not needed)
             overall = {
                 "today_count": sum(r["today_count"] for r in results),
                 "today_total_amount": float(sum(r["today_total_amount"] for r in results)),
                 "month_count": sum(r["month_count"] for r in results),
                 "month_total_amount": float(sum(r["month_total_amount"] for r in results)),
+
+                # Overall payment status totals
+                "payment_status_summary": {
+                    "paid": {
+                        "count": sum(r["payment_status_summary"]["paid"]["count"] for r in results),
+                        "total": float(sum(r["payment_status_summary"]["paid"]["total"] for r in results)),
+                    },
+                    "COD": {
+                        "count": sum(r["payment_status_summary"]["COD"]["count"] for r in results),
+                        "total": float(sum(r["payment_status_summary"]["COD"]["total"] for r in results)),
+                    },
+                    "credit": {
+                        "count": sum(r["payment_status_summary"]["credit"]["count"] for r in results),
+                        "total": float(sum(r["payment_status_summary"]["credit"]["total"] for r in results)),
+                    },
+                    "PENDING": {
+                        "count": sum(r["payment_status_summary"]["PENDING"]["count"] for r in results),
+                        "total": float(sum(r["payment_status_summary"]["PENDING"]["total"] for r in results)),
+                    },
+                    "VOIDED": {
+                        "count": sum(r["payment_status_summary"]["VOIDED"]["count"] for r in results),
+                        "total": float(sum(r["payment_status_summary"]["VOIDED"]["total"] for r in results)),
+                    },
+                }
             }
 
             return Response(
@@ -1975,7 +2042,6 @@ class FamilyOrderSummaryView(BaseTokenView):
 
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
         
 class TrackingReport(BaseTokenView):
     def get(self, request):
