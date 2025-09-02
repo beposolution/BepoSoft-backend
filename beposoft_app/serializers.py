@@ -194,8 +194,9 @@ class CustomerModelSerializerLimited(serializers.ModelSerializer):
 
     class Meta:
         model = Customers
-        fields = ['id','name', 'email', 'created_at','manager','family','phone','state_name','customer_type']          
-
+        fields = ['id','name', 'email', 'created_at',
+                  'manager','family','phone',
+                  'state_name','customer_type', 'gst']          
 
 
 class ProductsSerializer(serializers.ModelSerializer):
