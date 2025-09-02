@@ -168,6 +168,7 @@ urlpatterns = [
     path('api/assest/',ExpensAddAssestView.as_view()),
     path('api/asset/update/<int:pk>/',ExpensAddAssestView.as_view()),
     path('api/expense/addexpectemiupdate/<int:pk>/',ExpensAddViewExpectEmiUpdate.as_view()),
+    path("api/get/expense/<int:id>/", ExpenseDetailView.as_view(), name="expense-detail"),
 
 
     path('api/salesreport/',SalesReportView.as_view()),

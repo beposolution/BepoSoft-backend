@@ -1373,6 +1373,10 @@ class ExpenseExpectEmiSerializer(serializers.ModelSerializer):
                   'amount','expense_date','transaction_id',
                   'description','added_by','expense_type']
 
+class ExpenseGetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseModel
+        fields = "__all__" 
 
 class ExpenseSerializerAssest(serializers.ModelSerializer):
     

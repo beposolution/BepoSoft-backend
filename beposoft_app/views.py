@@ -3829,7 +3829,31 @@ class WarehouseUpdateCheckedByView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class ExpenseDetailView(BaseTokenView):
+    def get(self, request, id, *args, **kwargs):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
 
+            # Fetch expense or return 404
+            expense = get_object_or_404(ExpenseModel, id=id)
+
+            # Serialize
+            serializer = ExpenseSerializer(expense)
+
+            return Response({
+                "status": "success",
+                "message": "Expense retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ExpensAddView(BaseTokenView):
     def post(self, request):
@@ -6414,3 +6438,4 @@ class DataLogListView(BaseTokenView):
             qs = qs.filter(created_at__date__lte=dt_to)
 
         return Response(DataLogViewSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
