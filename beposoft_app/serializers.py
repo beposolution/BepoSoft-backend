@@ -1375,6 +1375,8 @@ class ExpenseExpectEmiSerializer(serializers.ModelSerializer):
                   'description','added_by','expense_type']
 
 class ExpenseGetSerializer(serializers.ModelSerializer):
+    emi_name = serializers.CharField(source="loan.emi_name", read_only=True)
+    purpose_of_payment_name = serializers.CharField(source="purpose_of_payment.name", read_only=True)
     class Meta:
         model = ExpenseModel
         fields = "__all__" 

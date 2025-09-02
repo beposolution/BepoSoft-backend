@@ -3841,7 +3841,7 @@ class ExpenseDetailView(BaseTokenView):
             expense = get_object_or_404(ExpenseModel, id=id)
 
             # Serialize
-            serializer = ExpenseSerializer(expense)
+            serializer = ExpenseGetSerializer(expense)
 
             return Response({
                 "status": "success",
