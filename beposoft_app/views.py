@@ -6410,7 +6410,7 @@ class DataLogCreateView(BaseTokenView):
                 user=auth_user,
                 **serializer.validated_data,  # accepts: order, before_data, after_data
             )
-            
+
             DataLog.delete_expired() # Clean up old logs after 60 days
 
             return Response(DataLogViewSerializer(log).data, status=status.HTTP_201_CREATED)
@@ -6425,10 +6425,10 @@ class DataLogListView(BaseTokenView):
 
         qs = DataLog.objects.all().order_by('-created_at')
 
-        order_id = request.GET.get('order')            # ?order=2332
-        user_id  = request.GET.get('user')             # ?user=17
-        dt_from  = request.GET.get('from')             # YYYY-MM-DD
-        dt_to    = request.GET.get('to')               # YYYY-MM-DD
+        order_id = request.GET.get('order')
+        user_id  = request.GET.get('user')
+        dt_from  = request.GET.get('from')
+        dt_to    = request.GET.get('to')
 
         if order_id:
             qs = qs.filter(order_id=order_id)
