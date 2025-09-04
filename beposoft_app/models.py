@@ -8,7 +8,8 @@ import random
 from django.utils.timezone import now 
 from datetime import datetime
 from django.db import transaction
-# from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
+from django.utils import timezone
+from datetime import timedelta
 
 
 # Create your models here.
@@ -1381,3 +1382,9 @@ class DataLog(models.Model):
     def __str__(self):
         u = self.user.name if self.user else "anonymous"
         return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"
+    
+    @staticmethod
+    def delete_expired():
+        """Delete all logs older than 60 days automatically"""
+        cutoff = timezone.now() - timedelta(days=60)
+        DataLog.objects.filter(created_at__lt=cutoff).delete()

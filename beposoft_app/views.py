@@ -6410,6 +6410,9 @@ class DataLogCreateView(BaseTokenView):
                 user=auth_user,
                 **serializer.validated_data,  # accepts: order, before_data, after_data
             )
+            
+            DataLog.delete_expired() # Clean up old logs after 60 days
+
             return Response(DataLogViewSerializer(log).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
