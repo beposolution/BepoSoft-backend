@@ -1106,6 +1106,11 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
+
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = "__all__"
         
         
 class TrackingdetailsSerializer(serializers.ModelSerializer):
