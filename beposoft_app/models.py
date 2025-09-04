@@ -1380,4 +1380,4 @@ class DataLog(models.Model):
 
     def __str__(self):
         u = self.user.name if self.user else "anonymous"
-        return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"z
+        return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"
