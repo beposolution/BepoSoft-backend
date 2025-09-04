@@ -1733,6 +1733,26 @@ class OrderListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class OrdersByDateView(APIView):
+    def get(self, request, date):
+        try:
+            orders = Order.objects.filter(order_date=date)
+
+            if not orders.exists():
+                return Response(
+                    {"message": f"No orders found for date {date}"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = OrderSerializer(orders, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 class OrderListByStatusView(BaseTokenView):
     def get(self, request, status_value):
         """
