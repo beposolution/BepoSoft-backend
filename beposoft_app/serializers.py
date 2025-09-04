@@ -1106,17 +1106,6 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
-
-class OrderSerializer(serializers.ModelSerializer):
-    manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
-    staffID = serializers.CharField(source="manage_staff.pk", read_only=True)
-    family = serializers.CharField(source="family.name", read_only=True)
-    customerID = serializers.IntegerField(source="customer.pk", read_only=True)
-    state = serializers.CharField(source="state.name", read_only=True)
-
-    class Meta:
-        model = Order
-        fields = "__all__"
         
         
 class TrackingdetailsSerializer(serializers.ModelSerializer):
