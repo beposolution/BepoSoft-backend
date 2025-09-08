@@ -1106,6 +1106,19 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
+
+class GSTOrderSerializer(serializers.ModelSerializer):
+    customerName = serializers.CharField(source="customer.name", read_only=True)
+    gst = serializers.CharField(source="customer.gst", read_only=True)
+    address = serializers.CharField(source="billing_address.state.name", read_only=True)
+    items = OrderItemModelSerializer(read_only = True,  many=True)
+    class Meta:
+        model = Order
+        fields = ['id', 'invoice', 'order_date', 
+                  'total_amount', 'payment_status', 
+                  'status', 'customer', 'manage_staff',
+                  'customerName', 'gst','items' ]
+
         
         
 class TrackingdetailsSerializer(serializers.ModelSerializer):
