@@ -696,6 +696,62 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
         # directly use exclude_price
         return self.get_exclude_price(obj)
     
+
+class GSTOrderItemModelSerializer(serializers.ModelSerializer):
+    name=serializers.CharField(source="product.name")
+    actual_price = serializers.SerializerMethodField()
+    exclude_price = serializers.SerializerMethodField()
+    price_discount = serializers.SerializerMethodField()
+  
+    class Meta:
+        model = OrderItem
+        fields = fields = [
+            "id",
+            "name",
+            "order",
+            "product",
+            "rate",
+            "tax",
+            "discount",
+            "quantity",
+            "actual_price",
+            "exclude_price",
+            "price_discount",
+        ]
+    def get_name(self, obj):
+        # Check if the product is a single or variant type
+        if obj.product.type == "single":
+            return obj.product.name
+        elif obj.variant:
+            return obj.variant.name
+        return None
+        
+    def get_price_discount(self, obj):
+        rate = obj.rate or Decimal('0')
+        discount = obj.discount or Decimal('0')
+        price_discount = max(rate - discount, Decimal('0'))
+
+        return round(price_discount, 2)
+
+        
+    from decimal import Decimal
+
+    def get_exclude_price(self, obj):
+        rate = obj.rate or Decimal('0')
+        discount = obj.discount or Decimal('0')
+        tax = obj.product.tax or 0  # tax is likely an integer
+
+        total_price = max(rate - discount, Decimal('0'))
+        exclude_price = total_price / (Decimal('1') + (Decimal(tax) / Decimal('100')))
+
+        return round(exclude_price, 2)
+
+    
+    def get_actual_price(self, obj):
+        # directly use exclude_price
+        return self.get_exclude_price(obj)
+    
+
     
 class FamilyOrderWarehouseModelSerilizer(serializers.ModelSerializer):
     class Meta:
@@ -1111,7 +1167,7 @@ class GSTOrderSerializer(serializers.ModelSerializer):
     customerName = serializers.CharField(source="customer.name", read_only=True)
     gst = serializers.CharField(source="customer.gst", read_only=True)
     address = serializers.CharField(source="billing_address.state.name", read_only=True)
-    items = OrderItemModelSerializer(read_only = True,  many=True)
+    items = GSTOrderItemModelSerializer(read_only = True,  many=True)
     class Meta:
         model = Order
         fields = ['id', 'invoice', 'order_date', 
