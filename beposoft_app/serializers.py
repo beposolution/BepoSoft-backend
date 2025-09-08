@@ -1117,7 +1117,7 @@ class GSTOrderSerializer(serializers.ModelSerializer):
         fields = ['id', 'invoice', 'order_date', 
                   'total_amount', 'payment_status', 
                   'status', 'customer', 'manage_staff',
-                  'customerName', 'gst','items' ]
+                  'customerName', 'gst','items', 'address']
 
         
         
