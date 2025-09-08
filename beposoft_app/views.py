@@ -1865,6 +1865,32 @@ class OrderListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class GSTOrderListView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user = self.get_user_from_token(request)
+            orders = Order.objects.exclude(status__in=["Invoice Rejected", "Invoice Created"])
+            
+            serializer = GSTOrderSerializer(orders, many=True)
+            return Response({
+                "success": True,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        except Order.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "No orders found."
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class OrderListByStatusView(BaseTokenView):
     def get(self, request, status_value):
         """
