@@ -41,6 +41,8 @@ admin.site.register(ProductRack)
 admin.site.register(OrderItemRackAllocation)
 admin.site.register(CustomerType)
 admin.site.register(DataLog)
+admin.site.register(WarehouseOrder)
+admin.site.register(WarehouseOrderItem)
 
 
 

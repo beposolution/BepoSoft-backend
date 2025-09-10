@@ -549,6 +549,18 @@ class OrderItemSerializer(serializers.ModelSerializer):
 #         item.save()
 #         return item
 
+class WarehouseOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WarehouseOrderItem
+        fields = "__all__"
+
+
+class WarehouseOrderSerializer(serializers.ModelSerializer):
+    items = WarehouseOrderItemSerializer(many=True, read_only=True)
+    class Meta:
+        model = WarehouseOrder
+        fields = "__all__"
+
 class OrderSerializer(serializers.ModelSerializer):
     cod_amount = serializers.FloatField(required=False, allow_null=True)
     shipping_mode = serializers.CharField(required=False, allow_blank=True)
