@@ -6588,3 +6588,42 @@ class WarehouseOrderView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class WarehouseOrderByWarehouseView(BaseTokenView):
+
+    def get(self, request, warehouse_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # filter orders for the given warehouse_id
+            orders = WarehouseOrder.objects.filter(
+                warehouses_id=warehouse_id
+            ).prefetch_related("items").order_by("-id")
+
+            if not orders.exists():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": f"No orders found for warehouse id {warehouse_id}"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            return Response(
+                {
+                    "status": "success",
+                    "data": WarehouseOrderSerializer(orders, many=True).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": f"Something went wrong: {str(e)}"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
