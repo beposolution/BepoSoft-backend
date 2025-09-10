@@ -6466,7 +6466,7 @@ class DataLogListView(BaseTokenView):
         return Response(DataLogViewSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
 
-class CreateWarehouseOrderFromBeposoftCart(BaseTokenView):
+class CreateWarehouseOrder(BaseTokenView):
 
     @transaction.atomic
     def post(self, request):
