@@ -808,6 +808,72 @@ class Order(models.Model):
         return f"Order {self.invoice} by {self.customer}"
 
 
+class WarehouseOrder(models.Model):
+    manage_staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="warehouse_orders")
+    warehouses = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True, blank=True, related_name="requesting_warehouse")
+    receiiver_warehouse = models.ForeignKey(WareHouse, on_delete=models.CASCADE, related_name="receiver_warehouse", null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="warehouse_companies", null=True)
+    invoice = models.CharField(max_length=20, unique=True, blank=True)
+    billing_address = models.ForeignKey(Shipping, on_delete=models.CASCADE, related_name="warehouse_billing_address", null=True, blank=True)
+    order_date = models.CharField(max_length=100)
+    shipping_charge = models.IntegerField(default=0, null=True, blank=True)
+
+    status = models.CharField(max_length=100, choices=[
+        ('Created', 'Created'),
+        ('Approved', 'Approved'),
+        ('Completed', 'Completed'),
+        ('Received', 'Received'),
+    ], default='Created')
+
+    note = models.TextField(default="", blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "warehouse_order"
+
+    def __str__(self):
+        return f"WarehouseOrder {self.invoice} for {self.warehouses} by {self.manage_staff}"
+
+    def generate_invoice_number(self):
+        """
+        Separate series from regular orders. Example: 'WH' + Company prefix + 6-digit counter.
+        """
+        if not self.company:
+            raise ValueError("Company must be set to generate a warehouse invoice number.")
+        prefix = f"WH{self.company.prefix}"
+        highest = WarehouseOrder.objects.filter(invoice__startswith=prefix).order_by('invoice').last()
+        if highest:
+            last_num = highest.invoice[len(prefix):]
+            try:
+                num = int(last_num) + 1
+            except ValueError:
+                num = 1
+        else:
+            num = 1
+        return f"{prefix}{str(num).zfill(6)}"
+
+    def save(self, *args, **kwargs):
+        if not self.invoice:
+            self.invoice = self.generate_invoice_number()
+        super().save(*args, **kwargs)
+
+
+class WarehouseOrderItem(models.Model):
+    order = models.ForeignKey(WarehouseOrder, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Products, on_delete=models.CASCADE)
+    size = models.ForeignKey(ProductAttributeVariant, on_delete=models.CASCADE, null=True, blank=True)
+    variant = models.ForeignKey(VariantProducts, on_delete=models.CASCADE, null=True, blank=True)
+    description = models.CharField(max_length=100, null=True, blank=True)
+    quantity = models.PositiveIntegerField()
+    rack_details = models.JSONField(default=list, blank=True, null=True)
+
+    class Meta:
+        db_table = "warehouse_order_item"
+
+    def __str__(self):
+        return f"{self.product.name} (x{self.quantity}) [WH]"
+
+
 class OrderImage(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_images')
     image = models.ImageField(upload_to='order_images/')

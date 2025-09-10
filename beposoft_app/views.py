@@ -6465,3 +6465,74 @@ class DataLogListView(BaseTokenView):
 
         return Response(DataLogViewSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
+
+class CreateWarehouseOrder(BaseTokenView):
+
+    @transaction.atomic
+    def post(self, request):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        cart_qs = BeposoftCart.objects.select_related("product").filter(user=authUser)
+        if not cart_qs.exists():
+            return Response({"status": "error", "message": "Cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = WarehouseOrderSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": "error", "message": "Validation failed", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        warehouse_order = serializer.save(manage_staff=authUser)
+
+        items_to_create = []
+        lock_map = {}  # product_id -> qty to lock
+
+        for cart in cart_qs:
+            product = cart.product
+            qty = int(cart.quantity or 0)
+            if qty <= 0:
+                continue
+
+            # availability
+            available = max(0, int(product.stock or 0) - int(product.locked_stock or 0))
+            if qty > available:
+                return Response(
+                    {"status": "error",
+                     "message": f"Not enough available stock for '{product.name}'. Need {qty}, available {available}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            items_to_create.append(
+                WarehouseOrderItem(
+                    order=warehouse_order,
+                    product=product,
+                    variant=None,
+                    size=None,
+                    description="",
+                    quantity=qty,
+                    rack_details=[],
+                )
+            )
+
+            lock_map[product.id] = lock_map.get(product.id, 0) + qty
+
+        if not items_to_create:
+            return Response({"status": "error", "message": "No valid items in cart."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        WarehouseOrderItem.objects.bulk_create(items_to_create)
+
+        prods = Products.objects.select_for_update().filter(id__in=lock_map.keys())
+        for p in prods:
+            p.locked_stock = (p.locked_stock or 0) + lock_map[p.id]
+            p.save(update_fields=["locked_stock"])
+
+        cart_qs.delete()
+
+        return Response(
+            {"status": "success", "message": "Warehouse order created successfully", "data": WarehouseOrderSerializer(warehouse_order).data},
+            status=status.HTTP_201_CREATED
+        )
