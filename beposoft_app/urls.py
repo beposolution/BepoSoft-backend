@@ -102,6 +102,7 @@ urlpatterns = [
     # path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
     path('api/product-wise/report/', ProductWiseReportView.as_view(), name='product-wise-report'),
     path('api/warehouse/order/create/', CreateWarehouseOrder.as_view(), name='create-warehouse-order'),
+    path('api/warehouse/order/view/', WarehouseOrderView.as_view(), name='view-warehouse-order'),
     
     # locking and unlocking the delivery note
     path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),
