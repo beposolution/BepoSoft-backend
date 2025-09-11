@@ -6575,7 +6575,7 @@ class WarehouseOrderView(BaseTokenView):
             return Response(
                 {
                     "status": "success",
-                    "data": WarehouseOrderSerializer(orders, many=True).data
+                    "data": WarehouseOrderGetSerializer(orders, many=True).data
                 },
                 status=status.HTTP_200_OK
             )
