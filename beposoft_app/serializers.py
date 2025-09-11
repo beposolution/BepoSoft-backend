@@ -521,6 +521,10 @@ class WarehouseOrderItemSerializer(serializers.ModelSerializer):
 
 
 class WarehouseOrderSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name", default=None)
+    warehouses_name = serializers.CharField(source="warehouses.name", default=None)
+    receiiver_warehouse_name = serializers.CharField(source="receiiver_warehouse.name", default=None)
+    company_name = serializers.CharField(source="company.name", default=None)
     items = WarehouseOrderItemSerializer(many=True, read_only=True)
     class Meta:
         model = WarehouseOrder
