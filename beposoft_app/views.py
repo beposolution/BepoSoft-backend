@@ -32,6 +32,7 @@ from rest_framework.pagination import PageNumberPagination
 from bepocart.models import *
 from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -6424,3 +6425,38 @@ class WarehouseOrderItemUpdateView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class ProductDateWiseReportView(APIView): 
+
+    def get(self, request):
+        try:
+            # Optional filters from query parameters
+            start_date = request.query_params.get('start_date')
+            end_date   = request.query_params.get('end_date')
+
+            filters = {}
+            if start_date and end_date:
+                filters['order__order_date__range'] = [start_date, end_date]
+
+            # Fetch OrderItem rows
+            queryset = (
+                OrderItem.objects
+                .select_related('order', 'product')
+                .filter(**filters)
+                .annotate(
+                    calculated_total=ExpressionWrapper(
+                        F('quantity') * (F('rate') - F('discount')),
+                        output_field=DecimalField(max_digits=12, decimal_places=2)
+                    )
+                )
+                .order_by('-order__order_date')
+            )
+
+            serializer = ProductDateWiseReportSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # Catch unexpected errors
+            return Response(
+                {"error": f"Unable to fetch product report: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
