@@ -104,6 +104,8 @@ urlpatterns = [
     path('api/warehouse/order/create/', CreateWarehouseOrder.as_view(), name='create-warehouse-order'),
     path('api/warehouse/order/view/', WarehouseOrderView.as_view(), name='view-warehouse-order'),
     path('api/warehouse/order/view/<int:warehouse_id>/', WarehouseOrderByWarehouseView.as_view(), name='view-warehouse-order-id'),
+    path('api/warehouse/order/update/<int:pk>/', WarehouseOrderUpdateView.as_view(), name='update-warehouse-order-id'),
+    path('api/warehouse/order/item/update/<int:pk>/', WarehouseOrderItemUpdateView.as_view(), name='update-warehouse-order-item-id'),
     
     # locking and unlocking the delivery note
     path('api/orders/<int:order_id>/lock/', LockOrderView.as_view(), name='lock_order'),
