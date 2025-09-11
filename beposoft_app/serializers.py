@@ -561,6 +561,15 @@ class WarehouseOrderSerializer(serializers.ModelSerializer):
         model = WarehouseOrder
         fields = "__all__"
 
+class WarehouseOrderGetSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name", default=None)
+    warehouses_name = serializers.CharField(source="warehouses.name", default=None)
+    receiiver_warehouse_name = serializers.CharField(source="receiiver_warehouse.name", default=None)
+    company_name = serializers.CharField(source="company.name", default=None)
+    class Meta:
+        model = WarehouseOrder
+        fields = "__all__"
+
 class OrderSerializer(serializers.ModelSerializer):
     cod_amount = serializers.FloatField(required=False, allow_null=True)
     shipping_mode = serializers.CharField(required=False, allow_blank=True)
