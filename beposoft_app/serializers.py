@@ -1737,3 +1737,22 @@ class DataLogViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataLog
         fields = '__all__'      
+
+class ProductDateWiseReportSerializer(serializers.ModelSerializer):
+    order_date = serializers.CharField(source='order.order_date', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_stock = serializers.CharField(source='product.stock', read_only=True)
+    total_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'quantity','rate','discount',
+                  'order_date','product','order',
+                  'product_name','product_stock','total_amount']
+    
+    def get_total_amount(self, obj):
+        """(rate - discount) * quantity"""
+        rate = obj.rate or 0
+        discount = obj.discount or 0
+        qty = obj.quantity or 0
+        return round((rate - discount) * qty, 2)
