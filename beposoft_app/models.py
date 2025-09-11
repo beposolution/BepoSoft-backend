@@ -823,6 +823,8 @@ class WarehouseOrder(models.Model):
         ('Approved', 'Approved'),
         ('Completed', 'Completed'),
         ('Received', 'Received'),
+        ('Rejected', 'Rejected'),
+        ('Cancelled', 'Cancelled'),
     ], default='Created')
 
     note = models.TextField(default="", blank=True, null=True)
