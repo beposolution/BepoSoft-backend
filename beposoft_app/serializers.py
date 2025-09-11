@@ -505,51 +505,16 @@ class OrderItemUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = "__all__"
-        
-# class RackAllocationSerializer(serializers.Serializer):
-#     rack_id = serializers.IntegerField()
-#     column_name = serializers.CharField()
-#     qty = serializers.IntegerField(min_value=1)
-
+   
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ['product', 'name', 'description', 'rate', 'tax', 'quantity', 'price']
         
-# class OrderItemCreateSerializer(serializers.ModelSerializer):
-#     rack_allocations = RackAllocationSerializer(many=True, write_only=True)
-
-#     class Meta:
-#         model = OrderItem
-#         fields = ['product','variant','size','description','rate','discount','tax','quantity','rack_allocations']
-
-#     def validate(self, data):
-#         product = data['product']
-#         allocs = data.get('rack_allocations', [])
-#         if sum(a['qty'] for a in allocs) != data['quantity']:
-#             raise serializers.ValidationError({"rack_allocations": "Sum of rack allocation qty must equal item quantity."})
-#         for a in allocs:
-#             r = product._find_rack(a['rack_id'], a['column_name'])
-#             if not r:
-#                 raise serializers.ValidationError({"rack_allocations": f"Rack {a['rack_id']} / {a['column_name']} not found."})
-#             if r.get('usability') != 'usable':
-#                 raise serializers.ValidationError({"rack_allocations": f"{a['column_name']} is not usable."})
-#             available = int(r.get('rack_stock', 0)) - int(r.get('locked_qty', 0) or 0)
-#             if a['qty'] > available:
-#                 raise serializers.ValidationError({"rack_allocations": f"Not enough in {a['column_name']} (available {available})."})
-#         return data
-
-#     def create(self, validated):
-#         order = self.context.get('order')
-#         if not order:
-#             raise serializers.ValidationError("Order context is required.")
-#         allocs = validated.pop('rack_allocations', [])
-#         item = OrderItem(order=order, **validated)
-#         item._payload_allocations = allocs
-#         item.save()
-#         return item
 
 class WarehouseOrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", default=None)
+    order_invoice = serializers.CharField(source="order.invoice", default=None)
     class Meta:
         model = WarehouseOrderItem
         fields = "__all__"
@@ -826,23 +791,6 @@ class WarehouseUpdateSerializers(serializers.ModelSerializer):
         model = Warehousedata
         fields = '__all__'
         
-        
-# class OrderModelSerilizer(serializers.ModelSerializer):
-#     manage_staff = serializers.CharField(source="manage_staff.name")
-#     staffID = serializers.CharField(source="manage_staff.pk")
-#     pmily = serializers.CharField(source="family.name")
-#     bank  = BankSerializer(read_only=True)
-#     billing_address = ShippingAddressView(read_only=True)
-#     customer = CustomerSerilizers(read_only=True)
-#     payment_receipts =  PaymentRecieptsViewSerializers(many=True,read_only=True)
-#     customerID = serializers.IntegerField(source="customer.pk")
-#     items = OrderItemModelSerializer(read_only = True,  many=True)
-#     warehouse=WarehousedataSerializer(many=True,read_only=True)
-
-    
-#     class Meta:
-#         model = Order
-#         fields = "__all__"
 
 
 class LedgerSerializers(serializers.ModelSerializer):
@@ -853,8 +801,6 @@ class LedgerSerializers(serializers.ModelSerializer):
         fields = ["id","invoice","company",
                   "total_amount","order_date",
                   "recived_payment","status"]
-
-        
 
 
 
@@ -869,7 +815,6 @@ class ProductsListViewSerializers(serializers.ModelSerializer):
         fields = '__all__'
 
 
-9
 class ProductAttributeModelSerilizer(serializers.ModelSerializer):
     class Meta:
         model = ProductAttribute
@@ -882,8 +827,6 @@ class BepocartSerializers(serializers.ModelSerializer):
         model = BeposoftCart
         fields = [f.name for f in BeposoftCart._meta.fields]
 
-        
-        
         
 class BepocartSerializersView(serializers.ModelSerializer):
     name = serializers.CharField(source="product.name")

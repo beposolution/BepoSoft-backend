@@ -6629,6 +6629,35 @@ class WarehouseOrderByWarehouseView(BaseTokenView):
             )
 
 
+class WarehouseOrderIDView(BaseTokenView):
+
+    def get(self, request, invoice=None):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            order = WarehouseOrder.objects.prefetch_related("items").filter(invoice=invoice).first()
+            if not order:
+                return Response(
+                    {"status": "error", "message": "Order not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            return Response(
+                {
+                    "status": "success",
+                    "data": WarehouseOrderSerializer(order).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": f"Something went wrong: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class WarehouseOrderUpdateView(BaseTokenView):
     
     def put(self, request, pk):
@@ -6687,3 +6716,4 @@ class WarehouseOrderItemUpdateView(BaseTokenView):
                 {"status": "error", "message": f"Update failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
