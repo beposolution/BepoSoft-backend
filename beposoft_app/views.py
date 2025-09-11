@@ -6433,7 +6433,8 @@ class ProductDateWiseReportView(APIView):
             start_date = request.query_params.get('start_date')
             end_date   = request.query_params.get('end_date')
 
-            filters = {}
+            filters = {'order__status': 'Shipped'}
+            
             if start_date and end_date:
                 filters['order__order_date__range'] = [start_date, end_date]
 
