@@ -516,6 +516,7 @@ class WarehouseOrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", default=None)
     order_invoice = serializers.CharField(source="order.invoice", default=None)
     product_image = serializers.ImageField(source="product.image", default=None)
+    product_rack = serializers.CharField(source="product.rack_details", default=None)
     class Meta:
         model = WarehouseOrderItem
         fields = "__all__"
