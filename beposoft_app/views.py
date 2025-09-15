@@ -6396,24 +6396,60 @@ class WarehouseOrderUpdateView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class WarehouseOrderItemUpdateView(BaseTokenView):
+# class WarehouseOrderItemUpdateView(BaseTokenView):
     
+#     def put(self, request, pk):
+#         try:
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+
+#             # Fetch the order item
+#             item = get_object_or_404(WarehouseOrderItem, pk=pk)
+
+#             serializer = WarehouseOrderItemSerializer(item, data=request.data, partial=True)
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 return Response(
+#                     {"status": "success", "data": serializer.data},
+#                     status=status.HTTP_200_OK
+#                 )
+#             return Response(
+#                 {"status": "error", "errors": serializer.errors},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         except Exception as e:
+#             return Response(
+#                 {"status": "error", "message": f"Update failed: {str(e)}"},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+
+# from django.db import transaction
+
+class WarehouseOrderItemUpdateView(BaseTokenView):
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            # Fetch the order item
             item = get_object_or_404(WarehouseOrderItem, pk=pk)
 
             serializer = WarehouseOrderItemSerializer(item, data=request.data, partial=True)
             if serializer.is_valid():
-                serializer.save()
+                with transaction.atomic():
+                    # 1️⃣ Save the updated order item
+                    updated_item = serializer.save()
+
+                    # 2️⃣ Add the quantities to the product's rack_lock
+                    self._update_product_rack_lock(updated_item)
+
                 return Response(
                     {"status": "success", "data": serializer.data},
                     status=status.HTTP_200_OK
                 )
+
             return Response(
                 {"status": "error", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST
@@ -6424,6 +6460,36 @@ class WarehouseOrderItemUpdateView(BaseTokenView):
                 {"status": "error", "message": f"Update failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def _update_product_rack_lock(self, order_item):
+        """
+        Merge the rack_details quantity of WarehouseOrderItem
+        into the rack_lock of Products.rack_details.
+        """
+        product = order_item.product
+        product_racks = product.rack_details or []
+        item_racks = order_item.rack_details or []
+
+        # Convert to dict keyed by (rack_id, column_name) for easy update
+        product_rack_map = {
+            (r.get("rack_id"), r.get("column_name")): r for r in product_racks
+        }
+
+        for r in item_racks:
+            key = (r.get("rack_id"), r.get("column_name"))
+            if key in product_rack_map:
+                pr = product_rack_map[key]
+                pr["rack_lock"] = (pr.get("rack_lock") or 0) + (r.get("quantity") or 0)
+            else:
+                # if the rack is new in product, optionally append it
+                product_racks.append({
+                    **r,
+                    "rack_lock": r.get("quantity", 0)
+                })
+
+        product.rack_details = product_racks
+        product.save(update_fields=["rack_details"])
+
 
 class ProductDateWiseReportView(APIView): 
 
