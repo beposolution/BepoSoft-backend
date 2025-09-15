@@ -394,33 +394,6 @@ class Products(models.Model):
         """Generates a unique variantID using UUID"""
         return str(uuid.uuid4())
     
-    # def save(self, *args, **kwargs):
-    #     if self.selling_price is None:
-    #         self.selling_price = 0.0
-       
-    #     # Generate variantID if not already set
-       
-    #     if not self.variantID:
-    #         self.variantID = self.generate_variant_id()
-            
-    #     # rack stock calculation for usable, damaged, and partially damaged
-    #     usable = 0
-    #     damaged = 0
-    #     partial = 0
-    #     for rack in self.rack_details or []:
-    #         usability = rack.get('usability')
-    #         qty = rack.get('rack_stock', 0)
-    #         if usability == 'usable':
-    #             usable += qty
-    #         elif usability == 'damaged':
-    #             damaged += qty
-    #         elif usability == 'partially_damaged':
-    #             partial += qty
-    #     self.stock = usable
-    #     self.damaged_stock = damaged
-    #     self.partially_damaged_stock = partial
-    #     super().save(*args, **kwargs) 
-    
     def _recompute_stock_fields(self):
         usable = damaged = partial = 0
         for rack in self.rack_details or []:
@@ -464,42 +437,7 @@ class Products(models.Model):
 
         super().save(*args, **kwargs)
         
-        # --- Stock update only when rack_details changes ---
-        # update_stock = False
-
-        # if self.pk:
-        #     # Fetch the current (old) object from db
-        #     old = Products.objects.filter(pk=self.pk).first()
-        #     # Compare old and new rack_details (handle None as empty list)
-        #     old_rack = old.rack_details if old and old.rack_details is not None else []
-        #     new_rack = self.rack_details if self.rack_details is not None else []
-        #     if old_rack != new_rack:
-        #         update_stock = True
-        # else:
-        #     # New product, always update
-        #     update_stock = True
-
-        # # If rack_details changed or new object, update the stock fields
-        # if update_stock:
-        #     usable = 0
-        #     damaged = 0
-        #     partial = 0
-        #     for rack in self.rack_details or []:
-        #         usability = rack.get('usability')
-        #         qty = rack.get('rack_stock', 0)
-        #         if usability == 'usable':
-        #             usable += qty
-        #         elif usability == 'damaged':
-        #             damaged += qty
-        #         elif usability == 'partially_damaged':
-        #             partial += qty
-        #     self.stock = usable
-        #     self.damaged_stock = damaged
-        #     self.partially_damaged_stock = partial
-
-        # super().save(*args, **kwargs)
-     
-
+       
     def lock_stock(self, quantity):
         """Locks stock without reducing actual stock"""
         if quantity > (self.stock - self.locked_stock):  
@@ -854,10 +792,34 @@ class WarehouseOrder(models.Model):
             num = 1
         return f"{prefix}{str(num).zfill(6)}"
 
+    # def save(self, *args, **kwargs):
+    #     if not self.invoice:
+    #         self.invoice = self.generate_invoice_number()
+    #     super().save(*args, **kwargs)
+
     def save(self, *args, **kwargs):
+    
+        is_update = self.pk is not None
+        old_status = None
+
+        if is_update:
+            # get the current status from DB before saving
+            old_status = WarehouseOrder.objects.filter(pk=self.pk)\
+                                            .values_list("status", flat=True)\
+                                            .first()
+
+        # --- your existing invoice logic ---
         if not self.invoice:
             self.invoice = self.generate_invoice_number()
+
+        # Save first so we have an ID and updated status
         super().save(*args, **kwargs)
+
+        
+        # --- new logic: adjust stock when status changes to Completed ---
+        if is_update and old_status != self.status and self.status == "Completed":
+            reduce_rack_stock_for_warehouse_order(self)
+
 
 
 class WarehouseOrderItem(models.Model):
@@ -874,6 +836,42 @@ class WarehouseOrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} (x{self.quantity}) [WH]"
+
+
+def reduce_rack_stock_for_warehouse_order(order):
+    """
+    For each item in the WarehouseOrder, subtract its rack_details quantities
+    from the corresponding rack_stock and rack_lock in Products.rack_details.
+    """
+    for item in order.items.select_related("product").all():
+        product = item.product
+        changed = False
+
+        # Ensure we lock the product row for safe concurrent updates
+        with transaction.atomic():
+            product = Products.objects.select_for_update().get(pk=product.pk)
+            prod_racks = product.rack_details or []
+
+            # Build quick lookup by (rack_id, column_name)
+            index = {
+                (r.get("rack_id"), r.get("column_name")): r for r in prod_racks
+            }
+
+            for rack in item.rack_details or []:
+                key = (rack.get("rack_id"), rack.get("column_name"))
+                target = index.get(key)
+                if not target:
+                    continue
+                qty = int(rack.get("quantity", 0) or 0)
+
+                # subtract quantity from rack_stock and rack_lock
+                target["rack_stock"] = max(0, int(target.get("rack_stock", 0)) - qty)
+                target["rack_lock"] = max(0, int(target.get("rack_lock", 0)) - qty)
+                changed = True
+
+            if changed:
+                product.rack_details = prod_racks
+                product.save(update_fields=["rack_details"])
 
 
 class OrderImage(models.Model):
