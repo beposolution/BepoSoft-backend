@@ -798,27 +798,24 @@ class WarehouseOrder(models.Model):
     #     super().save(*args, **kwargs)
 
     def save(self, *args, **kwargs):
-    
         is_update = self.pk is not None
         old_status = None
 
         if is_update:
-            # get the current status from DB before saving
             old_status = WarehouseOrder.objects.filter(pk=self.pk)\
                                             .values_list("status", flat=True)\
                                             .first()
 
-        # --- your existing invoice logic ---
         if not self.invoice:
             self.invoice = self.generate_invoice_number()
 
-        # Save first so we have an ID and updated status
         super().save(*args, **kwargs)
 
-        
-        # --- new logic: adjust stock when status changes to Completed ---
-        if is_update and old_status != self.status and self.status == "Completed":
-            reduce_rack_stock_for_warehouse_order(self)
+        if is_update and old_status != self.status:
+            if self.status == "Completed":
+                reduce_rack_stock_for_warehouse_order(self)
+            elif self.status in ["Rejected", "Cancelled"]:
+                release_rack_lock_for_warehouse_order(self)
 
 
 
@@ -866,6 +863,42 @@ def reduce_rack_stock_for_warehouse_order(order):
 
                 # subtract quantity from rack_stock and rack_lock
                 target["rack_stock"] = max(0, int(target.get("rack_stock", 0)) - qty)
+                target["rack_lock"] = max(0, int(target.get("rack_lock", 0)) - qty)
+                changed = True
+
+            if changed:
+                product.rack_details = prod_racks
+                product.save(update_fields=["rack_details"])
+
+def release_rack_lock_for_warehouse_order(order):
+    """
+    When a WarehouseOrder is Rejected or Cancelled, release the locked stock
+    (rack_lock) for each rack in every item without touching the actual
+    rack_stock.
+    """
+    for item in order.items.select_related("product").all():
+        product = item.product
+        changed = False
+
+        # Lock the product row to avoid race conditions
+        with transaction.atomic():
+            product = Products.objects.select_for_update().get(pk=product.pk)
+            prod_racks = product.rack_details or []
+
+            # Quick lookup by (rack_id, column_name)
+            index = {
+                (r.get("rack_id"), r.get("column_name")): r for r in prod_racks
+            }
+
+            for rack in item.rack_details or []:
+                key = (rack.get("rack_id"), rack.get("column_name"))
+                target = index.get(key)
+                if not target:
+                    continue
+
+                qty = int(rack.get("quantity", 0) or 0)
+
+                # Only subtract from rack_lock, never below 0
                 target["rack_lock"] = max(0, int(target.get("rack_lock", 0)) - qty)
                 changed = True
 
