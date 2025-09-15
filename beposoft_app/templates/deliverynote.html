@@ -118,6 +118,7 @@
             <th rowspan="2">Sl No.</th>
             <th rowspan="2">Image</th>
             <th rowspan="2">Product</th>
+            <th rowspan="2">Description</th>
             <th rowspan="2">Quantity</th>
             <th colspan="3">Rack Details</th>
             </tr>
@@ -156,7 +157,7 @@
                     {% else %} No Image {% endif %}
                 </td>
                 <td>{{ warehouse_item.product.name }}</td>
-                <!-- <td>{{ warehouse_item.description }}</td> -->
+                <td>{{ warehouse_item.description }}</td>
                 <td>{{ warehouse_item.quantity }} {{ warehouse_item.product.unit }}</td>
                 <!-- <td colspan="3"><span>No Rack Info</span></td> -->
                 </tr>
