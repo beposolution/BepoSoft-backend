@@ -1400,6 +1400,7 @@ class GRVModel(models.Model):
         ('return','Return'),
         ('refund','Refund'),
         ('exchange','Exchange'),
+        ('cod_return', 'COD Return'),
     ]
     REASON_CHOICES=[
         ('damaged', 'damaged'),
@@ -1420,6 +1421,13 @@ class GRVModel(models.Model):
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, null=True, blank=True)
     rack_details = models.JSONField(default=list, blank=True, null=True)
     selected_racks = models.JSONField(default=list, blank=True, null=True)
+    cod_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="COD return amount if applicable"
+    )
     
 
     def update_status(self, new_status):
