@@ -3985,7 +3985,7 @@ class GRVUpdateView(BaseTokenView):
                 remark = (grv.remark or "").strip().lower()
                 new_status = (grv.status or "").lower()
 
-                if remark in ("return", "exchange") and old_status != "approved" and new_status == "approved":
+                if remark in ("return", "exchange", "cod_return") and old_status != "approved" and new_status == "approved":
                     if not grv.product_id:
                         raise ValidationError("No product linked to this GRV.")
 
