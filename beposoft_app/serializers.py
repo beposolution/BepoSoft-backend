@@ -1275,7 +1275,7 @@ class GRVSerializer(serializers.ModelSerializer):
                 'returnreason','price','quantity',
                 'remark','note','status','customer',
                 'invoice','staff',"order_date",'date',
-                'time','updated_at','product_id',
+                'time','updated_at','product_id','cod_amount',
                 'rack_details','rack_products','selected_racks']
         
     # def get_product_id(self, obj):
