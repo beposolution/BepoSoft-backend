@@ -6527,3 +6527,18 @@ class ProductDateWiseReportView(APIView):
                 {"error": f"Unable to fetch product report: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+def warehouse_delivery_note(request, order_id):
+    order = get_object_or_404(WarehouseOrder, id=order_id)
+    items = WarehouseOrderItem.objects.filter(order=order).select_related('product')
+
+    total_quantity = sum(item.quantity for item in items)
+
+    context = {
+        "order": order,
+        "items": items,
+        "total_quantity": total_quantity,
+    }
+    
+    return render(request, "warehousedeliverynote.html", context)
