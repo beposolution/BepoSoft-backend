@@ -6367,65 +6367,69 @@ class WarehouseOrderIDView(BaseTokenView):
             )
 
 class WarehouseOrderUpdateView(BaseTokenView):
-    
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            # Fetch the order
             order = get_object_or_404(WarehouseOrder, pk=pk)
+            old_status = order.status
 
-            # Update using serializer
             serializer = WarehouseOrderSerializer(order, data=request.data, partial=True)
             if serializer.is_valid():
-                serializer.save()   # updates the instance
+                with transaction.atomic():
+                    updated_order = serializer.save()
+
+                    #  If status changes to Rejected / Completed / Cancelled,
+                    #    subtract rack_details qty from product.rack_details & locked_stock
+                    new_status = updated_order.status
+                    if (
+                        old_status not in ["Rejected", "Completed", "Cancelled"]
+                        and new_status in ["Rejected", "Completed", "Cancelled"]
+                    ):
+                        for item in updated_order.items.select_related("product").all():
+                            product = item.product
+                            product_racks = product.rack_details or []
+                            item_racks = item.rack_details or []
+
+                            # map by (rack_id, column_name)
+                            rack_map = {
+                                (r.get("rack_id"), r.get("column_name")): r
+                                for r in product_racks
+                            }
+                            for r in item_racks:
+                                key = (r.get("rack_id"), r.get("column_name"))
+                                if key in rack_map:
+                                    pr = rack_map[key]
+                                    pr["rack_lock"] = max(
+                                        (pr.get("rack_lock") or 0) - (r.get("quantity") or 0),
+                                        0,
+                                    )
+
+                            # update locked_stock and rack_details
+                            product.rack_details = product_racks
+                            product.locked_stock = max(
+                                (product.locked_stock or 0) - item.quantity, 0
+                            )
+                            product.save(update_fields=["rack_details", "locked_stock"])
+
                 return Response(
                     {"status": "success", "data": serializer.data},
-                    status=status.HTTP_200_OK
+                    status=status.HTTP_200_OK,
                 )
+
             return Response(
                 {"status": "error", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         except Exception as e:
             return Response(
                 {"status": "error", "message": f"Update failed: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-# class WarehouseOrderItemUpdateView(BaseTokenView):
-    
-#     def put(self, request, pk):
-#         try:
-#             authUser, error_response = self.get_user_from_token(request)
-#             if error_response:
-#                 return error_response
-
-#             # Fetch the order item
-#             item = get_object_or_404(WarehouseOrderItem, pk=pk)
-
-#             serializer = WarehouseOrderItemSerializer(item, data=request.data, partial=True)
-#             if serializer.is_valid():
-#                 serializer.save()
-#                 return Response(
-#                     {"status": "success", "data": serializer.data},
-#                     status=status.HTTP_200_OK
-#                 )
-#             return Response(
-#                 {"status": "error", "errors": serializer.errors},
-#                 status=status.HTTP_400_BAD_REQUEST
-#             )
-
-#         except Exception as e:
-#             return Response(
-#                 {"status": "error", "message": f"Update failed: {str(e)}"},
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
-
-# from django.db import transaction
 
 class WarehouseOrderItemUpdateView(BaseTokenView):
     def put(self, request, pk):
@@ -6540,5 +6544,5 @@ def warehouse_delivery_note(request, order_id):
         "items": items,
         "total_quantity": total_quantity,
     }
-    
+
     return render(request, "warehousedeliverynote.html", context)
