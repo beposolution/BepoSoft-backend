@@ -691,6 +691,7 @@ class OrderItemModelSerializer(serializers.ModelSerializer):
 
 class GSTOrderItemModelSerializer(serializers.ModelSerializer):
     name=serializers.CharField(source="product.name")
+    hsn=serializers.CharField(source="product.hsn_code")
     actual_price = serializers.SerializerMethodField()
     exclude_price = serializers.SerializerMethodField()
     price_discount = serializers.SerializerMethodField()
@@ -702,6 +703,7 @@ class GSTOrderItemModelSerializer(serializers.ModelSerializer):
             "name",
             "order",
             "product",
+            "hsn",
             "rate",
             "tax",
             "discount",
