@@ -1760,3 +1760,21 @@ class ProductDateWiseReportSerializer(serializers.ModelSerializer):
         discount = obj.discount or 0
         qty = obj.quantity or 0
         return round((rate - discount) * qty, 2)
+    
+
+class CallReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CallReport
+        fields = "__all__"
+
+class CallReportSortingSerializer(serializers.ModelSerializer):
+    customer_first_name = serializers.CharField(source='Customer.first_name', read_only=True)
+    customer_last_name = serializers.CharField(source='Customer.last_name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    state = serializers.CharField(source='Customer.state', read_only=True)
+    state_name = serializers.CharField(source='Customer.state.name', read_only=True)
+    country = serializers.CharField(source='Customer.state.country', read_only=True)
+    country_name = serializers.CharField(source='Customer.state.country.name', read_only=True)
+    class Meta:
+        model = CallReport
+        fields = '__all__'

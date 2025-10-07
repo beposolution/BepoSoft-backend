@@ -1488,3 +1488,29 @@ class DataLog(models.Model):
     def __str__(self):
         u = self.user.name if self.user else "anonymous"
         return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"
+    
+
+class CallReport(models.Model):
+    STATUS_CHOICES = [
+        ('Active','active'),
+        ('Productive','productive'),
+        ('Inactive','inactive')
+    ]
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    duration = models.CharField(max_length=100)
+    invoice = models.CharField(max_length=50, null=True, blank=True)
+    amount = models.FloatField(null=True, blank=True)
+    status = models.CharField(max_length=100, choices=STATUS_CHOICES, default='Active')
+    description = models.CharField(max_length=200, null=True, blank=True)
+    note = models.CharField(max_length=100, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    phone = models.CharField(max_length=100, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    date = models.DateField(null=True, blank=True)
+    Customer = models.ForeignKey(Customers, on_delete=models.CASCADE, null=True, blank=True, related_name="call_report")
+
+    class Meta:
+        db_table = "callreport"
+
+    def __str__(self):
+        return f"{self.customer_name} - {self.invoice}"
