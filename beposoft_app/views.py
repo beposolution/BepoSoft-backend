@@ -6549,7 +6549,7 @@ def warehouse_delivery_note(request, order_id):
 
 
 
-class CallReportCreateView(APIView):
+class CallReportCreateView(BaseTokenView):
     """GET all call report / POST new call report"""
 
     def get(self, request):
@@ -6570,7 +6570,7 @@ class CallReportCreateView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 
-class CallReportUpdateView(APIView):
+class CallReportUpdateView(BaseTokenView):
     """GET a single call report / PUT update by id"""
 
     def get(self, request, pk):
