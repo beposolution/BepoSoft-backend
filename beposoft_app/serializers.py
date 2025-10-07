@@ -1766,6 +1766,7 @@ class CallReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = CallReport
         fields = "__all__"
+        read_only_fields = ["created_by", "created_at", "date"]
 
 class CallReportSortingSerializer(serializers.ModelSerializer):
     customer_first_name = serializers.CharField(source='Customer.first_name', read_only=True)
