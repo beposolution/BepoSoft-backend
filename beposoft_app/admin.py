@@ -43,6 +43,7 @@ admin.site.register(CustomerType)
 admin.site.register(DataLog)
 admin.site.register(WarehouseOrder)
 admin.site.register(WarehouseOrderItem)
+admin.site.register(CallReport)
 
 
 

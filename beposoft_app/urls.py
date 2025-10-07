@@ -238,5 +238,13 @@ urlpatterns = [
     path('api/datalog/create/', DataLogCreateView.as_view(), name='datalog-create'),
     path('api/datalog/', DataLogListView.as_view(), name='datalog-list'),
 
+    
+    path("api/call/report/", CallReportCreateView.as_view(), name="call-report-create"),
+    path("api/call/report/<int:pk>/", CallReportUpdateView.as_view(), name="call-report-update"),
+    path('api/call/report/date/<str:date>/', CallReportByDateView.as_view(), name='call-report-by-date'),
+    path('api/call/report/staff/<int:created_by>/', CallReportByStaffView.as_view(), name='call-report-by-staff'),
+    path('api/call/report/state/<int:state_id>/', CallReportByStateView.as_view(), name='call-report-by-state'),
+    path('api/call/report/filter/', CallReportFilterView.as_view(), name='call-report-filter'),
+
 ]
 

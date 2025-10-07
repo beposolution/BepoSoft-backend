@@ -6546,3 +6546,169 @@ def warehouse_delivery_note(request, order_id):
     }
 
     return render(request, "warehousedeliverynote.html", context)
+
+
+
+class CallReportCreateView(APIView):
+    """GET all call report / POST new call report"""
+
+    def get(self, request):
+        try:
+            call_report = CallReport.objects.select_related("created_by").all()
+            serializer = CallReportSerializer(call_report, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            serializer = CallReportSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class CallReportUpdateView(APIView):
+    """GET a single call report / PUT update by id"""
+
+    def get(self, request, pk):
+        try:
+            call_report = get_object_or_404(CallReport.objects.select_related("created_by"), pk=pk)
+            serializer = CallReportSerializer(call_report)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            call_report = get_object_or_404(CallReport, pk=pk)
+            serializer = CallReportSerializer(call_report, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class CallReportByDateView(BaseTokenView):
+   
+    def get(self, request, date):
+        try:
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {"error": "Invalid date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            reports = CallReport.objects.filter(date=date_obj)
+
+            if not reports.exists():
+                return Response(
+                    {"message": "No call reports found for this date."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = CallReportSortingSerializer(reports, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+class CallReportByStaffView(BaseTokenView):
+
+    def get(self, request, created_by):
+        try:
+            try:
+                user_id = int(created_by)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid user ID. Must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            reports = CallReport.objects.filter(created_by_id=user_id).order_by('-created_at')
+
+            if not reports.exists():
+                return Response(
+                    {"message": "No call reports found for this user."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = CallReportSortingSerializer(reports, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+class CallReportByStateView(BaseTokenView):
+    
+    def get(self, request, state_id):
+        try:
+            try:
+                state_id = int(state_id)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid state ID. Must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            reports = CallReport.objects.filter(Customer__state_id=state_id).select_related("Customer", "created_by").order_by('-created_at')
+
+            if not reports.exists():
+                return Response(
+                    {"message": "No call reports found for this state."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = CallReportSortingSerializer(reports, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+class CallReportFilterView(BaseTokenView):
+    
+    def get(self, request):
+        try:
+            reports = CallReport.objects.select_related("Customer", "created_by")
+
+            customer_name = request.query_params.get("customer_name")
+            customer_id = request.query_params.get("customer")
+
+            if customer_id:
+                reports = reports.filter(Customer_id=customer_id)
+
+            if customer_name:
+                reports = reports.filter(customer_name__icontains=customer_name)
+
+            reports = reports.order_by("-created_at")
+
+            if not reports.exists():
+                return Response(
+                    {"message": "No call reports found for the given filters."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            serializer = CallReportSortingSerializer(reports, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
