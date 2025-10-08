@@ -6727,7 +6727,7 @@ class CallReportSummaryView(BaseTokenView):
 
             # Status-based counts
             active_count = CallReport.objects.filter(status='Active').count()
-            productive_count = CallReport.objects.filter(status='productive').count()
+            productive_count = CallReport.objects.filter(status='Productive').count()
             inactive_count = CallReport.objects.filter(status='inactive').count()
 
             # Total amount (handle null values)
