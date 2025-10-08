@@ -1763,6 +1763,10 @@ class ProductDateWiseReportSerializer(serializers.ModelSerializer):
     
 
 class CallReportSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source = 'created_by.name', read_only=True)
+    created_by_designation = serializers.CharField(source = 'created_by.designation', read_only=True)
+    created_by_department_id = serializers.CharField(source = 'created_by.department_id.id', read_only=True)
+    created_by_department_name = serializers.CharField(source = 'created_by.department_id.name', read_only=True)
     class Meta:
         model = CallReport
         fields = "__all__"
