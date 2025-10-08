@@ -6720,30 +6720,58 @@ class CallReportFilterView(BaseTokenView):
 
 
 class CallReportSummaryView(BaseTokenView):
-    
     def get(self, request, *args, **kwargs):
         try:
-            # all records
+            # Total record count
             total_count = CallReport.objects.count()
 
-            # status-based counts
+            # Status-based counts
             active_count = CallReport.objects.filter(status='Active').count()
             productive_count = CallReport.objects.filter(status='productive').count()
+            inactive_count = CallReport.objects.filter(status='inactive').count()
 
-            # total amount (handle None)
+            # Total amount (handle null values)
             total_amount = CallReport.objects.aggregate(total=Sum('amount'))['total'] or 0
 
+            # --- Parse and Sum Durations ---
+            total_seconds = 0
+            for report in CallReport.objects.exclude(duration__isnull=True).exclude(duration=''):
+                dur = report.duration.lower().strip()
+                try:
+                    # Match patterns like "2 min 30 sec", "30 sec", "1 min"
+                    minutes = 0
+                    seconds = 0
+
+                    min_match = re.search(r'(\d+)\s*min', dur)
+                    sec_match = re.search(r'(\d+)\s*sec', dur)
+
+                    if min_match:
+                        minutes = int(min_match.group(1))
+                    if sec_match:
+                        seconds = int(sec_match.group(1))
+
+                    total_seconds += minutes * 60 + seconds
+
+                except Exception:
+                    continue
+
+            # Convert to human-readable HH:MM:SS
+            total_duration = str(timedelta(seconds=total_seconds))
+
+            # Final response
             data = {
                 "total_records": total_count,
                 "active_count": active_count,
                 "productive_count": productive_count,
+                "inactive_count": inactive_count,
                 "total_amount": round(total_amount, 2),
+                "total_duration": total_duration,
                 "status": "success"
             }
+
             return JsonResponse(data, status=200)
 
         except Exception as e:
-            # Catch any unexpected error
             return JsonResponse({
                 "status": "error",
                 "message": str(e)
