@@ -6717,3 +6717,34 @@ class CallReportFilterView(BaseTokenView):
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class CallReportSummaryView(BaseTokenView):
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            # all records
+            total_count = CallReport.objects.count()
+
+            # status-based counts
+            active_count = CallReport.objects.filter(status='Active').count()
+            productive_count = CallReport.objects.filter(status='productive').count()
+
+            # total amount (handle None)
+            total_amount = CallReport.objects.aggregate(total=Sum('amount'))['total'] or 0
+
+            data = {
+                "total_records": total_count,
+                "active_count": active_count,
+                "productive_count": productive_count,
+                "total_amount": round(total_amount, 2),
+                "status": "success"
+            }
+            return JsonResponse(data, status=200)
+
+        except Exception as e:
+            # Catch any unexpected error
+            return JsonResponse({
+                "status": "error",
+                "message": str(e)
+            }, status=500)

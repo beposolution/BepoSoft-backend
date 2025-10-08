@@ -245,6 +245,7 @@ urlpatterns = [
     path('api/call/report/staff/<int:created_by>/', CallReportByStaffView.as_view(), name='call-report-by-staff'),
     path('api/call/report/state/<int:state_id>/', CallReportByStateView.as_view(), name='call-report-by-state'),
     path('api/call/report/filter/', CallReportFilterView.as_view(), name='call-report-filter'),
+    path('api/call/report/summary/', CallReportSummaryView.as_view(), name='call-report-summary'),
 
 ]
 
