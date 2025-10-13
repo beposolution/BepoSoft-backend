@@ -6194,18 +6194,23 @@ class DeleteOldDataLogsView(BaseTokenView):
     def delete(self, request):
         try:
             with transaction.atomic():
-                # Select the 50 oldest logs
-                oldest_logs = DataLog.objects.order_by('created_at')[:50]
-                count = oldest_logs.count()
+                # Get the IDs of the 50 oldest logs
+                oldest_ids = list(
+                    DataLog.objects.order_by('created_at')
+                    .values_list('id', flat=True)[:100]
+                )
 
-                if count == 0:
-                    return Response({"message": "No DataLog entries to delete."}, status=status.HTTP_200_OK)
+                if not oldest_ids:
+                    return Response(
+                        {"message": "No DataLog entries to delete."},
+                        status=status.HTTP_200_OK
+                    )
 
-                # Delete them
-                oldest_logs.delete()
+                # Delete by IDs
+                deleted_count, _ = DataLog.objects.filter(id__in=oldest_ids).delete()
 
                 return Response(
-                    {"message": f"Deleted {count} oldest DataLog entries successfully."},
+                    {"message": f"Deleted {deleted_count} oldest DataLog entries successfully."},
                     status=status.HTTP_200_OK
                 )
 
