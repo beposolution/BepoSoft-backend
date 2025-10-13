@@ -1490,6 +1490,25 @@ class DataLog(models.Model):
         return f"[DataLog] by {u} @ {self.created_at:%Y-%m-%d %H:%M:%S} (id={self.pk})"
     
 
+class ContactInfo(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, null=True, blank=True)
+    phone = models.CharField(max_length=100)
+    state = models.ForeignKey(State, on_delete=models.CASCADE)
+    email = models.EmailField(max_length=100, null=True, blank=True)
+    address = models.CharField(max_length=100, null=True, blank=True)
+    zipcode = models.CharField(max_length=100, null=True, blank=True)
+    description = models.CharField(max_length=200, null=True, blank=True)
+    note = models.CharField(max_length=200, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="contactinfo", null=False, blank=False)
+
+    class Meta:
+        db_table = "contactinfo"
+
+    def __str__(self):
+        return self.first_name
+    
+
 class CallReport(models.Model):
     STATUS_CHOICES = [
         ('Active','active'),
@@ -1507,7 +1526,7 @@ class CallReport(models.Model):
     phone = models.CharField(max_length=100, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     date = models.DateField(null=True, blank=True)
-    Customer = models.ForeignKey(Customers, on_delete=models.CASCADE, null=True, blank=True, related_name="call_report")
+    Customer = models.ForeignKey(ContactInfo, on_delete=models.CASCADE, null=True, blank=True, related_name="call_report")
 
     class Meta:
         db_table = "callreport"
