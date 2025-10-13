@@ -6562,7 +6562,7 @@ def warehouse_delivery_note(request, order_id):
     return render(request, "warehousedeliverynote.html", context)
 
 
-class ContactInfoCreateView(APIView):
+class ContactInfoCreateView(BaseTokenView):
     """GET all customers / POST new customer"""
 
     def get(self, request):
@@ -6583,7 +6583,7 @@ class ContactInfoCreateView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ContactInfoUpdateView(APIView):
+class ContactInfoUpdateView(BaseTokenView):
     """GET a single customer / PUT update by id"""
 
     def get(self, request, pk):
