@@ -6575,9 +6575,13 @@ class ContactInfoCreateView(BaseTokenView):
 
     def post(self, request):
         try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
             serializer = ContactInfoSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            serializer.save(created_by=request.user)
+            serializer.save(created_by=authUser) 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
