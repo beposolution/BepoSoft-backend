@@ -1763,6 +1763,17 @@ class ProductDateWiseReportSerializer(serializers.ModelSerializer):
         return round((rate - discount) * qty, 2)
     
 
+class ContactInfoSerializer(serializers.ModelSerializer):
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    state_id = serializers.CharField(source='state.id', read_only=True)
+    country_name = serializers.CharField(source='state.country.name', read_only=True)
+    country_code = serializers.CharField(source='state.country.code', read_only=True)
+    country_id = serializers.CharField(source='state.country.id', read_only=True)
+    created_by = serializers.CharField(source='created_by.name', read_only=True)
+    class Meta:
+        model = ContactInfo
+        fields = "__all__"
+
 class CallReportSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source = 'created_by.name', read_only=True)
     created_by_designation = serializers.CharField(source = 'created_by.designation', read_only=True)

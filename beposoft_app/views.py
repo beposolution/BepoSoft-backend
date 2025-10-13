@@ -6548,6 +6548,49 @@ def warehouse_delivery_note(request, order_id):
     return render(request, "warehousedeliverynote.html", context)
 
 
+class ContactInfoCreateView(APIView):
+    """GET all customers / POST new customer"""
+
+    def get(self, request):
+        try:
+            contactinfo = ContactInfo.objects.select_related("state__country", "created_by").all()
+            serializer = ContactInfoSerializer(contactinfo, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            serializer = ContactInfoSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ContactInfoUpdateView(APIView):
+    """GET a single customer / PUT update by id"""
+
+    def get(self, request, pk):
+        try:
+            contactinfo = get_object_or_404(ContactInfo.objects.select_related("state__country", "created_by"), pk=pk)
+            serializer = ContactInfoSerializer(contactinfo)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            contactinfo = get_object_or_404(ContactInfo, pk=pk)
+            serializer = ContactInfoSerializer(contactinfo, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
 
 class CallReportCreateView(BaseTokenView):
     """GET all call report / POST new call report"""
