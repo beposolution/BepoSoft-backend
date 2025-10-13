@@ -6187,6 +6187,33 @@ class DataLogListView(BaseTokenView):
             "results": serializer.data,
         }, status=status.HTTP_200_OK)
 
+class DeleteOldDataLogsView(BaseTokenView):
+    """
+    DELETE the 50 oldest DataLog records.
+    """
+    def delete(self, request):
+        try:
+            with transaction.atomic():
+                # Select the 50 oldest logs
+                oldest_logs = DataLog.objects.order_by('created_at')[:50]
+                count = oldest_logs.count()
+
+                if count == 0:
+                    return Response({"message": "No DataLog entries to delete."}, status=status.HTTP_200_OK)
+
+                # Delete them
+                oldest_logs.delete()
+
+                return Response(
+                    {"message": f"Deleted {count} oldest DataLog entries successfully."},
+                    status=status.HTTP_200_OK
+                )
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CreateWarehouseOrder(BaseTokenView):
     @transaction.atomic
