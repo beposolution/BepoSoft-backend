@@ -236,6 +236,7 @@ urlpatterns = [
     path('api/call-log/view/', CallLogView.as_view(), name='calllog-view'),
     
     path('api/datalog/create/', DataLogCreateView.as_view(), name='datalog-create'),
+    path('api/datalog/delete/', DeleteOldDataLogsView.as_view(), name='datalog-create'),
     path('api/datalog/', DataLogListView.as_view(), name='datalog-list'),
 
     
