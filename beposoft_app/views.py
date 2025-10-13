@@ -6156,22 +6156,36 @@ class DataLogListView(BaseTokenView):
 
         qs = DataLog.objects.all().order_by('-created_at')
 
-        order_id = request.GET.get('order')            # ?order=2332
-        user_id  = request.GET.get('user')             # ?user=17
-        dt_from  = request.GET.get('from')             # YYYY-MM-DD
-        dt_to    = request.GET.get('to')               # YYYY-MM-DD
+        order_id = request.GET.get('order')      # ?order=2332
+        user_id = request.GET.get('user')        # ?user=17
+        dt_from = request.GET.get('from')        # YYYY-MM-DD
+        dt_to = request.GET.get('to')            # YYYY-MM-DD
 
         if order_id:
             qs = qs.filter(order_id=order_id)
         if user_id:
             qs = qs.filter(user_id=user_id)
-
         if dt_from:
             qs = qs.filter(created_at__date__gte=dt_from)
         if dt_to:
             qs = qs.filter(created_at__date__lte=dt_to)
 
-        return Response(DataLogViewSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 100))
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        total_count = qs.count()  # before slicing
+        qs = qs[start:end]
+
+        serializer = DataLogViewSerializer(qs, many=True)
+
+        return Response({
+            "page": page,
+            "page_size": page_size,
+            "count": total_count,
+            "results": serializer.data,
+        }, status=status.HTTP_200_OK)
 
 
 class CreateWarehouseOrder(BaseTokenView):
