@@ -6567,7 +6567,7 @@ class ContactInfoCreateView(BaseTokenView):
 
     def get(self, request):
         try:
-            contactinfo = ContactInfo.objects.select_related("state__country", "created_by").all()
+            contactinfo = ContactInfo.objects.select_related("state", "created_by").all()
             serializer = ContactInfoSerializer(contactinfo, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -6592,7 +6592,7 @@ class ContactInfoUpdateView(BaseTokenView):
 
     def get(self, request, pk):
         try:
-            contactinfo = get_object_or_404(ContactInfo.objects.select_related("state__country", "created_by"), pk=pk)
+            contactinfo = get_object_or_404(ContactInfo.objects.select_related("state", "created_by"), pk=pk)
             serializer = ContactInfoSerializer(contactinfo)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
