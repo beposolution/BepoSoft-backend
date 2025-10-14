@@ -6641,6 +6641,42 @@ class ContactInfoUpdateView(BaseTokenView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 
+class ContactInfoByStaffView(BaseTokenView):
+    """GET all ContactInfo by created_by / PUT update all ContactInfo by created_by"""
+
+    def get(self, request, created_by):
+        try:
+            contactinfos = ContactInfo.objects.select_related(
+                "state", "created_by"
+            ).filter(created_by_id=created_by)
+            serializer = ContactInfoSerializer(contactinfos, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, created_by):
+        try:
+            contactinfos = ContactInfo.objects.filter(created_by_id=created_by)
+            if not contactinfos.exists():
+                return Response(
+                    {"detail": "No ContactInfo found for this user."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Loop through the list of objects to update each individually
+            updated_data = []
+            for contactinfo in contactinfos:
+                serializer = ContactInfoSerializer(
+                    contactinfo, data=request.data, partial=True
+                )
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                updated_data.append(serializer.data)
+
+            return Response(updated_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class CallReportCreateView(BaseTokenView):
     """GET all call report / POST new call report"""

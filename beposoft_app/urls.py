@@ -240,8 +240,9 @@ urlpatterns = [
     path('api/datalog/', DataLogListView.as_view(), name='datalog-list'),
 
     
-    path("api/contact/info", ContactInfoCreateView.as_view(), name="contact-info-create"),
+    path("api/contact/info/", ContactInfoCreateView.as_view(), name="contact-info-create"),
     path("api/contact/info/<int:pk>/", ContactInfoUpdateView.as_view(), name="contact-info-update"),
+    path("api/contact/info/staff/<int:created_by>/", ContactInfoByStaffView.as_view(), name="staff-contact-info-update"),
     path("api/call/report/", CallReportCreateView.as_view(), name="call-report-create"),
     path("api/call/report/<int:pk>/", CallReportUpdateView.as_view(), name="call-report-update"),
     path('api/call/report/date/<str:date>/', CallReportByDateView.as_view(), name='call-report-by-date'),

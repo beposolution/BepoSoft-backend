@@ -1769,7 +1769,7 @@ class ContactInfoSerializer(serializers.ModelSerializer):
     country_name = serializers.CharField(source='state.country.name', read_only=True)
     country_code = serializers.CharField(source='state.country.code', read_only=True)
     country_id = serializers.CharField(source='state.country.id', read_only=True)
-    created_by = serializers.CharField(source='created_by.name', read_only=True)
+    created = serializers.CharField(source='created_by.name', read_only=True)
     class Meta:
         model = ContactInfo
         fields = "__all__"
