@@ -6696,12 +6696,24 @@ class CallReportCreateView(BaseTokenView):
             if error_response:
                 return error_response
 
+            customer_id = request.data.get("Customer")
+            if not customer_id:
+                return Response(
+                    {"error": "Add Customer Contact first"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             serializer = CallReportSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(created_by=authUser)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
 
 class CallReportUpdateView(BaseTokenView):
