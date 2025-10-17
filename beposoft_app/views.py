@@ -6696,12 +6696,12 @@ class CallReportCreateView(BaseTokenView):
             if error_response:
                 return error_response
 
-            customer_id = request.data.get("Customer")
-            if not customer_id:
-                return Response(
-                    {"error": "Add Customer Contact first"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # customer_id = request.data.get("Customer")
+            # if not customer_id:
+            #     return Response(
+            #         {"error": "Add Customer Contact first"},
+            #         status=status.HTTP_400_BAD_REQUEST
+            #     )
 
             serializer = CallReportSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -6730,10 +6730,24 @@ class CallReportUpdateView(BaseTokenView):
     def put(self, request, pk):
         try:
             call_report = get_object_or_404(CallReport, pk=pk)
-            serializer = CallReportSerializer(call_report, data=request.data, partial=True)
+            data = request.data.copy()
+
+            # Check if status is being updated to "Productive"
+            new_status = data.get("status")
+            customer_id = data.get("Customer") or getattr(call_report.Customer, "id", None)
+
+            if new_status == "Productive" and not customer_id:
+                return Response(
+                    {"error": "Add Customer Contact first"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = CallReportSerializer(call_report, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+
             return Response(serializer.data, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
