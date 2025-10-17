@@ -6877,19 +6877,15 @@ class CallReportFilterView(BaseTokenView):
 class CallReportSummaryView(BaseTokenView):
     def get(self, request, *args, **kwargs):
         try:
-            # Total record count
-            total_count = CallReport.objects.count()
 
-            # Status-based counts
+            total_count = CallReport.objects.count()
             active_count = CallReport.objects.filter(status='Active').count()
             productive_count = CallReport.objects.filter(status='Productive').count()
             inactive_count = CallReport.objects.filter(status='inactive').count()
-
-            # Total amount (handle null values)
             total_amount = CallReport.objects.aggregate(total=Sum('amount'))['total'] or 0
 
-            # --- Parse and Sum Durations ---
             total_seconds = 0
+
             for report in CallReport.objects.exclude(duration__isnull=True).exclude(duration=''):
                 dur = report.duration.lower().strip()
                 try:
@@ -6910,8 +6906,35 @@ class CallReportSummaryView(BaseTokenView):
                 except Exception:
                     continue
 
-            # Convert to human-readable HH:MM:SS
             total_duration = str(timedelta(seconds=total_seconds))
+
+            today = date.today()
+            today_reports = CallReport.objects.filter(date=today)
+
+            today_total = today_reports.count()
+            today_active = today_reports.filter(status='Active').count()
+            today_productive = today_reports.filter(status='Productive').count()
+            today_inactive = today_reports.filter(status='inactive').count()
+            today_amount = today_reports.aggregate(total=Sum('amount'))['total'] or 0
+
+            today_seconds = 0
+            
+            for report in today_reports.exclude(duration__isnull=True).exclude(duration=''):
+                dur = report.duration.lower().strip()
+                try:
+                    minutes = 0
+                    seconds = 0
+                    min_match = re.search(r'(\d+)\s*min', dur)
+                    sec_match = re.search(r'(\d+)\s*sec', dur)
+                    if min_match:
+                        minutes = int(min_match.group(1))
+                    if sec_match:
+                        seconds = int(sec_match.group(1))
+                    today_seconds += minutes * 60 + seconds
+                except Exception:
+                    continue
+                
+            today_duration = str(timedelta(seconds=today_seconds))
 
             # Final response
             data = {
@@ -6921,6 +6944,17 @@ class CallReportSummaryView(BaseTokenView):
                 "inactive_count": inactive_count,
                 "total_amount": round(total_amount, 2),
                 "total_duration": total_duration,
+
+                "today_summary": {
+                    "date": today.strftime("%Y-%m-%d"),
+                    "total_records": today_total,
+                    "active_count": today_active,
+                    "productive_count": today_productive,
+                    "inactive_count": today_inactive,
+                    "total_amount": round(today_amount, 2),
+                    "total_duration": today_duration,
+                },
+
                 "status": "success"
             }
 
