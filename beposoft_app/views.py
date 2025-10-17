@@ -6918,7 +6918,7 @@ class CallReportSummaryView(BaseTokenView):
             today_amount = today_reports.aggregate(total=Sum('amount'))['total'] or 0
 
             today_seconds = 0
-            
+
             for report in today_reports.exclude(duration__isnull=True).exclude(duration=''):
                 dur = report.duration.lower().strip()
                 try:
@@ -6935,6 +6935,59 @@ class CallReportSummaryView(BaseTokenView):
                     continue
                 
             today_duration = str(timedelta(seconds=today_seconds))
+
+            month_start = today.replace(day=1)
+            month_reports = CallReport.objects.filter(date__gte=month_start, date__lte=today)
+
+            month_total = month_reports.count()
+            month_active = month_reports.filter(status='Active').count()
+            month_productive = month_reports.filter(status='Productive').count()
+            month_inactive = month_reports.filter(status='inactive').count()
+            month_amount = month_reports.aggregate(total=Sum('amount'))['total'] or 0
+
+            month_seconds = 0
+            for report in month_reports.exclude(duration__isnull=True).exclude(duration=''):
+                dur = report.duration.lower().strip()
+                try:
+                    minutes = 0
+                    seconds = 0
+                    min_match = re.search(r'(\d+)\s*min', dur)
+                    sec_match = re.search(r'(\d+)\s*sec', dur)
+                    if min_match:
+                        minutes = int(min_match.group(1))
+                    if sec_match:
+                        seconds = int(sec_match.group(1))
+                    month_seconds += minutes * 60 + seconds
+                except Exception:
+                    continue
+            month_duration = str(timedelta(seconds=month_seconds))
+
+            last_30_days = today - timedelta(days=30)
+            last_30_reports = CallReport.objects.filter(date__gte=last_30_days, date__lte=today)
+
+            last30_total = last_30_reports.count()
+            last30_active = last_30_reports.filter(status='Active').count()
+            last30_productive = last_30_reports.filter(status='Productive').count()
+            last30_inactive = last_30_reports.filter(status='inactive').count()
+            last30_amount = last_30_reports.aggregate(total=Sum('amount'))['total'] or 0
+
+            last30_seconds = 0
+            for report in last_30_reports.exclude(duration__isnull=True).exclude(duration=''):
+                dur = report.duration.lower().strip()
+                try:
+                    minutes = 0
+                    seconds = 0
+                    min_match = re.search(r'(\d+)\s*min', dur)
+                    sec_match = re.search(r'(\d+)\s*sec', dur)
+                    if min_match:
+                        minutes = int(min_match.group(1))
+                    if sec_match:
+                        seconds = int(sec_match.group(1))
+                    last30_seconds += minutes * 60 + seconds
+                except Exception:
+                    continue
+            last30_duration = str(timedelta(seconds=last30_seconds))
+
 
             # Final response
             data = {
@@ -6953,6 +7006,28 @@ class CallReportSummaryView(BaseTokenView):
                     "inactive_count": today_inactive,
                     "total_amount": round(today_amount, 2),
                     "total_duration": today_duration,
+                },
+
+                "current_month_summary": {
+                    "month_start": month_start.strftime("%Y-%m-%d"),
+                    "month_end": today.strftime("%Y-%m-%d"),
+                    "total_records": month_total,
+                    "active_count": month_active,
+                    "productive_count": month_productive,
+                    "inactive_count": month_inactive,
+                    "total_amount": round(month_amount, 2),
+                    "total_duration": month_duration,
+                },
+
+                "last_30_days_summary": {
+                    "from_date": last_30_days.strftime("%Y-%m-%d"),
+                    "to_date": today.strftime("%Y-%m-%d"),
+                    "total_records": last30_total,
+                    "active_count": last30_active,
+                    "productive_count": last30_productive,
+                    "inactive_count": last30_inactive,
+                    "total_amount": round(last30_amount, 2),
+                    "total_duration": last30_duration,
                 },
 
                 "status": "success"
