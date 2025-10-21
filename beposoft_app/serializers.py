@@ -1166,6 +1166,34 @@ class TrackingdetailsSerializer(serializers.ModelSerializer):
         extra_fields = ['warehouse_data'] 
 
 
+# class ProductWiseReportSerializer(serializers.ModelSerializer):
+#     product_id = serializers.IntegerField(source='product.id')
+#     product_name = serializers.CharField(source='product.name')
+#     order_id = serializers.IntegerField(source='order.id')
+#     invoice = serializers.CharField(source='order.invoice')
+#     staff_id = serializers.IntegerField(source='order.manage_staff.id')
+#     staff_name = serializers.CharField(source='order.manage_staff.name')
+#     staff_family = serializers.CharField(source='order.manage_staff.family.name')
+#     allocated_states = serializers.SerializerMethodField()
+#     order_date = serializers.CharField(source='order.order_date')
+#     order_state = serializers.CharField(source='order.state.name')
+#     family_name = serializers.CharField(source='order.family.name')
+#     category_name = serializers.CharField(source='product.product_category.category_name')
+#     category_id = serializers.CharField(source='product.product_category')
+
+#     class Meta:
+#         model = OrderItem
+#         fields = [
+#             'product_id', 'product_name','quantity',
+#             'order_id', 'invoice','order_state',
+#             'staff_id', 'staff_name','staff_family',
+#             'allocated_states', 'order_date','family_name',
+#             'category_name', 'category_id'
+#         ]
+
+#     def get_allocated_states(self, obj):
+#         return [state.name for state in obj.order.manage_staff.allocated_states.all()]
+
 class ProductWiseReportSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(source='product.id')
     product_name = serializers.CharField(source='product.name')
@@ -1178,18 +1206,31 @@ class ProductWiseReportSerializer(serializers.ModelSerializer):
     order_date = serializers.CharField(source='order.order_date')
     order_state = serializers.CharField(source='order.state.name')
     family_name = serializers.CharField(source='order.family.name')
+    category_name = serializers.SerializerMethodField()
+    category_id = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = [
-            'product_id', 'product_name','quantity',
-            'order_id', 'invoice','order_state',
-            'staff_id', 'staff_name','staff_family',
-            'allocated_states', 'order_date','family_name'
+            'product_id', 'product_name', 'quantity',
+            'order_id', 'invoice', 'order_state',
+            'staff_id', 'staff_name', 'staff_family',
+            'allocated_states', 'order_date', 'family_name',
+            'category_name', 'category_id'
         ]
 
     def get_allocated_states(self, obj):
         return [state.name for state in obj.order.manage_staff.allocated_states.all()]
+
+    def get_category_name(self, obj):
+        if obj.product.product_category:
+            return obj.product.product_category.category_name
+        return None
+
+    def get_category_id(self, obj):
+        if obj.product.product_category:
+            return obj.product.product_category.id
+        return None
 
 
 class OrderModelSerilizer(serializers.ModelSerializer):
