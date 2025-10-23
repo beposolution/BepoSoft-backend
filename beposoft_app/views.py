@@ -2386,6 +2386,73 @@ class ProductWiseReportView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ProductWiseFilterReportView(BaseTokenView):
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # --- Get filters from query params ---
+            family_name = request.query_params.get("family")
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            order_items = OrderItem.objects.select_related(
+                "product",
+                "order",
+                "order__manage_staff",
+                "order__family",
+                "order__state",
+            ).prefetch_related(
+                "order__manage_staff__allocated_states"
+            )
+
+            # --- Apply family filter ---
+            if family_name:
+                order_items = order_items.filter(order__family__name__iexact=family_name)
+
+            # --- Apply date range filter ---
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+                    order_items = order_items.filter(order__order_date__gte=start_dt)
+                except ValueError:
+                    return Response(
+                        {"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+                    order_items = order_items.filter(order__order_date__lte=end_dt)
+                except ValueError:
+                    return Response(
+                        {"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            serializer = ProductWiseReportSerializer(order_items, many=True)
+            return Response(
+                {
+                    "message": "Product-wise report fetched successfully",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while generating report",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 logger = logging.getLogger(__name__)
 
 class ProductAttributeCreateValue(BaseTokenView):

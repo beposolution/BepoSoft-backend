@@ -101,6 +101,7 @@ urlpatterns = [
     path('api/order/payment/images/delete/<int:image_id>/', DeleteOrderPaymentImageView.as_view(), name='delete-order-image'),
     # path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
     path('api/product-wise/report/', ProductWiseReportView.as_view(), name='product-wise-report'),
+    path('api/product-wise/filter/report/', ProductWiseFilterReportView.as_view(), name='product-wise-report'),
     path('api/warehouse/order/create/', CreateWarehouseOrder.as_view(), name='create-warehouse-order'),
     path('api/warehouse/order/view/', WarehouseOrderView.as_view(), name='view-warehouse-order'),
     path('api/warehouse/order/view/<str:invoice>/', WarehouseOrderIDView.as_view(), name='view-warehouse-order-by-id'),
