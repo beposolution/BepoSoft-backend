@@ -259,10 +259,15 @@ class CountryCodeSerializer(serializers.ModelSerializer):
 class ProductSingleviewSerializres(serializers.ModelSerializer):
     variantIDs = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    product_category_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
         fields = "__all__"
+
+    def get_product_category_name(self, obj):
+        """Return category name safely, even if null."""
+        return obj.product_category.category_name if obj.product_category else None
 
     def get_variantIDs(self, obj):
         """
@@ -306,7 +311,10 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "selling_price": variant.selling_price , # Selling price field
                         "retail_price": variant.retail_price,  
                         "created_user":variant.created_user.name,
-                        "approval_status":variant.approval_status
+                        "approval_status":variant.approval_status,
+
+                        "product_category_id": variant.product_category.id if variant.product_category else None,
+                        "product_category_name": variant.product_category.category_name if variant.product_category else None,
                         
                     })
 
