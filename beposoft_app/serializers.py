@@ -812,12 +812,12 @@ class WarehouseUpdateSerializers(serializers.ModelSerializer):
 class LedgerSerializers(serializers.ModelSerializer):
     recived_payment =  PaymentRecieptsViewSerializers(many=True,read_only=True)
     company = serializers.CharField(source="company.name")
+    customer_name = serializers.CharField(source="customer.name")
     class Meta :
         model = Order
-        fields = ["id","invoice","company",
+        fields = ["id","invoice","company","customer_name",
                   "total_amount","order_date",
                   "recived_payment","status"]
-
 
 
 class AttributesModelSerializer(serializers.ModelSerializer):
