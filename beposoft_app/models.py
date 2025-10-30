@@ -1528,6 +1528,8 @@ class CallReport(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     date = models.DateField(null=True, blank=True)
     Customer = models.ForeignKey(ContactInfo, on_delete=models.CASCADE, null=True, blank=True, related_name="call_report")
+    audio_file = models.FileField(upload_to='call_audios/', null=True, blank=True)
+    call_datetime = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "callreport"
