@@ -6797,6 +6797,7 @@ class CallReportUpdateView(BaseTokenView):
     def put(self, request, pk):
         try:
             call_report = get_object_or_404(CallReport, pk=pk)
+
             data = request.data.copy()
 
             # Check if status is being updated to "Productive"
@@ -6809,7 +6810,9 @@ class CallReportUpdateView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            serializer = CallReportSerializer(call_report, data=data, partial=True)
+            serializer = CallReportSerializer(
+                call_report, data=request.data, partial=True
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
