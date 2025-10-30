@@ -6798,8 +6798,6 @@ class CallReportUpdateView(BaseTokenView):
 
     def put(self, request, pk):
         try:
-            print("FILES:", request.FILES)
-            print("DATA:", request.data)
 
             call_report = get_object_or_404(CallReport, pk=pk)
             file_obj = request.FILES.get("audio_file", None)
@@ -6831,8 +6829,6 @@ class CallReportUpdateView(BaseTokenView):
             return Response(CallReportSerializer(instance).data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            import traceback
-            print(traceback.format_exc())
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         
