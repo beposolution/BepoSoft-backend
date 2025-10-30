@@ -6798,6 +6798,8 @@ class CallReportUpdateView(BaseTokenView):
 
     def put(self, request, pk):
         try:
+            print("FILES:", request.FILES)
+            print("DATA:", request.data)
             call_report = get_object_or_404(CallReport, pk=pk)
             data = request.data.copy()
             file_obj = request.FILES.get("audio_file", None)
