@@ -6793,6 +6793,8 @@ class CallReportUpdateView(BaseTokenView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    parser_classes = (MultiPartParser, FormParser)
 
     def put(self, request, pk):
         try:
@@ -6800,7 +6802,6 @@ class CallReportUpdateView(BaseTokenView):
 
             data = request.data.copy()
 
-            # Check if status is being updated to "Productive"
             new_status = data.get("status")
             customer_id = data.get("Customer") or getattr(call_report.Customer, "id", None)
 
@@ -6810,9 +6811,11 @@ class CallReportUpdateView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            serializer = CallReportSerializer(
-                call_report, data=request.data, partial=True
-            )
+            # If file present, replace it explicitly
+            if 'audio_file' in request.FILES:
+                call_report.audio_file = request.FILES['audio_file']
+
+            serializer = CallReportSerializer(call_report, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
