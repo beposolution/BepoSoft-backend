@@ -6802,9 +6802,10 @@ class CallReportUpdateView(BaseTokenView):
             print("DATA:", request.data)
 
             call_report = get_object_or_404(CallReport, pk=pk)
-            data = request.data  # ✅ FIXED: no copy()
-
             file_obj = request.FILES.get("audio_file", None)
+
+            # Work directly with request.data
+            data = request.data
 
             new_status = data.get("status")
             customer_id = data.get("Customer") or getattr(call_report.Customer, "id", None)
@@ -6815,15 +6816,15 @@ class CallReportUpdateView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # remove file key from serializer data (we handle separately)
-            if 'audio_file' in data:
-                data = data.copy()
-                data.pop('audio_file')
+            # Do NOT copy or mutate QueryDict directly.
+            # Create a shallow dictionary excluding 'audio_file'
+            cleaned_data = {k: v for k, v in data.items() if k != "audio_file"}
 
-            serializer = CallReportSerializer(call_report, data=data, partial=True)
+            serializer = CallReportSerializer(call_report, data=cleaned_data, partial=True)
             serializer.is_valid(raise_exception=True)
             instance = serializer.save()
 
+            # Handle file manually AFTER saving
             if file_obj:
                 instance.audio_file.save(file_obj.name, file_obj, save=True)
 
