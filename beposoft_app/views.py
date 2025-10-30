@@ -6800,6 +6800,7 @@ class CallReportUpdateView(BaseTokenView):
         try:
             call_report = get_object_or_404(CallReport, pk=pk)
             data = request.data.copy()
+            file_obj = request.FILES.get("audio_file", None)
 
             new_status = data.get("status")
             customer_id = data.get("Customer") or getattr(call_report.Customer, "id", None)
@@ -6810,18 +6811,23 @@ class CallReportUpdateView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Pass everything (including files) to the serializer
-            serializer = CallReportSerializer(
-                call_report, 
-                data=request.data, 
-                partial=True
-            )
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
+            # Temporarily remove file from serializer data
+            if 'audio_file' in data:
+                data.pop('audio_file')
 
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            serializer = CallReportSerializer(call_report, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            instance = serializer.save()
+
+            # Handle file manually AFTER saving the rest
+            if file_obj:
+                instance.audio_file.save(file_obj.name, file_obj, save=True)
+
+            return Response(CallReportSerializer(instance).data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         
