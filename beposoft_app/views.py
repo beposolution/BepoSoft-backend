@@ -3055,6 +3055,14 @@ class AdvanceReceiptDetailView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+    def delete(self, request, pk):
+        try:
+            receipt = get_object_or_404(AdvanceReceipt, pk=pk)
+            receipt.delete()
+            return Response({'message': 'Advance receipt deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 class BankReceiptDetailView(APIView):
     def get(self, request, pk):
         try:
