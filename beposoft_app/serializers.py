@@ -1847,3 +1847,20 @@ class CallReportSortingSerializer(serializers.ModelSerializer):
     class Meta:
         model = CallReport
         fields = '__all__'
+
+
+class QuestionnaireSerializer(serializers.ModelSerializer):
+    family_name = serializers.CharField(source='family.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    class Meta:
+        model = Questionnaire
+        fields = "__all__"
+
+
+class AnswersSerializer(serializers.ModelSerializer):
+    question_name = serializers.CharField(source='question.questions', read_only=True)
+    family_name = serializers.CharField(source='family.name', read_only=True)
+    added_by_name = serializers.CharField(source='added_by.name', read_only=True)
+    class Meta:
+        model = Answers
+        fields = "__all__"

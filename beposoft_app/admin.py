@@ -45,6 +45,8 @@ admin.site.register(WarehouseOrder)
 admin.site.register(WarehouseOrderItem)
 admin.site.register(CallReport)
 admin.site.register(ContactInfo)
+admin.site.register(Questionnaire)
+admin.site.register(Answers)
 
 
 
