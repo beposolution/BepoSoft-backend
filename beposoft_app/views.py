@@ -7129,3 +7129,270 @@ class CallReportSummaryView(BaseTokenView):
                 "status": "error",
                 "message": str(e)
             }, status=500)
+
+
+class QuestionnaireView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            questionnaires = Questionnaire.objects.all().order_by('-created_at')
+            serializer = QuestionnaireSerializer(questionnaires, many=True)
+
+            return Response(
+                {"data": serializer.data, "message": "Questionnaires retrieved successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+            serializer = QuestionnaireSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=auth_user)
+                return Response(
+                    {"data": serializer.data, "message": "Questionnaire created successfully"},
+                    status=status.HTTP_201_CREATED
+                )
+            
+            return Response(
+                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class QuestionnaireDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                questionnaire = Questionnaire.objects.get(pk=pk)
+            except Questionnaire.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Questionnaire not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = QuestionnaireSerializer(questionnaire)
+            return Response(
+                {"data": serializer.data, "message": "Questionnaire retrieved successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                questionnaire = Questionnaire.objects.get(pk=pk)
+            except Questionnaire.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Questionnaire not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = QuestionnaireSerializer(questionnaire, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"data": serializer.data, "message": "Questionnaire updated successfully"},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+class AnswersView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            answers = Answers.objects.all().order_by('-created_at')
+            serializer = AnswersSerializer(answers, many=True)
+            return Response(
+                {"data": serializer.data, "message": "Answers retrieved successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = AnswersSerializer(data=request.data)
+            if serializer.is_valid():
+                # set added_by to authenticated user
+                serializer.save(added_by=auth_user)
+                return Response(
+                    {"data": serializer.data, "message": "Answer created successfully"},
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AnswersDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                answer = Answers.objects.get(pk=pk)
+            except Answers.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Answer not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = AnswersSerializer(answer)
+            return Response(
+                {"data": serializer.data, "message": "Answer retrieved successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                answer = Answers.objects.get(pk=pk)
+            except Answers.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Answer not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = AnswersSerializer(answer, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"data": serializer.data, "message": "Answer updated successfully"},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

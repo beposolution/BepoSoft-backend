@@ -1537,3 +1537,31 @@ class CallReport(models.Model):
 
     def __str__(self):
         return f"{self.customer_name} - {self.invoice}"
+    
+
+class Questionnaire(models.Model):
+    questions = models.TextField(null=True, blank=True)
+    family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name="questionnaires")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_questionnaires")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "questionnaire"
+
+    def __str__(self):
+        return f"{self.id} - {self.family}"
+    
+
+class Answers(models.Model):
+    answer = models.TextField(null=True, blank=True)
+    note = models.CharField(max_length=100, null=True, blank=True)
+    question = models.ForeignKey(Questionnaire, on_delete=models.CASCADE, related_name="answers")
+    family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name="family_answers")
+    added_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_answers")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "answers"
+
+    def __str__(self):
+        return f"{self.id} - {self.family}"
