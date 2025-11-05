@@ -277,6 +277,7 @@ class Customers(models.Model):
     customer_status = models.CharField(max_length=200, choices=CUSTOMER_STATUS, default='customer')
     family = models.ForeignKey(Family, on_delete=models.SET_NULL, null=True, blank=True) 
     customer_type = models.ForeignKey(CustomerType, on_delete=models.SET_NULL, null=True, blank=True)
+    gst_confirm = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
         return self.name
