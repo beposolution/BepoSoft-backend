@@ -1861,6 +1861,7 @@ class AnswersSerializer(serializers.ModelSerializer):
     question_name = serializers.CharField(source='question.questions', read_only=True)
     family_name = serializers.CharField(source='family.name', read_only=True)
     added_by_name = serializers.CharField(source='added_by.name', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
     class Meta:
         model = Answers
         fields = "__all__"
