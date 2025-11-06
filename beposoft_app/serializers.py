@@ -1855,6 +1855,7 @@ class QuestionnaireSerializer(serializers.ModelSerializer):
     class Meta:
         model = Questionnaire
         fields = "__all__"
+        read_only_fields = ('created_by',)
 
 
 class AnswersSerializer(serializers.ModelSerializer):
@@ -1865,3 +1866,4 @@ class AnswersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Answers
         fields = "__all__"
+        read_only_fields = ('added_by',)
