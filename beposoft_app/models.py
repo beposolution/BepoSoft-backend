@@ -1559,6 +1559,7 @@ class Answers(models.Model):
     family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name="family_answers")
     added_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_answers")
     created_at = models.DateTimeField(auto_now_add=True)
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="customer_answers", null=True, blank=True)
 
     class Meta:
         db_table = "answers"
