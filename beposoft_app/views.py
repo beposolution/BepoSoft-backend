@@ -7164,31 +7164,29 @@ class QuestionnaireView(BaseTokenView):
             auth_user, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
+
             serializer = QuestionnaireSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(created_by=auth_user)
-                return Response(
-                    {"data": serializer.data, "message": "Questionnaire created successfully"},
-                    status=status.HTTP_201_CREATED
-                )
-            
-            return Response(
-                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # will raise ValidationError which DRF will convert to a 400 if unhandled
+            serializer.is_valid(raise_exception=True)
 
+            with transaction.atomic():
+                instance = serializer.save(created_by=auth_user)
+
+            # re-serialize the saved instance so read-only fields (created_by_name, etc.) exist
+            out = QuestionnaireSerializer(instance).data
+            return Response({"data": out, "message": "Questionnaire created successfully"},
+                            status=status.HTTP_201_CREATED)
+
+        except ValidationError:
+            # let DRF handle validation errors (this block is optional if you want custom format)
+            raise
         except User.DoesNotExist:
-            return Response(
-                {"status": "error", "message": "User does not exist"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        except Exception as e:
-            return Response(
-                {"status": "error", "message": "An error occurred", "errors": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
+            return Response({"detail": "User does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            # unexpected errors -> 500
+            return Response({"detail": "An internal error occurred", "error": str(exc)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
 
 class QuestionnaireDetailView(BaseTokenView):
 
@@ -7293,36 +7291,40 @@ class AnswersView(BaseTokenView):
 
     def post(self, request):
         try:
+            # ✅ Authenticate user from token
             auth_user, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
+            # ✅ Initialize serializer
             serializer = AnswersSerializer(data=request.data)
-            if serializer.is_valid():
-                # set added_by to authenticated user
-                serializer.save(added_by=auth_user)
-                return Response(
-                    {"data": serializer.data, "message": "Answer created successfully"},
-                    status=status.HTTP_201_CREATED
-                )
+            serializer.is_valid(raise_exception=True)
+
+            # ✅ Save with added_by from token, wrapped in transaction for safety
+            with transaction.atomic():
+                instance = serializer.save(added_by=auth_user)
+
+            # ✅ Re-serialize the saved instance to include read-only fields (like added_by_name)
+            out = AnswersSerializer(instance).data
 
             return Response(
-                {"status": "error", "message": "Invalid data", "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST
+                {"data": out, "message": "Answer created successfully"},
+                status=status.HTTP_201_CREATED
             )
 
+        except ValidationError:
+            # DRF automatically handles this if you raise it, but you can customize:
+            raise
         except User.DoesNotExist:
             return Response(
-                {"status": "error", "message": "User does not exist"},
+                {"detail": "User does not exist"},
                 status=status.HTTP_404_NOT_FOUND
             )
-
         except Exception as e:
             return Response(
-                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                {"detail": "An internal error occurred", "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 class AnswersDetailView(BaseTokenView):
 
