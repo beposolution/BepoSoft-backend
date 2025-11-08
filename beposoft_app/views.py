@@ -1736,29 +1736,46 @@ class OrderListView(BaseTokenView):
 
 
 class GSTOrderListView(BaseTokenView):
-
     def get(self, request):
+        # follow the same get_user_from_token pattern as your DataLogListView
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        # base queryset: exclude the two invoice statuses and order by newest first
+        qs = Order.objects.exclude(status__in=["Invoice Rejected", "Invoice Created"]).order_by('-id')
+        # parse pagination params safely
         try:
-            user = self.get_user_from_token(request)
-            orders = Order.objects.exclude(status__in=["Invoice Rejected", "Invoice Created"])
-            
-            serializer = GSTOrderSerializer(orders, many=True)
-            return Response({
-                "success": True,
-                "data": serializer.data
-            }, status=status.HTTP_200_OK)
-        
-        except Order.DoesNotExist:
-            return Response({
-                "success": False,
-                "message": "No orders found."
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        except Exception as e:
-            return Response({
-                "success": False,
-                "message": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            page = int(request.GET.get('page', 1))
+            if page < 1:
+                page = 1
+        except (ValueError, TypeError):
+            page = 1
+
+        try:
+            page_size = int(request.GET.get('page_size', 100))
+            # optional: clamp page_size to a sane maximum
+            if page_size < 1:
+                page_size = 100
+            elif page_size > 1000:
+                page_size = 1000
+        except (ValueError, TypeError):
+            page_size = 100
+
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        total_count = qs.count()
+        paginated_qs = qs[start:end]
+
+        serializer = GSTOrderSerializer(paginated_qs, many=True)
+
+        return Response({
+            "page": page,
+            "page_size": page_size,
+            "count": total_count,
+            "results": serializer.data,
+        }, status=status.HTTP_200_OK)
 
 
 class OrderListByStatusView(BaseTokenView):
