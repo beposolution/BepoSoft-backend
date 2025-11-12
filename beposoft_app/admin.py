@@ -47,6 +47,7 @@ admin.site.register(CallReport)
 admin.site.register(ContactInfo)
 admin.site.register(Questionnaire)
 admin.site.register(Answers)
+admin.site.register(Districts)
 
 
 

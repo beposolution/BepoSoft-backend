@@ -438,9 +438,6 @@ class DepartmentSerilizers(serializers.ModelSerializer):
         fields = "__all__"
 
 
-    
-
-
 
 class StateSerializers(serializers.ModelSerializer):
     class Meta:
@@ -448,6 +445,11 @@ class StateSerializers(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class DistrictSerializer(serializers.ModelSerializer):
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    class Meta:
+        model = Districts
+        fields = "__all__"
 
 class SupervisorSerializerView(serializers.ModelSerializer):
     department = serializers.CharField(source='department.name', read_only=True)

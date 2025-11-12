@@ -65,6 +65,17 @@ class CountryCode(models.Model):
         return self.country_code
     
 
+class Districts(models.Model):
+    name = models.CharField(max_length=50, null=True, blank=True)
+    state = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = "Districts"
+
+    def __str__(self):
+        return self.name
+    
+
 class WareHouse(models.Model):
     name=models.CharField(max_length=200)
     address=models.CharField(max_length=500,null=True)
@@ -1503,6 +1514,7 @@ class ContactInfo(models.Model):
     description = models.CharField(max_length=200, null=True, blank=True)
     note = models.CharField(max_length=200, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="contactinfo", null=False, blank=False)
+    district = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True, related_name="contactdistrict")
 
     class Meta:
         db_table = "contactinfo"
