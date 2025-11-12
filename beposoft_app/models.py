@@ -1514,7 +1514,7 @@ class ContactInfo(models.Model):
     description = models.CharField(max_length=200, null=True, blank=True)
     note = models.CharField(max_length=200, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="contactinfo", null=False, blank=False)
-    district = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True, related_name="contactdistrict")
+    district = models.ForeignKey(Districts, on_delete=models.SET_NULL, null=True, blank=True, related_name="contactdistrict")
 
     class Meta:
         db_table = "contactinfo"
