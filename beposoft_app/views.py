@@ -6870,7 +6870,7 @@ class CallReportByDateView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            reports = CallReport.objects.filter(date=date_obj)
+            reports = CallReport.objects.filter(created_at__date=date_obj)
 
             if not reports.exists():
                 return Response(
