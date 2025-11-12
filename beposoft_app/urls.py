@@ -240,6 +240,9 @@ urlpatterns = [
     path('api/datalog/delete/', DeleteOldDataLogsView.as_view(), name='datalog-create'),
     path('api/datalog/', DataLogListView.as_view(), name='datalog-list'),
 
+    path('api/districts/add/', DistrictView.as_view(), name='add-districts'),
+    path('api/districts/update/<int:id>/', DistrictDetailView.as_view(), name='update-districts'),
+
     
     path("api/contact/info/", ContactInfoCreateView.as_view(), name="contact-info-create"),
     path("api/contact/info/<int:pk>/", ContactInfoUpdateView.as_view(), name="contact-info-update"),
