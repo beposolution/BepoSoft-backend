@@ -1871,3 +1871,46 @@ class AnswersSerializer(serializers.ModelSerializer):
         model = Answers
         fields = "__all__"
         read_only_fields = ('added_by',)
+
+
+class StaffOrderUpdateItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffOrderUpdateItem
+        fields = ['category', 'quantity', 'invoice', 'volume', 'note1', 'description1']
+
+
+class StaffOrderUpdateSerializer(serializers.ModelSerializer):
+    items = StaffOrderUpdateItemSerializer(many=True)
+
+    class Meta:
+        model = StaffOrderUpdate
+        fields = ['id', 'staff', 'customer', 'note', 'description', 'items']
+        read_only_fields = ['staff']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        parent = StaffOrderUpdate.objects.create(**validated_data)
+
+        for item in items_data:
+            StaffOrderUpdateItem.objects.create(parent=parent, **item)
+
+        return parent
+
+    def update(self, instance, validated_data):
+
+        if "items" not in validated_data:
+            raise serializers.ValidationError({"items": "This field is required."})
+
+        StaffOrderUpdateItem.objects.filter(parent=instance).delete()
+
+        items_data = validated_data.pop('items')
+
+        instance.customer = validated_data.get('customer', instance.customer)
+        instance.note = validated_data.get('note', instance.note)
+        instance.description = validated_data.get('description', instance.description)
+        instance.save()
+
+        for item in items_data:
+            StaffOrderUpdateItem.objects.create(parent=instance, **item)
+
+        return instance

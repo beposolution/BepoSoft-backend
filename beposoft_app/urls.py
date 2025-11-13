@@ -255,6 +255,8 @@ urlpatterns = [
     path('api/call/report/filter/', CallReportFilterView.as_view(), name='call-report-filter'),
     path('api/call/report/summary/', CallReportSummaryView.as_view(), name='call-report-summary'),
 
+    path('api/staff/custom/order/update/', StaffOrderUpdateView.as_view()),
+    path('api/staff/custom/order/update/<int:pk>/', StaffOrderUpdateDetailView.as_view()),
 
     path('api/questionnaires/', QuestionnaireView.as_view(), name='questionnaire_view'),
     path('api/questionnaires/<int:pk>/', QuestionnaireDetailView.as_view(), name='questionnaire_detail_update'),
