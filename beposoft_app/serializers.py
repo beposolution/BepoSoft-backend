@@ -1888,7 +1888,7 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffOrderUpdate
-        fields = ['id', 'staff', 'customer', 'note', 'description', 
+        fields = ['id', 'staff', 'customer', 'note', 'description', 'date',
                   'items', 'staff_name', 'customer_name', 'customer_state']
         extra_kwargs = {
             'staff': {'required': False},
