@@ -257,6 +257,7 @@ urlpatterns = [
 
     path('api/staff/custom/order/update/', StaffOrderUpdateView.as_view()),
     path('api/staff/custom/order/update/<int:pk>/', StaffOrderUpdateDetailView.as_view()),
+    path('api/customers/manager/<int:manager_id>/', CustomerByManagerView.as_view()),
 
     path('api/questionnaires/', QuestionnaireView.as_view(), name='questionnaire_view'),
     path('api/questionnaires/<int:pk>/', QuestionnaireDetailView.as_view(), name='questionnaire_detail_update'),
