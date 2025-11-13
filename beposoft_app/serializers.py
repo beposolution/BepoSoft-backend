@@ -1874,17 +1874,20 @@ class AnswersSerializer(serializers.ModelSerializer):
 
 
 class StaffOrderUpdateItemSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.category_name', read_only=True)
     class Meta:
         model = StaffOrderUpdateItem
-        fields = ['category', 'quantity', 'invoice', 'volume', 'note1', 'description1']
+        fields = ['category', 'quantity', 'invoice', 'volume', 'note1', 'description1', 'category_name']
 
 
 class StaffOrderUpdateSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source='staff.name', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
     items = StaffOrderUpdateItemSerializer(many=True)
 
     class Meta:
         model = StaffOrderUpdate
-        fields = ['id', 'staff', 'customer', 'note', 'description', 'items']
+        fields = ['id', 'staff', 'customer', 'note', 'description', 'items', 'staff_name', 'customer_name']
         read_only_fields = ['staff']
 
     def create(self, validated_data):
