@@ -7504,3 +7504,105 @@ class DistrictDetailView(BaseTokenView):
                 "success": False,
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaffOrderUpdateView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            data = request.data.copy()
+            data["staff"] = auth_user.id 
+
+            serializer = StaffOrderUpdateSerializer(data=data)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "message": "Order update saved successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(
+                {"error": "Something went wrong", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = StaffOrderUpdate.objects.filter(staff=auth_user).order_by("-id")
+            serializer = StaffOrderUpdateSerializer(queryset, many=True)
+
+            return Response(
+                {"message": "Fetched successfully", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": "Failed to fetch data", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+class StaffOrderUpdateDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = get_object_or_404(StaffOrderUpdate, pk=pk, staff=auth_user)
+            serializer = StaffOrderUpdateSerializer(obj)
+
+            return Response(
+                {"message": "Fetched successfully", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": "Failed to fetch data", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = get_object_or_404(StaffOrderUpdate, pk=pk, staff=auth_user)
+
+            data = request.data.copy()  
+            data["staff"] = auth_user.id 
+            serializer = StaffOrderUpdateSerializer(obj, data=data)
+            if serializer.is_valid():
+
+                serializer.save()
+
+                return Response(
+                    {"message": "Updated successfully", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(
+                {"error": "Failed to update data", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

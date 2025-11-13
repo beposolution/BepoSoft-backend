@@ -48,6 +48,8 @@ admin.site.register(ContactInfo)
 admin.site.register(Questionnaire)
 admin.site.register(Answers)
 admin.site.register(Districts)
+admin.site.register(StaffOrderUpdate)
+admin.site.register(StaffOrderUpdateItem)
 
 
 

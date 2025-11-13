@@ -1578,3 +1578,27 @@ class Answers(models.Model):
 
     def __str__(self):
         return f"{self.id} - {self.family}"
+    
+
+class StaffOrderUpdate(models.Model):
+    staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notes_staff')
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name='notes_customer')
+    note = models.CharField(max_length=50, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Note by {self.staff} for {self.customer}"
+
+
+class StaffOrderUpdateItem(models.Model):
+    parent = models.ForeignKey(StaffOrderUpdate, on_delete=models.CASCADE, related_name='items')
+    category = models.ForeignKey(ProductCategoryModel, on_delete=models.CASCADE)
+    quantity = models.IntegerField()
+    invoice = models.CharField(max_length=100, blank=True, null=True)
+    volume = models.CharField(max_length=100, blank=True, null=True)
+    note1 = models.CharField(max_length=100, blank=True, null=True)
+    description1 = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.category} - {self.quantity}"
