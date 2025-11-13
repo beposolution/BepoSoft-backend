@@ -7545,7 +7545,8 @@ class StaffOrderUpdateView(BaseTokenView):
             if error_response:
                 return error_response
 
-            queryset = StaffOrderUpdate.objects.filter(staff=auth_user).order_by("-id")
+            # queryset = StaffOrderUpdate.objects.filter(staff=auth_user).order_by("-id")
+            queryset = StaffOrderUpdate.objects.all().order_by("-id")
             serializer = StaffOrderUpdateSerializer(queryset, many=True)
 
             return Response(
