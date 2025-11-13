@@ -1888,7 +1888,9 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = StaffOrderUpdate
         fields = ['id', 'staff', 'customer', 'note', 'description', 'items', 'staff_name', 'customer_name']
-        read_only_fields = ['staff']
+        extra_kwargs = {
+            'staff': {'required': False},
+        }
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
