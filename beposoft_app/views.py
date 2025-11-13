@@ -7610,3 +7610,18 @@ class StaffOrderUpdateDetailView(BaseTokenView):
                 {"error": "Failed to update data", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class CustomerByManagerView(BaseTokenView):
+
+    def get(self, request, manager_id):
+        try:
+            customers = Customers.objects.filter(manager_id=manager_id)
+
+            serializer = CustomerSerilizers(customers, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": "Something went wrong", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
