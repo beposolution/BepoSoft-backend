@@ -1883,11 +1883,13 @@ class StaffOrderUpdateItemSerializer(serializers.ModelSerializer):
 class StaffOrderUpdateSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(source='staff.name', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer_state = serializers.CharField(source='customer.state.name', read_only=True)
     items = StaffOrderUpdateItemSerializer(many=True)
 
     class Meta:
         model = StaffOrderUpdate
-        fields = ['id', 'staff', 'customer', 'note', 'description', 'items', 'staff_name', 'customer_name']
+        fields = ['id', 'staff', 'customer', 'note', 'description', 
+                  'items', 'staff_name', 'customer_name', 'customer_state']
         extra_kwargs = {
             'staff': {'required': False},
         }
