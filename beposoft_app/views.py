@@ -7515,26 +7515,29 @@ class StaffOrderUpdateView(BaseTokenView):
                 return error_response
 
             data = request.data.copy()
-            data["staff"] = auth_user.id 
+            data["staff"] = auth_user.id
 
             serializer = StaffOrderUpdateSerializer(data=data)
 
-            if serializer.is_valid():
-                serializer.save()
+            if not serializer.is_valid():
                 return Response(
-                    {
-                        "message": "Order update saved successfully",
-                        "data": serializer.data
-                    },
-                    status=status.HTTP_201_CREATED
+                    {"error": "Validation failed", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer.save()
+
+            return Response(
+                {"message": "Order update saved successfully", "data": serializer.data},
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
             return Response(
                 {"error": "Something went wrong", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
 
     def get(self, request):
         try:
