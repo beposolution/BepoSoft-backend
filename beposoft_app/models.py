@@ -653,6 +653,7 @@ class Order(models.Model):
     note = models.TextField(default="")
     accounts_note = models.TextField(default="", blank=True, null=True)
     confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='confirmed_orders', null=True, blank=True)
+    shopify_order_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
 
     payment_method = models.CharField(max_length=50, choices=[
         ('Credit Card', 'Credit Card'),
