@@ -263,6 +263,8 @@ urlpatterns = [
     path('api/questionnaires/<int:pk>/', QuestionnaireDetailView.as_view(), name='questionnaire_detail_update'),
     path('api/answers/', AnswersView.as_view(), name='answers_list_create'),
     path('api/answers/<int:pk>/', AnswersDetailView.as_view(), name='answers_detail_update'),
+    path("api/questionnaires/family/<int:family_id>/", QuestionnaireByFamilyView.as_view(),name="questionnaires-by-family"),
+    path("api/answers/family/<int:family_id>/", AnswersByFamilyView.as_view(),name="answers-by-family"),
 
 ]
 

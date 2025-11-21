@@ -7625,3 +7625,41 @@ class CustomerByManagerView(BaseTokenView):
                 {"error": "Something went wrong", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+class QuestionnaireByFamilyView(BaseTokenView):
+
+    def get(self, request, family_id):
+        try:
+            questionnaires = Questionnaire.objects.filter(family_id=family_id)
+
+            serializer = QuestionnaireSerializer(questionnaires, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Something went wrong while fetching questionnaires.",
+                    "details": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+class AnswersByFamilyView(BaseTokenView):
+
+    def get(self, request, family_id):
+        try:
+            answers = Answers.objects.filter(family_id=family_id)
+
+            serializer = AnswersSerializer(answers, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Something went wrong while fetching answers.",
+                    "details": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
