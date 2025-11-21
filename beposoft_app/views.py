@@ -6981,52 +6981,60 @@ class CallReportFilterView(BaseTokenView):
 
 
 class CallReportSummaryView(BaseTokenView):
+    
     def get(self, request, *args, **kwargs):
         try:
-
+            # Overall totals
             total_count = CallReport.objects.count()
             active_count = CallReport.objects.filter(status='Active').count()
             productive_count = CallReport.objects.filter(status='Productive').count()
             inactive_count = CallReport.objects.filter(status='inactive').count()
             total_amount = CallReport.objects.aggregate(total=Sum('amount'))['total'] or 0
 
+            # Total duration across all reports
             total_seconds = 0
-
             for report in CallReport.objects.exclude(duration__isnull=True).exclude(duration=''):
                 dur = report.duration.lower().strip()
                 try:
-                    # Match patterns like "2 min 30 sec", "30 sec", "1 min"
                     minutes = 0
                     seconds = 0
-
                     min_match = re.search(r'(\d+)\s*min', dur)
                     sec_match = re.search(r'(\d+)\s*sec', dur)
-
                     if min_match:
                         minutes = int(min_match.group(1))
                     if sec_match:
                         seconds = int(sec_match.group(1))
-
                     total_seconds += minutes * 60 + seconds
-
                 except Exception:
                     continue
-
             total_duration = str(timedelta(seconds=total_seconds))
 
+            # Today
             today = date.today()
-            today_reports = CallReport.objects.filter(date=today)
 
-            today_total = today_reports.count()
-            today_active = today_reports.filter(status='Active').count()
-            today_productive = today_reports.filter(status='Productive').count()
-            today_inactive = today_reports.filter(status='inactive').count()
-            today_amount = today_reports.aggregate(total=Sum('amount'))['total'] or 0
+            # PRODUCTIVE uses `date`
+            today_productive_qs = CallReport.objects.filter(date=today, status='Productive')
+            today_productive = today_productive_qs.count()
 
+            # ACTIVE uses `created_at__date`
+            today_active_qs = CallReport.objects.filter(created_at__date=today, status='Active')
+            today_active = today_active_qs.count()
+
+            # INACTIVE - use created_at__date for "today" counts (keeps consistency with Active)
+            today_inactive_qs = CallReport.objects.filter(created_at__date=today, status__iexact='inactive')
+            today_inactive = today_inactive_qs.count()
+
+            # TOTAL for today: combine active + productive + inactive (as counts)
+            today_total = today_active + today_productive + today_inactive
+
+            # Amount for today: sum amounts from records considered productive by `date`
+            # (If you want amounts from active as well, change accordingly; keeping same approach as earlier)
+            today_amount = today_productive_qs.aggregate(total=Sum('amount'))['total'] or 0
+
+            # Duration for today: sum durations from both active (created_at) and productive (date)
             today_seconds = 0
-
-            for report in today_reports.exclude(duration__isnull=True).exclude(duration=''):
-                dur = report.duration.lower().strip()
+            for report in list(today_active_qs) + list(today_productive_qs):
+                dur = (report.duration or "").lower().strip()
                 try:
                     minutes = 0
                     seconds = 0
@@ -7039,21 +7047,26 @@ class CallReportSummaryView(BaseTokenView):
                     today_seconds += minutes * 60 + seconds
                 except Exception:
                     continue
-                
             today_duration = str(timedelta(seconds=today_seconds))
 
+            # Current month (productive uses `date`, active uses created_at)
             month_start = today.replace(day=1)
-            month_reports = CallReport.objects.filter(date__gte=month_start, date__lte=today)
 
-            month_total = month_reports.count()
-            month_active = month_reports.filter(status='Active').count()
-            month_productive = month_reports.filter(status='Productive').count()
-            month_inactive = month_reports.filter(status='inactive').count()
-            month_amount = month_reports.aggregate(total=Sum('amount'))['total'] or 0
+            month_productive_qs = CallReport.objects.filter(date__gte=month_start, date__lte=today, status='Productive')
+            month_productive = month_productive_qs.count()
+
+            month_active_qs = CallReport.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today, status='Active')
+            month_active = month_active_qs.count()
+
+            month_inactive_qs = CallReport.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today, status__iexact='inactive')
+            month_inactive = month_inactive_qs.count()
+
+            month_total = month_active + month_productive + month_inactive
+            month_amount = month_productive_qs.aggregate(total=Sum('amount'))['total'] or 0
 
             month_seconds = 0
-            for report in month_reports.exclude(duration__isnull=True).exclude(duration=''):
-                dur = report.duration.lower().strip()
+            for report in list(month_active_qs) + list(month_productive_qs):
+                dur = (report.duration or "").lower().strip()
                 try:
                     minutes = 0
                     seconds = 0
@@ -7068,18 +7081,24 @@ class CallReportSummaryView(BaseTokenView):
                     continue
             month_duration = str(timedelta(seconds=month_seconds))
 
+            # Last 30 days (productive uses `date`, active uses created_at)
             last_30_days = today - timedelta(days=30)
-            last_30_reports = CallReport.objects.filter(date__gte=last_30_days, date__lte=today)
 
-            last30_total = last_30_reports.count()
-            last30_active = last_30_reports.filter(status='Active').count()
-            last30_productive = last_30_reports.filter(status='Productive').count()
-            last30_inactive = last_30_reports.filter(status='inactive').count()
-            last30_amount = last_30_reports.aggregate(total=Sum('amount'))['total'] or 0
+            last30_productive_qs = CallReport.objects.filter(date__gte=last_30_days, date__lte=today, status='Productive')
+            last30_productive = last30_productive_qs.count()
+
+            last30_active_qs = CallReport.objects.filter(created_at__date__gte=last_30_days, created_at__date__lte=today, status='Active')
+            last30_active = last30_active_qs.count()
+
+            last30_inactive_qs = CallReport.objects.filter(created_at__date__gte=last_30_days, created_at__date__lte=today, status__iexact='inactive')
+            last30_inactive = last30_inactive_qs.count()
+
+            last30_total = last30_active + last30_productive + last30_inactive
+            last30_amount = last30_productive_qs.aggregate(total=Sum('amount'))['total'] or 0
 
             last30_seconds = 0
-            for report in last_30_reports.exclude(duration__isnull=True).exclude(duration=''):
-                dur = report.duration.lower().strip()
+            for report in list(last30_active_qs) + list(last30_productive_qs):
+                dur = (report.duration or "").lower().strip()
                 try:
                     minutes = 0
                     seconds = 0
@@ -7093,7 +7112,6 @@ class CallReportSummaryView(BaseTokenView):
                 except Exception:
                     continue
             last30_duration = str(timedelta(seconds=last30_seconds))
-
 
             # Final response
             data = {
