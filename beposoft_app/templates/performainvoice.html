@@ -248,43 +248,51 @@
 
   <!-- Script -->
   <script>
-    function downloadInvoice() {
-      const downloadBtn = document.getElementById("downloadBtn");
-      downloadBtn.style.display = "none";
+function downloadInvoice() {
+  const downloadBtn = document.getElementById("downloadBtn");
+  downloadBtn.style.display = "none";
 
-      const invoice = document.querySelector("#invoice");
+  const invoice = document.querySelector("#invoice");
 
-      html2canvas(invoice, {
-        scale: 2,
-        useCORS: true,
-        scrollY: -window.scrollY
-      }).then(canvas => {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF("p", "mm", "a4");
+  // Detect mobile scaling
+  let scaleFactor = 1;
+  if (window.innerWidth <= 768) {
+    scaleFactor = 0.55;  // SAME as your mobile CSS transform
+  }
 
-        const imgData = canvas.toDataURL("image/png");
+  html2canvas(invoice, {
+    scale: 2 * scaleFactor,    // IMPORTANT
+    useCORS: true,
+    scrollY: -window.scrollY
+  }).then(canvas => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
 
-        const pageWidth = 210;
-        const pageHeight = 297;
+    const imgData = canvas.toDataURL("image/png");
 
-        const imgWidth = pageWidth;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const pageWidth = 210;
+    const pageHeight = 297;
 
-        if (imgHeight > pageHeight) {
-          const scaleRatio = pageHeight / imgHeight;
-          const scaledWidth = imgWidth * scaleRatio;
-          const scaledHeight = imgHeight * scaleRatio;
-          const marginX = (pageWidth - scaledWidth) / 2;
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-          pdf.addImage(imgData, "PNG", marginX, 0, scaledWidth, scaledHeight);
-        } else {
-          pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-        }
+    if (imgHeight > pageHeight) {
+      const ratio = pageHeight / imgHeight;
+      const scaledWidth = imgWidth * ratio;
+      const scaledHeight = imgHeight * ratio;
 
-        pdf.save("performainvoice.pdf");
-        downloadBtn.style.display = "block";
-      });
+      const marginX = (pageWidth - scaledWidth) / 2;
+
+      pdf.addImage(imgData, "PNG", marginX, 0, scaledWidth, scaledHeight);
+    } else {
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
     }
-  </script>
+
+    pdf.save("performainvoice.pdf");
+    downloadBtn.style.display = "block";
+  });
+}
+</script>
+
 </body>
 </html>
