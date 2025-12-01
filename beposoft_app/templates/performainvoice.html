@@ -7,20 +7,15 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>   
+
+  <style>
     body {
       font-size: 12px;
+      background: #e9ecef;
     }
 
-    .no-print { 
-      display: block; 
-    }
-
-    @media print {
-      .no-print { 
-        display: none; 
-      }
-    }
+    .no-print { display: block; }
+    @media print { .no-print { display: none !important; } }
 
     .button-container {
       display: flex;
@@ -30,46 +25,73 @@
       padding-bottom: 20px;
     }
 
-    .container { 
-      max-width: 100%; 
-      padding-left: 12px; 
-      padding-right: 12px; 
+    .container {
+      max-width: 100%;
+      padding-left: 12px;
+      padding-right: 12px;
     }
 
-    /* -------------------------------
-      FIXED A4 INVOICE – DO NOT SHRINK
-    -------------------------------- */
+    /* ---------------------------
+       OUTLINE: FULL INVOICE BOX
+       --------------------------- */
     #invoice {
-      width: 210mm;         /* A4 width */
-      margin: 0 auto;
-      padding: 20px;
-      border: 1px solid #000;
-      background: #fff;
+      width: 210mm;
+      margin: 20px auto;
+      padding: 18px 22px;
+      border: 2px solid #000;      /* OUTLINE */
+      background: #ffffff;
       box-sizing: border-box;
+      box-shadow: none;
+      border-radius: 0;
     }
 
-    .invoice-table { 
-      width: 100%; 
-      border-collapse: collapse; 
+    .invoice-header-title {
+      font-size: 26px;
+      letter-spacing: 1px;
+      font-weight: 600;
     }
 
-    .company-details div {
-      margin-bottom: 2px;
-      line-height: 1.3;
+    /* ---------------------------
+       OUTLINE: TABLE STYLING
+       --------------------------- */
+    .invoice-table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: auto;
+      font-size: 12px;
+      border: 2px solid #000;    /* Outer table border */
     }
 
     .invoice-table th,
     .invoice-table td {
-      border: 1px solid #ccc;
+      border: 1px solid #000;    /* Inner borders */
       padding: 6px;
       text-align: center;
     }
 
     .invoice-table th {
-      background-color: #f2f2f2;
+      background-color: #f8f9fa;
+      font-weight: 600;
     }
 
-    /* Wrapper to keep scaling centered */
+    .table-modern {
+      border: 2px solid #000 !important; /* Bill/Ship & Bank/Summary outline */
+    }
+
+    .table-modern th,
+    .table-modern td {
+      border: 1px solid #000 !important; /* Inner borders */
+      padding: 6px;
+      background: #ffffff;
+      vertical-align: top;
+    }
+
+    .table-modern thead th {
+      background-color: #f8f9fa;
+      font-weight: 600;
+    }
+
+    /* Mobile scaling */
     .invoice-wrapper {
       width: 100%;
       display: flex;
@@ -77,74 +99,64 @@
       overflow-x: hidden;
     }
 
-    /* ---------------------------------------
-      MOBILE FIX – SCALE THE FULL A4 PROPERLY
-    ---------------------------------------- */
-    @media (max-width: 768px) {
-
+    @media print {
       html, body {
         margin: 0;
         padding: 0;
-        width: 100%;
-        background: #fff;
-        overflow-x: auto !important;  /* Allow horizontal scroll if needed */
-      }
-
-      /* Wrapper – center and scale */
-      .invoice-wrapper {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        padding: 0 !important;
-        margin: 0 !important;
-
-        /* SCALE for mobile */
-        transform: scale(0.55);
-        transform-origin: top center;
-
-        /* VERY IMPORTANT */
-        overflow: visible !important;  
-      }
-
-      /* Keep original A4 width */
-      #invoice {
         width: 210mm;
-        margin: 0;
-        padding: 20px;
-        border: 1px solid #000;
         background: #fff;
-        box-sizing: border-box;
       }
-
-      /* Remove bootstrap spacing issues */
       .container, .container-fluid {
-        padding: 0 !important;
+        width: 100% !important;
         margin: 0 !important;
-        width: 100%;
+        padding: 0 !important;
       }
-
-      table {
-        font-size: 10px;   /* Minor font reduction for readability */
+      #invoice {
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
       }
     }
 
+    @media (max-width: 768px) {
+      html, body {
+        width: 100%;
+        background: #fff;
+        overflow-x: auto !important;
+      }
+      .invoice-wrapper {
+        transform: scale(0.55);
+        transform-origin: top center;
+      }
+      #invoice {
+        width: 210mm;
+        padding: 18px 22px;
+      }
+      table { font-size: 10px; }
+    }
   </style>
 </head>
+
 <body>
   <div class="invoice-wrapper">
     <div class="container-fluid" id="invoice">
-      <!-- Invoice Heading -->
-      <div class="text-center" style="font-size: 28px; margin-bottom: 25px;margin-top: 45px;">
-        <h2>PERFORMA INVOICE</h2>
+
+      <!-- Heading -->
+      <div class="text-center" style="margin-top: 25px; margin-bottom: 20px;">
+        <h2 class="invoice-header-title">PERFORMA INVOICE</h2>
       </div>
-      <div class="d-flex justify-content-between mt-2" style="font-size:12px;margin-top: 45px;">
-        <p>Invoice Number: {{ order.invoice }}</p>
-        <p>Invoice Date: {{ order.order_date }}</p>
+
+      <!-- Invoice Info Row -->
+      <div class="d-flex justify-content-between" style="font-size: 12px;">
+        <p><strong>Invoice Number:</strong> {{ order.invoice }}</p>
+        <p><strong>Invoice Date:</strong> {{ order.order_date }}</p>
       </div>
-<hr>
-<br>
-      <!-- Bill to / Ship to -->
-      <table class="table table-bordered mt-3">
+
+      <hr style="border-top: 1px solid #000;">
+      <br>
+
+      <!-- BILL TO / SHIP TO -->
+      <table class="table table-modern mt-2">
         <thead>
           <tr>
             <th>Bill to</th>
@@ -153,14 +165,22 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{order.customer.name}}<br>{{order.customer.address}}<br>Phone: {{ order.customer.phone }}<br>GSTIN: {{ order.customer.gst }}</td>
-            <td>{{order.billing_address.address}}<br>Phone: {{ order.billing_address.phone }}</td>
+            <td>
+              <strong>{{ order.customer.name }}</strong><br>
+              {{ order.customer.address }}<br>
+              Phone: {{ order.customer.phone }}<br>
+              GSTIN: {{ order.customer.gst }}
+            </td>
+            <td>
+              {{ order.billing_address.address }}<br>
+              Phone: {{ order.billing_address.phone }}
+            </td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Items Table -->
-      <table class="invoice-table" style="width: 100%; border-collapse: collapse;">
+      <!-- ITEMS TABLE -->
+      <table class="invoice-table mt-3">
         <thead>
           <tr>
             <th rowspan="2">Product</th>
@@ -181,7 +201,7 @@
         <tbody>
           {% for item in items %}
           <tr>
-            <td>{{ item.product.name }}</td>
+            <td style="text-align:left;">{{ item.product.name }}</td>
             <td>{{ item.product.hsn_code }}</td>
             <td>{{ exclude_price|floatformat:2 }}</td>
             <td>{{ item.product.tax }}</td>
@@ -194,104 +214,91 @@
           </tr>
           {% endfor %}
         </tbody>
+
         <tfoot>
           <tr>
-            <td colspan="8" style="text-align: right; font-weight: bold;">TOTAL</td>
-            <td style="font-weight: bold;">{{ total_quantity }}</td>
-            <td style="font-weight: bold;">{{ totalamount|floatformat:2 }}</td>
+            <td colspan="8" style="text-align: right; font-weight: 700;">TOTAL</td>
+            <td style="font-weight: 700;">{{ total_quantity }}</td>
+            <td style="font-weight: 700;">{{ totalamount|floatformat:2 }}</td>
           </tr>
         </tfoot>
       </table>
 
-      <!-- Bank and Summary Tables wrapped in fixed layout table -->
-      <table class="table table-bordered mt-4" style="width: 100%; table-layout: fixed; font-size: 12px;">
+      <!-- BANK + SUMMARY -->
+      <table class="table table-modern mt-4" style="table-layout: fixed;">
         <tr>
-          <!-- Bank Details -->
+          <!-- BANK DETAILS -->
           <td style="width: 50%; vertical-align: top;">
-            <table class="table table-bordered mb-0" style="font-size: 12px;">
-              <tr><th colspan="2" style="text-align: center; font-size: 14px;">Bank Details</th></tr>
-              <tr><td><strong>A/C Name:</strong></td><td><strong>Michael export & import Pvt ltd</strong></td></tr>
-              <tr><td><strong>Bank A/C:</strong></td><td><strong>850120110000259</strong></td></tr>
-              <tr><td><strong>Bank Name:</strong></td><td><strong>BOI BEPO</strong></td></tr>
-              <tr><td><strong>Bank IFSC:</strong></td><td><strong>BKID0008501</strong></td></tr>
-              <tr><td><strong>Branch:</strong></td><td><strong>MG ROAD</strong></td></tr>
+            <table class="table table-modern mb-0">
+              <thead>
+                <tr><th colspan="2" class="text-center">Bank Details</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>A/C Name</strong></td><td>Michael export & import Pvt ltd</td></tr>
+                <tr><td><strong>Bank A/C</strong></td><td>850120110000259</td></tr>
+                <tr><td><strong>Bank Name</strong></td><td>BOI BEPO</td></tr>
+                <tr><td><strong>IFSC</strong></td><td>BKID0008501</td></tr>
+                <tr><td><strong>Branch</strong></td><td>MG ROAD</td></tr>
+              </tbody>
             </table>
           </td>
 
-          <!-- Financial Summary -->
+          <!-- SUMMARY -->
           <td style="width: 50%; vertical-align: top;">
-            <table class="table table-bordered mb-0" style="font-size: 12px;">
-              <tr><td><strong>Discounted Amount</strong></td><td class="text-end"><strong>{{ discounted_amount|floatformat:2 }}</strong></td></tr>
-              <tr><td><strong>Net Amount</strong></td><td class="text-end"><strong>{{ totalamount|floatformat:2 }}</strong></td></tr>
-              <!-- <tr><td><strong>Net Amount Before Tax</strong></td><td class="text-end"><strong>{{ net_amount_before_tax|floatformat:2 }}</strong></td></tr> -->
-              <tr><td><strong>Total Tax Amount</strong></td><td class="text-end"><strong>{{ total_tax_amount|floatformat:2 }}</strong></td></tr>
-              <tr><td><strong>Shipping Charge</strong></td><td class="text-end"><strong>{{ order.shipping_charge|floatformat:2 }}</strong></td></tr>
-              <tr><td><strong>Total Payable Amount</strong></td><td class="text-end"><strong>{{ grand_total|floatformat:2 }}</strong></td></tr>
+            <table class="table table-modern mb-0">
+              <tbody>
+                <tr><td><strong>Discounted Amount</strong></td><td class="text-end">{{ discounted_amount|floatformat:2 }}</td></tr>
+                <tr><td><strong>Net Amount</strong></td><td class="text-end">{{ totalamount|floatformat:2 }}</td></tr>
+                <tr><td><strong>Total Tax</strong></td><td class="text-end">{{ total_tax_amount|floatformat:2 }}</td></tr>
+                <tr><td><strong>Shipping Charge</strong></td><td class="text-end">{{ order.shipping_charge|floatformat:2 }}</td></tr>
+                <tr><td><strong>Total Payable</strong></td><td class="text-end"><strong>{{ grand_total|floatformat:2 }}</strong></td></tr>
+              </tbody>
             </table>
           </td>
         </tr>
       </table>
 
-      <!-- Footer -->
-      <div style="text-align: center; margin-top: 20px;">
+      <!-- FOOTER -->
+      <div class="text-center mt-3">
         <p><strong>Thank you!</strong></p>
-        <hr>
-        <p>Invoice was created on a computer and is valid without the signature and seal.</p>
+        <hr style="border-top: 1px dashed #000;">
+        <p>Invoice is computer-generated and does not require signature.</p>
       </div>
 
-      <!-- Download Button -->
+      <!-- DOWNLOAD BUTTON -->
       <div class="button-container">
         <button class="btn btn-primary no-print" id="downloadBtn" onclick="downloadInvoice()">Download Invoice</button>
       </div>
+
     </div>
   </div>
 
-  <!-- Script -->
-<script>
-function downloadInvoice() {
-  const downloadBtn = document.getElementById("downloadBtn");
-  downloadBtn.style.display = "none";
+  <script>
+    function downloadInvoice() {
+      const btn = document.getElementById("downloadBtn");
+      btn.style.display = "none";
 
-  const wrapper = document.querySelector(".invoice-wrapper");
-  const invoice = document.getElementById("invoice");
+      const wrapper = document.querySelector(".invoice-wrapper");
+      const invoice = document.getElementById("invoice");
 
-  // SAVE original CSS
-  const originalTransform = wrapper.style.transform;
-  const originalTransformOrigin = wrapper.style.transformOrigin;
+      const originalTransform = wrapper.style.transform;
+      wrapper.style.transform = "none";
 
-  // REMOVE scaling for mobile
-  wrapper.style.transform = "none";
-  wrapper.style.transformOrigin = "top left";
+      const a4Width = 1240;
+      const originalWidth = invoice.style.width;
+      invoice.style.width = a4Width + "px";
 
-  // FORCE A4 WIDTH before capture
-  const a4WidthPx = 1240;
-  const originalWidth = invoice.style.width;
-  invoice.style.width = a4WidthPx + "px";
+      html2canvas(invoice, { scale: 2 }).then(canvas => {
+        const pdf = new jspdf.jsPDF("p","mm","a4");
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
+        pdf.save("PerformaInvoice.pdf");
 
-  // CAPTURE
-  html2canvas(invoice, {
-    scale: 2,
-    useCORS: true,
-    scrollY: -window.scrollY
-  }).then(canvas => {
-
-    const imgData = canvas.toDataURL("image/png");
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF("p", "mm", "a4");
-
-    pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
-    pdf.save("PerformaInvoice.pdf");
-
-    // RESTORE original width & scaling
-    invoice.style.width = originalWidth;
-    wrapper.style.transform = originalTransform;
-    wrapper.style.transformOrigin = originalTransformOrigin;
-    downloadBtn.style.display = "block";
-  });
-}
-
-</script>
-
+        invoice.style.width = originalWidth;
+        wrapper.style.transform = originalTransform;
+        btn.style.display = "block";
+      });
+    }
+  </script>
 
 </body>
 </html>
