@@ -7,14 +7,21 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
+  <style>   
     body {
       font-size: 12px;
     }
-    .no-print { display: block; }
-    @media print {
-      .no-print { display: none; }
+
+    .no-print { 
+      display: block; 
     }
+
+    @media print {
+      .no-print { 
+        display: none; 
+      }
+    }
+
     .button-container {
       display: flex;
       justify-content: center;
@@ -23,87 +30,99 @@
       padding-bottom: 20px;
     }
 
-    .container { max-width: 100%; padding-left: 12px; padding-right: 12px; }
-    
+    .container { 
+      max-width: 100%; 
+      padding-left: 12px; 
+      padding-right: 12px; 
+    }
+
+    /* -------------------------------
+      FIXED A4 INVOICE – DO NOT SHRINK
+    -------------------------------- */
     #invoice {
-      width: 210mm;              /* for printed size */
-      /* For screen display we let it scale down on small screens */
-      max-width: 100%;
+      width: 210mm;         /* A4 width */
       margin: 0 auto;
       padding: 20px;
       border: 1px solid #000;
       background: #fff;
       box-sizing: border-box;
-      /* Remove clipping so html2canvas can capture full height */
-      /* max-height: 297mm; */
-      /* overflow: hidden; */
     }
-    .invoice-table { width: 100%; border-collapse: collapse; }
 
-/* Optional: improve on-screen readability */
-    @media screen {
-      #invoice { transform-origin: top center; }
+    .invoice-table { 
+      width: 100%; 
+      border-collapse: collapse; 
     }
 
     .company-details div {
       margin-bottom: 2px;
       line-height: 1.3;
     }
-    .invoice-table th, .invoice-table td {
+
+    .invoice-table th,
+    .invoice-table td {
       border: 1px solid #ccc;
       padding: 6px;
       text-align: center;
     }
+
     .invoice-table th {
       background-color: #f2f2f2;
     }
-    /* MOBILE RESPONSIVE FIX - WITHOUT CHANGING DESKTOP/LAPTOP DESIGN */
-@media (max-width: 768px) {
 
-  body {
-    padding: 0;
-    margin: 0;
-  }
+    /* Wrapper to keep scaling centered */
+    .invoice-wrapper {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      overflow-x: hidden;
+    }
 
-  #invoice {
-    width: 100% !important;          /* full mobile width */
-    padding: 10px !important;        /* reduce side padding */
-    border: none !important;         /* remove border on phone */
-  }
+    /* ---------------------------------------
+      MOBILE FIX – SCALE THE FULL A4 PROPERLY
+    ---------------------------------------- */
+    @media (max-width: 768px) {
 
-  .invoice-table th,
-  .invoice-table td {
-    font-size: 10px !important;      /* reduce table font size */
-    padding: 3px !important;
-    white-space: normal !important;  /* allow text wrapping */
-  }
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden !important;
+        background: #fff;
+        width: 100%;
+      }
 
-  table.table-bordered th,
-  table.table-bordered td {
-    font-size: 11px !important;
-    padding: 4px !important;
-  }
+      /* Apply scaling ONLY to wrapper */
+      .invoice-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        overflow-x: hidden;
+        margin: 0 !important;
+        padding: 0 !important;
+        transform: scale(0.48);      /* SCALE */
+        transform-origin: top center;
+      }
 
-  h2 {
-    font-size: 20px !important;
-  }
+      /* Keep invoice original A4 size */
+      #invoice {
+        width: 210mm;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid #000;
+        background: #fff;
+        box-sizing: border-box;
+      }
 
-  .button-container {
-    padding-bottom: 40px;
-  }
-
-  /* Prevent horizontal scrolling */
-  .container, .container-fluid {
-    padding-left: 5px !important;
-    padding-right: 5px !important;
-    overflow-x: hidden !important;
-  }
-}
+      /* Remove bootstrap spacing */
+      .container, .container-fluid {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+    }
 
   </style>
 </head>
 <body>
-  <div class="container mt-5">
+  <div class="invoice-wrapper">
     <div class="container-fluid" id="invoice">
       <!-- Invoice Heading -->
       <div class="text-center" style="font-size: 28px; margin-bottom: 25px;margin-top: 45px;">
