@@ -247,52 +247,51 @@
   </div>
 
   <!-- Script -->
-  <script>
+<script>
 function downloadInvoice() {
   const downloadBtn = document.getElementById("downloadBtn");
   downloadBtn.style.display = "none";
 
-  const invoice = document.querySelector("#invoice");
+  const invoice = document.getElementById("invoice");
 
-  // Detect mobile scaling
-  let scaleFactor = 1;
-  if (window.innerWidth <= 768) {
-    scaleFactor = 0.55;  // SAME as your mobile CSS transform
-  }
+  // A4 SIZE IN PIXELS AT 150 DPI
+  const a4WidthPx = 1240;   // 210mm → 1240px
+  const a4HeightPx = 1754;  // 297mm → 1754px
+
+  const originalWidth = invoice.style.width;
+
+  // FORCE INVOICE TO A4 SIZE BEFORE CAPTURE
+  invoice.style.width = a4WidthPx + "px";
 
   html2canvas(invoice, {
-    scale: 2 * scaleFactor,    // IMPORTANT
+    scale: 2,        // Higher clarity
     useCORS: true,
     scrollY: -window.scrollY
   }).then(canvas => {
+
+    const imgData = canvas.toDataURL("image/png");
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p", "mm", "a4");
 
-    const imgData = canvas.toDataURL("image/png");
+    // FIXED A4 SIZE ADD
+    pdf.addImage(
+      imgData,
+      "PNG",
+      0,
+      0,
+      210,   // A4 width in mm
+      297    // A4 height in mm
+    );
 
-    const pageWidth = 210;
-    const pageHeight = 297;
+    pdf.save("PerformaInvoice.pdf");
 
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    if (imgHeight > pageHeight) {
-      const ratio = pageHeight / imgHeight;
-      const scaledWidth = imgWidth * ratio;
-      const scaledHeight = imgHeight * ratio;
-
-      const marginX = (pageWidth - scaledWidth) / 2;
-
-      pdf.addImage(imgData, "PNG", marginX, 0, scaledWidth, scaledHeight);
-    } else {
-      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-    }
-
-    pdf.save("performainvoice.pdf");
+    // Restore original width after export
+    invoice.style.width = originalWidth;
     downloadBtn.style.display = "block";
   });
 }
 </script>
+
 
 </body>
 </html>
