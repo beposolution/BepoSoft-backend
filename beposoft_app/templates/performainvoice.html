@@ -85,37 +85,46 @@
       html, body {
         margin: 0;
         padding: 0;
-        overflow-x: hidden !important;
-        background: #fff;
         width: 100%;
+        background: #fff;
+        overflow-x: auto !important;  /* Allow horizontal scroll if needed */
       }
 
-      /* Apply scaling ONLY to wrapper */
+      /* Wrapper – center and scale */
       .invoice-wrapper {
         width: 100%;
         display: flex;
         justify-content: center;
-        overflow-x: hidden;
-        margin: 0 !important;
         padding: 0 !important;
-        transform: scale(0.48);      /* SCALE */
+        margin: 0 !important;
+
+        /* SCALE for mobile */
+        transform: scale(0.55);
         transform-origin: top center;
+
+        /* VERY IMPORTANT */
+        overflow: visible !important;  
       }
 
-      /* Keep invoice original A4 size */
+      /* Keep original A4 width */
       #invoice {
         width: 210mm;
-        margin: 0 auto;
+        margin: 0;
         padding: 20px;
         border: 1px solid #000;
         background: #fff;
         box-sizing: border-box;
       }
 
-      /* Remove bootstrap spacing */
+      /* Remove bootstrap spacing issues */
       .container, .container-fluid {
-        margin: 0 !important;
         padding: 0 !important;
+        margin: 0 !important;
+        width: 100%;
+      }
+
+      table {
+        font-size: 10px;   /* Minor font reduction for readability */
       }
     }
 
