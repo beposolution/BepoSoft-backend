@@ -73,10 +73,18 @@
     .page-break { page-break-after: always; }
 
    @media (max-width: 768px) {
-  #invoice {
-    width: 100%;
+    .invoice-wrapper {
+      transform: scale(0.55);
+      transform-origin: top center;
+      width: 100%;
+      overflow-x: hidden;
+    }
+
+    #invoice {
+      width: 210mm;    /* original size */
+    }
   }
-}
+
   </style>
 </head>
 
