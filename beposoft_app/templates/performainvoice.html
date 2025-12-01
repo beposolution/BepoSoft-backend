@@ -73,17 +73,18 @@
     .page-break { page-break-after: always; }
 
    @media (max-width: 768px) {
-    .invoice-wrapper {
-      transform: scale(0.55);
-      transform-origin: top center;
-      width: 100%;
-      overflow-x: hidden;
-    }
-
-    #invoice {
-      width: 210mm; 
-    }
+  .invoice-wrapper {
+    width: 100%;
+    overflow-x: auto !important;        /* allow scrolling instead of hiding */
+    -webkit-overflow-scrolling: touch;   /* smooth scroll on iOS */
   }
+
+  #invoice {
+    width: 900px !important;            /* responsive virtual width */
+    margin: 0 auto;
+    transform: none !important;         /* remove scaling */
+  }
+}
 
   </style>
 </head>
