@@ -72,15 +72,11 @@
     /* Page break after 30 rows */
     .page-break { page-break-after: always; }
 
-    /* Mobile scaling */
-    @media (max-width: 768px) {
-      .invoice-wrapper {
-        transform: scale(0.55);
-        transform-origin: top center;
-      }
-      #invoice { width: 210mm; }
-      table { font-size: 10px; }
-    }
+   @media (max-width: 768px) {
+  #invoice {
+    width: 100%;
+  }
+}
   </style>
 </head>
 
@@ -234,16 +230,43 @@ function downloadInvoice() {
   const btn = document.getElementById("downloadBtn");
   btn.style.display = "none";
 
+  const wrapper = document.querySelector(".invoice-wrapper");
   const invoice = document.getElementById("invoice");
-  const { jsPDF } = window.jspdf;
 
-  html2canvas(invoice, { scale: 2 }).then(canvas => {
-    const pdf = new jsPDF("p","mm","a4");
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
-    pdf.save("PerformaInvoice.pdf");
-    btn.style.display = "block";
+  // Save original styles
+  const originalTransform = wrapper.style.transform;
+  const originalWidth = invoice.style.width;
+
+  /* FIX FOR MOBILE SCREEN CAPTURE */
+  wrapper.style.transform = "none";                 // remove scaling
+  wrapper.style.webkitTransform = "none";           // iPhone fix
+  wrapper.style.msTransform = "none";
+  
+  invoice.style.width = "210mm";                    // force real A4 width
+  invoice.style.maxWidth = "210mm";
+
+  /* SCROLL FIX FOR IOS / ANDROID */
+  window.scrollTo(0, 0);
+
+  html2canvas(invoice, {
+      scale: 3,                 // higher dpi → sharper, no overlap
+      useCORS: true,
+      allowTaint: true
+  }).then(canvas => {
+
+      const pdf = new jspdf.jsPDF("p", "mm", "a4");
+      const imgData = canvas.toDataURL("image/png");
+
+      pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
+      pdf.save("PerformaInvoice.pdf");
+
+      // Restore original state
+      wrapper.style.transform = originalTransform;
+      invoice.style.width = originalWidth;
+      btn.style.display = "block";
   });
 }
+
 </script>
 
 </body>
