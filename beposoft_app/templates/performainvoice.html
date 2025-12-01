@@ -252,19 +252,25 @@ function downloadInvoice() {
   const downloadBtn = document.getElementById("downloadBtn");
   downloadBtn.style.display = "none";
 
+  const wrapper = document.querySelector(".invoice-wrapper");
   const invoice = document.getElementById("invoice");
 
-  // A4 SIZE IN PIXELS AT 150 DPI
-  const a4WidthPx = 1240;   // 210mm → 1240px
-  const a4HeightPx = 1754;  // 297mm → 1754px
+  // SAVE original CSS
+  const originalTransform = wrapper.style.transform;
+  const originalTransformOrigin = wrapper.style.transformOrigin;
 
+  // REMOVE scaling for mobile
+  wrapper.style.transform = "none";
+  wrapper.style.transformOrigin = "top left";
+
+  // FORCE A4 WIDTH before capture
+  const a4WidthPx = 1240;
   const originalWidth = invoice.style.width;
-
-  // FORCE INVOICE TO A4 SIZE BEFORE CAPTURE
   invoice.style.width = a4WidthPx + "px";
 
+  // CAPTURE
   html2canvas(invoice, {
-    scale: 2,        // Higher clarity
+    scale: 2,
     useCORS: true,
     scrollY: -window.scrollY
   }).then(canvas => {
@@ -273,23 +279,17 @@ function downloadInvoice() {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p", "mm", "a4");
 
-    // FIXED A4 SIZE ADD
-    pdf.addImage(
-      imgData,
-      "PNG",
-      0,
-      0,
-      210,   // A4 width in mm
-      297    // A4 height in mm
-    );
-
+    pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
     pdf.save("PerformaInvoice.pdf");
 
-    // Restore original width after export
+    // RESTORE original width & scaling
     invoice.style.width = originalWidth;
+    wrapper.style.transform = originalTransform;
+    wrapper.style.transformOrigin = originalTransformOrigin;
     downloadBtn.style.display = "block";
   });
 }
+
 </script>
 
 
