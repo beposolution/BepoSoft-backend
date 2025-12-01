@@ -8,7 +8,6 @@ import random
 from django.utils.timezone import now 
 from datetime import datetime
 from django.db import transaction
-# from beposoft_app.utils.racks import allocate_racks_for_quantity, RackAllocationError
 
 
 # Create your models here.
@@ -944,16 +943,6 @@ class OrderPaymentImages(models.Model):
     class Meta:
         db_table = "order_payment_images"
     
-
-def _auto_allocate_racks(product, quantity: int, release_allocations=None):
-    if quantity <= 0:
-        return []
-    locked_product = Products.objects.select_for_update().get(pk=product.pk)
-    return allocate_racks_for_quantity(
-        locked_product,
-        int(quantity),
-        release_allocations=release_allocations or [],
-    )
 
 
 class OrderItem(models.Model):
