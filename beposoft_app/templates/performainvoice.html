@@ -57,6 +57,49 @@
     .invoice-table th {
       background-color: #f2f2f2;
     }
+    /* MOBILE RESPONSIVE FIX - WITHOUT CHANGING DESKTOP/LAPTOP DESIGN */
+@media (max-width: 768px) {
+
+  body {
+    padding: 0;
+    margin: 0;
+  }
+
+  #invoice {
+    width: 100% !important;          /* full mobile width */
+    padding: 10px !important;        /* reduce side padding */
+    border: none !important;         /* remove border on phone */
+  }
+
+  .invoice-table th,
+  .invoice-table td {
+    font-size: 10px !important;      /* reduce table font size */
+    padding: 3px !important;
+    white-space: normal !important;  /* allow text wrapping */
+  }
+
+  table.table-bordered th,
+  table.table-bordered td {
+    font-size: 11px !important;
+    padding: 4px !important;
+  }
+
+  h2 {
+    font-size: 20px !important;
+  }
+
+  .button-container {
+    padding-bottom: 40px;
+  }
+
+  /* Prevent horizontal scrolling */
+  .container, .container-fluid {
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+    overflow-x: hidden !important;
+  }
+}
+
   </style>
 </head>
 <body>
