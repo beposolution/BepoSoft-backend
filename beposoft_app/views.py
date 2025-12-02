@@ -1993,66 +1993,80 @@ class FamilyOrderSummaryView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
+        
 class OrderDateReportView(BaseTokenView):
 
     def get(self, request, start_date, end_date):
         try:
-            # Filter orders between two dates
-            orders = Order.objects.filter(
-                order_date__gte=start_date,
-                order_date__lte=end_date
-            ).select_related("manage_staff", "family")
+            # Parse incoming dates
+            start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            end = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-            # Prepare order list
-            order_data = []
-            for o in orders:
-                order_data.append({
-                    "order_id": o.id,
-                    "staff_id": o.manage_staff.id if o.manage_staff else None,
-                    "staff_name": o.manage_staff.name if o.manage_staff else None,
-                    "amount": o.total_amount,
-                    "status": o.status,
-                    "family_id": o.family.id if o.family else None,
-                    "family_name": o.family.name if o.family else None,
-                    "order_date": o.order_date,
-                })
+            # Optional family_id from frontend
+            family_id = request.GET.get("family_id")
 
-            # SUMMARY CALCULATIONS
-            total_orders_count = orders.count()
-            total_orders_amount = orders.aggregate(total=Sum("total_amount"))["total"] or 0
+            # Prepare list manually since order_date is CharField
+            filtered_orders = []
 
-            not_rejected = orders.exclude(status="Invoice Rejected")
-            rejected = orders.filter(status="Invoice Rejected")
+            queryset = Order.objects.all().select_related("manage_staff", "family")
 
-            summary = {
-                "total_orders": {
-                    "count": total_orders_count,
-                    "amount": total_orders_amount
-                },
-                "non_rejected_orders": {
-                    "count": not_rejected.count(),
-                    "amount": not_rejected.aggregate(total=Sum("total_amount"))["total"] or 0
-                },
-                "rejected_orders": {
-                    "count": rejected.count(),
-                    "amount": rejected.aggregate(total=Sum("total_amount"))["total"] or 0
-                }
-            }
+            # Apply family filter if provided
+            if family_id:
+                queryset = queryset.filter(family_id=family_id)
+
+            # Iterate and filter by converting order_date string to date
+            for o in queryset:
+                try:
+                    order_dt = datetime.strptime(o.order_date, "%Y-%m-%d").date()
+                    if start <= order_dt <= end:
+                        filtered_orders.append(o)
+                except:
+                    continue
+
+            # ---- Summaries ----
+            total_amount = sum(o.total_amount for o in filtered_orders)
+
+            non_rejected = [o for o in filtered_orders if o.status != "Invoice Rejected"]
+            rejected = [o for o in filtered_orders if o.status == "Invoice Rejected"]
+
+            order_data = [{
+                "order_id": o.id,
+                "staff_id": o.manage_staff.id if o.manage_staff else None,
+                "staff_name": o.manage_staff.name if o.manage_staff else None,
+                "amount": o.total_amount,
+                "status": o.status,
+                "family_id": o.family.id if o.family else None,
+                "family_name": o.family.name if o.family else None,
+                "order_date": o.order_date,
+            } for o in filtered_orders]
 
             return Response({
                 "status": True,
                 "start_date": start_date,
                 "end_date": end_date,
-                "summary": summary,
-                "orders": order_data
-            }, status=status.HTTP_200_OK)
+                "family_id": family_id,
+                "summary": {
+                    "total_orders": {
+                        "count": len(filtered_orders),
+                        "amount": total_amount,
+                    },
+                    "non_rejected_orders": {
+                        "count": len(non_rejected),
+                        "amount": sum(o.total_amount for o in non_rejected),
+                    },
+                    "rejected_orders": {
+                        "count": len(rejected),
+                        "amount": sum(o.total_amount for o in rejected),
+                    },
+                },
+                "orders": order_data,
+            })
 
         except Exception as e:
             return Response({
                 "status": False,
-                "message": str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+                "error": str(e),
+            }, status=400)
         
 
 class ParcelServiceGroupedView(BaseTokenView):
