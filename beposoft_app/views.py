@@ -1619,12 +1619,27 @@ class CreateOrder(BaseTokenView):
                     product_data[product_id]["discount"] += Decimal(item.discount or 0)
 
             # Lock all products in one go
-            products = Products.objects.select_for_update().filter(pk__in=product_ids)
-            products_map = {p.pk: p for p in products}
+            # products = Products.objects.select_for_update().filter(pk__in=product_ids)
+            # products_map = {p.pk: p for p in products}
 
             # Create order items and update locked_stock once per product
+            # for product_id, data in product_data.items():
+            #     OrderItem.objects.create(
+            #         order=order,
+            #         product=data["product"],
+            #         quantity=int(data["quantity"]),
+            #         discount=data["discount"],
+            #         tax=data["tax"],
+            #         rate=data["rate"],
+            #         description=data["description"],
+                    
+            #     )
+            #     product = products_map[product_id]
+
+            #     old_locked_stock = product.locked_stock or 0
+            #     product.locked_stock = old_locked_stock + data["quantity"]
+            #     product.save()
             for product_id, data in product_data.items():
-                # Create order item
                 OrderItem.objects.create(
                     order=order,
                     product=data["product"],
@@ -1633,13 +1648,8 @@ class CreateOrder(BaseTokenView):
                     tax=data["tax"],
                     rate=data["rate"],
                     description=data["description"],
-                    
                 )
-                product = products_map[product_id]
 
-                old_locked_stock = product.locked_stock or 0
-                product.locked_stock = old_locked_stock + data["quantity"]
-                product.save()
 
             # Clear cart after order creation
             cart_items.delete()
