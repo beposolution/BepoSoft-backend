@@ -1993,7 +1993,7 @@ class FamilyOrderSummaryView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        
+
 class OrderDateReportView(BaseTokenView):
 
     def get(self, request, start_date, end_date):
@@ -3225,7 +3225,14 @@ class CustomerOrderLedgerdata(BaseTokenView):
             customer = get_object_or_404(Customers, pk=pk)
 
             # Fetch order ledger
-            ledger = Order.objects.filter(customer=customer.pk).order_by("order_date")
+            # ledger = Order.objects.filter(customer=customer.pk).order_by("order_date")
+            ledger = (
+                Order.objects
+                .filter(customer=customer.pk)
+                .exclude(id__in=GRVModel.objects.filter(remark='cod_return').values('order_id'))
+                .order_by("order_date")
+            )
+
             ledger_serializer = LedgerSerializers(ledger, many=True)
 
             # Fetch advance receipts for the customer (if related to customer)
