@@ -90,6 +90,7 @@ urlpatterns = [
     path('api/gst/orders/', GSTOrderListView.as_view(), name='gst'),
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
+    path("api/orders/date/report/<str:start_date>/<str:end_date>/", OrderDateReportView.as_view(), name="order-date-report"),
     path('api/orders/parcel/service/data/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
     path('api/order-item/create/', OrderItemCreateView.as_view(), name='order-item-create'),

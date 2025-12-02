@@ -1994,6 +1994,67 @@ class FamilyOrderSummaryView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+class OrderDateReportView(BaseTokenView):
+
+    def get(self, request, start_date, end_date):
+        try:
+            # Filter orders between two dates
+            orders = Order.objects.filter(
+                order_date__gte=start_date,
+                order_date__lte=end_date
+            ).select_related("manage_staff", "family")
+
+            # Prepare order list
+            order_data = []
+            for o in orders:
+                order_data.append({
+                    "order_id": o.id,
+                    "staff_id": o.manage_staff.id if o.manage_staff else None,
+                    "staff_name": o.manage_staff.name if o.manage_staff else None,
+                    "amount": o.total_amount,
+                    "status": o.status,
+                    "family_id": o.family.id if o.family else None,
+                    "family_name": o.family.name if o.family else None,
+                    "order_date": o.order_date,
+                })
+
+            # SUMMARY CALCULATIONS
+            total_orders_count = orders.count()
+            total_orders_amount = orders.aggregate(total=Sum("total_amount"))["total"] or 0
+
+            not_rejected = orders.exclude(status="Invoice Rejected")
+            rejected = orders.filter(status="Invoice Rejected")
+
+            summary = {
+                "total_orders": {
+                    "count": total_orders_count,
+                    "amount": total_orders_amount
+                },
+                "non_rejected_orders": {
+                    "count": not_rejected.count(),
+                    "amount": not_rejected.aggregate(total=Sum("total_amount"))["total"] or 0
+                },
+                "rejected_orders": {
+                    "count": rejected.count(),
+                    "amount": rejected.aggregate(total=Sum("total_amount"))["total"] or 0
+                }
+            }
+
+            return Response({
+                "status": True,
+                "start_date": start_date,
+                "end_date": end_date,
+                "summary": summary,
+                "orders": order_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": False,
+                "message": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+
 class ParcelServiceGroupedView(BaseTokenView):
     """
     GET /api/warehouse/parcel-service-grouped/?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...&message_status=...
