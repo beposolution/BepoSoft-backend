@@ -8,6 +8,97 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
+    <script>
+  // Convert number to words using Indian numbering system
+      function numberToWordsIndia(num) {
+        const ones = ['', 'one','two','three','four','five','six','seven','eight','nine',
+                      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen',
+                      'seventeen','eighteen','nineteen'];
+        const tens = ['', '', 'twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+
+        function twoDigit(n) {
+          if (n < 20) return ones[n];
+          const t = Math.floor(n / 10);
+          const o = n % 10;
+          return tens[t] + (o ? ' ' + ones[o] : '');
+        }
+
+        function threeDigit(n) {
+          const h = Math.floor(n / 100);
+          const rem = n % 100;
+          let str = '';
+          if (h) str += ones[h] + ' hundred';
+          if (rem) str += (str ? ' ' : '') + twoDigit(rem);
+          return str;
+        }
+
+        if (num === 0) return 'zero';
+
+        const parts = [];
+        const crore = Math.floor(num / 10000000);
+        if (crore) { parts.push(threeDigit(crore) + ' crore'); }
+        num = num % 10000000;
+
+        const lakh = Math.floor(num / 100000);
+        if (lakh) { parts.push(threeDigit(lakh) + ' lakh'); }
+        num = num % 100000;
+
+        const thousand = Math.floor(num / 1000);
+        if (thousand) { parts.push(threeDigit(thousand) + ' thousand'); }
+        num = num % 1000;
+
+        if (num) { parts.push(threeDigit(num)); }
+
+        return parts.join(' ').replace(/\s+/g,' ').trim();
+      }
+
+      function amountToWords(amount) {
+        const n = Number(String(amount).replace(/,/g, '').trim());
+        if (!isFinite(n)) return '';
+
+        const intPart = Math.floor(Math.abs(n));
+        const decPart = Math.round((Math.abs(n) - intPart) * 100);
+
+        let words = numberToWordsIndia(intPart) + (intPart === 1 ? ' rupee' : ' rupees');
+        if (decPart) {
+          words += ' and ' + numberToWordsIndia(decPart) + (decPart === 1 ? ' paise' : ' paise');
+        }
+        words += ' only';
+        if (n < 0) words = 'minus ' + words;
+        return words;
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        // Read numeric total from #grand-total (recommended)
+        const grandTotalElement = document.getElementById('grand-total');
+
+        let totalVal = null;
+        if (grandTotalElement) {
+          totalVal = grandTotalElement.textContent.replace(/[^\d.,-]/g, '').trim();
+        } else {
+          // fallback: find the label cell and its sibling
+          const labels = Array.from(document.querySelectorAll('td')).filter(td => /Total Payable Amount/i.test(td.textContent));
+          if (labels.length) {
+            const valueCell = labels[0].nextElementSibling;
+            if (valueCell) {
+              totalVal = valueCell.textContent.replace(/[^\d.,-]/g, '').trim();
+            }
+          }
+        }
+
+        if (!totalVal) return;
+
+        const words = amountToWords(totalVal);
+
+        const outputCell = document.getElementById('payable-in-words');
+        if (outputCell) {
+          outputCell.textContent = words.toUpperCase();
+          const row = document.getElementById('payable-words-row');
+          if (row) row.style.display = ''; // ensure visible
+        }
+      });
+    </script>
+
     <style>
       body {
         font-size: 12px;
@@ -15,6 +106,14 @@
 
       .no-print {
         display: block;
+      }
+
+      #payable-in-words {
+        font-weight: bold !important;
+        text-transform: uppercase;
+        white-space: normal;
+        word-break: break-word;
+        text-align: right;
       }
 
       @media print {
@@ -125,7 +224,7 @@
                 {{ order.customer.phone }}, {{ order.customer.alt_phone }}<br />GSTIN: {{ order.customer.gst }}
               </td>
               <td>
-                {{order.billing_address.address}}<br />Phone:
+                {{order.billing_address.name}}, <br/>{{order.billing_address.address}}<br />Phone:
                 {{order.billing_address.phone }} , {{order.billing_address.alt_phone }}
               </td>
             </tr>
@@ -224,32 +323,38 @@
                 <tr>
                   <td><strong>Discounted Amount</strong></td>
                   <td class="text-end">
-                    <strong>{{ discounted_amount|floatformat:2 }}</strong>
+                    <strong>₹{{ discounted_amount|floatformat:2 }}</strong>
                   </td>
                 </tr>
                 <!-- <tr><td><strong>Net Amount</strong></td><td class="text-end"><strong>{{ totalamount|floatformat:2 }}</strong></td></tr> -->
                 <tr>
                   <td><strong>Net Amount Before Tax</strong></td>
                   <td class="text-end">
-                    <strong>{{ net_amount_before_tax|floatformat:2 }}</strong>
+                    <strong>₹{{ net_amount_before_tax|floatformat:2 }}</strong>
                   </td>
                 </tr>
                 <tr>
                   <td><strong>Total Tax Amount</strong></td>
                   <td class="text-end">
-                    <strong>{{ total_tax_amount|floatformat:2 }}</strong>
+                    <strong>₹{{ total_tax_amount|floatformat:2 }}</strong>
                   </td>
                 </tr>
                 <tr>
                   <td><strong>Shipping Charge</strong></td>
                   <td class="text-end">
-                    <strong>{{ order.shipping_charge|floatformat:2 }}</strong>
+                    <strong>₹{{ order.shipping_charge|floatformat:2 }}</strong>
                   </td>
                 </tr>
                 <tr>
                   <td><strong>Total Payable Amount</strong></td>
-                  <td class="text-end">
-                    <strong>{{ grand_total|floatformat:2 }}</strong>
+                  <td id="grand-total" class="text-end">
+                    <strong>₹{{ grand_total|floatformat:2 }}</strong>
+                  </td>
+                </tr>
+                <tr id="payable-words-row">
+                  <td><strong>Total Payable Amount (in words)</strong></td>
+                  <td id="payable-in-words" class="text-end">
+                    <!-- JS is in here -->
                   </td>
                 </tr>
               </table>
