@@ -7104,16 +7104,16 @@ class CallReportSummaryView(BaseTokenView):
             # Today
             today = date.today()
 
-            # PRODUCTIVE uses `date`
-            today_productive_qs = CallReport.objects.filter(date=today, status='Productive')
+            # PRODUCTIVE uses `call_datetime`
+            today_productive_qs = CallReport.objects.filter(call_datetime=today, status='Productive')
             today_productive = today_productive_qs.count()
 
-            # ACTIVE uses `created_at__date`
-            today_active_qs = CallReport.objects.filter(created_at__date=today, status='Active')
+            # ACTIVE uses `call_datetime__date`
+            today_active_qs = CallReport.objects.filter(call_datetime__date=today, status='Active')
             today_active = today_active_qs.count()
 
-            # INACTIVE - use created_at__date for "today" counts (keeps consistency with Active)
-            today_inactive_qs = CallReport.objects.filter(created_at__date=today, status__iexact='inactive')
+            # INACTIVE - use call_datetime__date for "today" counts (keeps consistency with Active)
+            today_inactive_qs = CallReport.objects.filter(call_datetime__date=today, status__iexact='inactive')
             today_inactive = today_inactive_qs.count()
 
             # TOTAL for today: combine active + productive + inactive (as counts)
@@ -7123,7 +7123,7 @@ class CallReportSummaryView(BaseTokenView):
             # (If you want amounts from active as well, change accordingly; keeping same approach as earlier)
             today_amount = today_productive_qs.aggregate(total=Sum('amount'))['total'] or 0
 
-            # Duration for today: sum durations from both active (created_at) and productive (date)
+            # Duration for today: sum durations from both active (call_datetime) and productive (date)
             today_seconds = 0
             for report in list(today_active_qs) + list(today_productive_qs):
                 dur = (report.duration or "").lower().strip()
@@ -7141,16 +7141,16 @@ class CallReportSummaryView(BaseTokenView):
                     continue
             today_duration = str(timedelta(seconds=today_seconds))
 
-            # Current month (productive uses `date`, active uses created_at)
+            # Current month (productive uses `call_datetime`, active uses created_at)
             month_start = today.replace(day=1)
 
-            month_productive_qs = CallReport.objects.filter(date__gte=month_start, date__lte=today, status='Productive')
+            month_productive_qs = CallReport.objects.filter(call_datetime__gte=month_start, call_datetime__lte=today, status='Productive')
             month_productive = month_productive_qs.count()
 
-            month_active_qs = CallReport.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today, status='Active')
+            month_active_qs = CallReport.objects.filter(call_datetime__date__gte=month_start, call_datetime__date__lte=today, status='Active')
             month_active = month_active_qs.count()
 
-            month_inactive_qs = CallReport.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today, status__iexact='inactive')
+            month_inactive_qs = CallReport.objects.filter(call_datetime__date__gte=month_start, call_datetime__date__lte=today, status__iexact='inactive')
             month_inactive = month_inactive_qs.count()
 
             month_total = month_active + month_productive + month_inactive
@@ -7173,16 +7173,16 @@ class CallReportSummaryView(BaseTokenView):
                     continue
             month_duration = str(timedelta(seconds=month_seconds))
 
-            # Last 30 days (productive uses `date`, active uses created_at)
+            # Last 30 days (productive uses `call_datetime`, active uses call_datetime)
             last_30_days = today - timedelta(days=30)
 
-            last30_productive_qs = CallReport.objects.filter(date__gte=last_30_days, date__lte=today, status='Productive')
+            last30_productive_qs = CallReport.objects.filter(call_datetime__gte=last_30_days, call_datetime__lte=today, status='Productive')
             last30_productive = last30_productive_qs.count()
 
-            last30_active_qs = CallReport.objects.filter(created_at__date__gte=last_30_days, created_at__date__lte=today, status='Active')
+            last30_active_qs = CallReport.objects.filter(call_datetime__date__gte=last_30_days, call_datetime__date__lte=today, status='Active')
             last30_active = last30_active_qs.count()
 
-            last30_inactive_qs = CallReport.objects.filter(created_at__date__gte=last_30_days, created_at__date__lte=today, status__iexact='inactive')
+            last30_inactive_qs = CallReport.objects.filter(call_datetime__date__gte=last_30_days, call_datetime__date__lte=today, status__iexact='inactive')
             last30_inactive = last30_inactive_qs.count()
 
             last30_total = last30_active + last30_productive + last30_inactive
