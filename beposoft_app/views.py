@@ -3685,33 +3685,28 @@ class WarehouseSummaryView(APIView):
             else:
                 base_qs = Warehousedata.objects.all()
 
-            # === DATE RANGES ===
+            # === DATE HANDLING ===
             today = now().date()
             first_day_month = today.replace(day=1)
             last_30_days = today - timedelta(days=30)
 
-            # === FILTERED ===
             qs_today = base_qs.filter(shipped_date=today)
             qs_month = base_qs.filter(shipped_date__gte=first_day_month)
             qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
 
-            # === SUMMARY ===
+            # === SUMMARY BLOCK ===
             def get_summary(qs):
-                total_weight = float(sum(qs.values_list("actual_weight", flat=True)))
-                total_amount = float(sum(qs.values_list("parcel_amount", flat=True)))
+                total_weight_g = float(sum(qs.values_list("actual_weight", flat=True)))
+                total_amt = float(sum(qs.values_list("parcel_amount", flat=True)))
 
-                # convert g → kg
-                total_weight_kg = total_weight / 1000 if total_weight else 0
-
-                avg = 0
-                if total_weight_kg > 0:
-                    avg = total_amount / total_weight_kg
+                total_weight_kg = total_weight_g / 1000 if total_weight_g else 0
+                avg = total_amt / total_weight_kg if total_weight_kg > 0 else 0
 
                 return {
                     "total_boxes": qs.count(),
-                    "total_actual_weight_g": total_weight,
+                    "total_actual_weight_g": total_weight_g,
                     "total_actual_weight_kg": total_weight_kg,
-                    "total_parcel_amount": total_amount,
+                    "total_parcel_amount": total_amt,
                     "average": avg
                 }
 
@@ -3719,44 +3714,31 @@ class WarehouseSummaryView(APIView):
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # === GROUPED BY PARCEL SERVICE ===
-            grouped_data = {}
+            # === GROUPED PARCEL SERVICE SUMMARY ===
+            grouped_summary = {}
 
             for w in base_qs:
                 ps_name = w.parcel_service.name if w.parcel_service else "Others"
 
-                if ps_name not in grouped_data:
-                    grouped_data[ps_name] = {
+                if ps_name not in grouped_summary:
+                    grouped_summary[ps_name] = {
                         "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
-                        "items": []
                     }
 
-                grouped_data[ps_name]["total_actual_weight_g"] += float(w.actual_weight or 0)
-                grouped_data[ps_name]["total_parcel_amount"] += float(w.parcel_amount or 0)
+                grouped_summary[ps_name]["total_actual_weight_g"] += float(w.actual_weight or 0)
+                grouped_summary[ps_name]["total_parcel_amount"] += float(w.parcel_amount or 0)
 
-                grouped_data[ps_name]["items"].append({
-                    "length": w.length,
-                    "breadth": w.breadth,
-                    "height": w.height,
-                    "actual_weight": float(w.actual_weight or 0),
-                    "parcel_amount": float(w.parcel_amount or 0),
-                })
+            # === ADD KG + AVERAGE FOR EACH PARCEL SERVICE ===
+            for ps_name, data in grouped_summary.items():
+                total_g = data["total_actual_weight_g"]
+                total_amt = data["total_parcel_amount"]
 
-            # === ADD AVERAGE FOR EACH PARCEL SERVICE ===
-            for ps_name, values in grouped_data.items():
-                total_weight_g = values["total_actual_weight_g"]
-                total_amount = values["total_parcel_amount"]
+                total_kg = total_g / 1000 if total_g else 0
+                average = total_amt / total_kg if total_kg > 0 else 0
 
-                # convert to kg
-                total_weight_kg = total_weight_g / 1000 if total_weight_g else 0
-
-                average = 0
-                if total_weight_kg > 0:
-                    average = total_amount / total_weight_kg
-
-                grouped_data[ps_name]["total_actual_weight_kg"] = total_weight_kg
-                grouped_data[ps_name]["average"] = average
+                data["total_actual_weight_kg"] = total_kg
+                data["average"] = average
 
             return Response(
                 {
@@ -3764,16 +3746,15 @@ class WarehouseSummaryView(APIView):
                     "today_summary": today_summary,
                     "current_month_summary": current_month_summary,
                     "last_30_days_summary": last_30_days_summary,
-                    "data": grouped_data
+                    "data": grouped_summary
                 },
                 status=status.HTTP_200_OK
             )
 
         except Exception as e:
-            return Response(
-                {"success": False, "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )         
+            return Response({"success": False, "error": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                 
 
 from django.shortcuts import get_object_or_404
 
