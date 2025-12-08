@@ -3685,7 +3685,6 @@ class WarehouseSummaryView(APIView):
             else:
                 base_qs = Warehousedata.objects.all()
 
-            # === DATE HANDLING ===
             today = now().date()
             first_day_month = today.replace(day=1)
             last_30_days = today - timedelta(days=30)
@@ -3694,7 +3693,7 @@ class WarehouseSummaryView(APIView):
             qs_month = base_qs.filter(shipped_date__gte=first_day_month)
             qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
 
-            # === SAFE PARSE HELPERS ===
+            # Safe helpers
             def safe_float(value):
                 try:
                     if value in [None, "", "null"]:
@@ -3711,7 +3710,6 @@ class WarehouseSummaryView(APIView):
                     return 0.0
                 return l * b * h
 
-            # === SUMMARY BLOCK (today, month, last 30 days) ===
             def get_summary(qs):
                 total_weight_g = float(sum(qs.values_list("actual_weight", flat=True)))
                 total_amt = float(sum(qs.values_list("parcel_amount", flat=True)))
@@ -3736,7 +3734,9 @@ class WarehouseSummaryView(APIView):
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # === PARCEL SERVICE-WISE FUNCTION ===
+            # ================================
+            # UPDATED SERVICE-WISE SUMMARY
+            # ================================
             def get_service_summary(qs):
                 result = {}
                 for w in qs:
@@ -3744,18 +3744,20 @@ class WarehouseSummaryView(APIView):
 
                     if name not in result:
                         result[name] = {
+                            "total_boxes": 0,
                             "total_actual_weight_g": 0.0,
                             "total_parcel_amount": 0.0,
                             "total_volume": 0.0,
                             "total_weight_field": 0.0,
                         }
 
+                    result[name]["total_boxes"] += 1
                     result[name]["total_actual_weight_g"] += float(w.actual_weight or 0)
                     result[name]["total_parcel_amount"] += float(w.parcel_amount or 0)
                     result[name]["total_volume"] += get_volume(w)
                     result[name]["total_weight_field"] += safe_float(w.weight)
 
-                # Add KG & Average
+                # Add KG & Averages
                 for ps, data in result.items():
                     total_g = data["total_actual_weight_g"]
                     total_amt = data["total_parcel_amount"]
@@ -3768,18 +3770,17 @@ class WarehouseSummaryView(APIView):
 
                 return result
 
-            # Build 3 levels of service-wise summary
             today_services = get_service_summary(qs_today)
             month_services = get_service_summary(qs_month)
             days30_services = get_service_summary(qs_30_days)
 
-            # Combine keys
             all_services = {}
             all_keys = set(today_services.keys()) | set(month_services.keys()) | set(days30_services.keys())
 
             for key in all_keys:
                 all_services[key] = {
                     "today": today_services.get(key, {
+                        "total_boxes": 0,
                         "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
                         "total_volume": 0.0,
@@ -3788,6 +3789,7 @@ class WarehouseSummaryView(APIView):
                         "average": 0.0
                     }),
                     "current_month": month_services.get(key, {
+                        "total_boxes": 0,
                         "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
                         "total_volume": 0.0,
@@ -3796,6 +3798,7 @@ class WarehouseSummaryView(APIView):
                         "average": 0.0
                     }),
                     "last_30_days": days30_services.get(key, {
+                        "total_boxes": 0,
                         "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
                         "total_volume": 0.0,
@@ -3805,7 +3808,6 @@ class WarehouseSummaryView(APIView):
                     })
                 }
 
-            # === FINAL RESPONSE ===
             return Response(
                 {
                     "success": True,
@@ -3818,8 +3820,7 @@ class WarehouseSummaryView(APIView):
             )
 
         except Exception as e:
-            return Response({"success": False, "error": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"success": False, "error": str(e)}, status=500)
 
 
 
