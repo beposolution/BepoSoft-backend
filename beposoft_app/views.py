@@ -33,6 +33,7 @@ from bepocart.models import *
 from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from django.db.models.functions import Cast, NullIf
 
 logger = logging.getLogger(__name__)
 
@@ -3671,6 +3672,63 @@ class WarehouseListView(BaseTokenView):
             return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class WarehouseSummaryView(APIView):
+
+    def get(self, request):
+        try:
+            order_id = request.GET.get('order', None)
+
+            # Base queryset
+            if order_id:
+                base_qs = Warehousedata.objects.filter(order__id=order_id)
+            else:
+                base_qs = Warehousedata.objects.all()
+
+            # === DATE RANGES ===
+            today = now().date()
+            first_day_month = today.replace(day=1)
+            last_30_days = today - timedelta(days=30)
+
+            # === FILTERED QUERIES ===
+            qs_today = base_qs.filter(shipped_date=today)
+            qs_month = base_qs.filter(shipped_date__gte=first_day_month)
+            qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
+
+            # === SUMMARY FUNCTION ===
+            def get_summary(qs):
+                return {
+                    "total_boxes": qs.count(),
+                    "total_actual_weight": float(sum(qs.values_list("actual_weight", flat=True))),
+                    "total_parcel_amount": float(sum(qs.values_list("parcel_amount", flat=True))),
+                }
+
+            # === SUMMARY VALUES ===
+            today_summary = get_summary(qs_today)
+            current_month_summary = get_summary(qs_month)
+            last_30_days_summary = get_summary(qs_30_days)
+
+            # === SERIALIZED FULL DATA ===
+            serializer = WarehouseSummarySerializer(base_qs, many=True)
+
+            return Response(
+                {
+                    "success": True,
+                    "today_summary": today_summary,
+                    "current_month_summary": current_month_summary,
+                    "last_30_days_summary": last_30_days_summary,
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+            
 
 from django.shortcuts import get_object_or_404
 
