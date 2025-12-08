@@ -3694,10 +3694,33 @@ class WarehouseSummaryView(APIView):
             qs_month = base_qs.filter(shipped_date__gte=first_day_month)
             qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
 
+            # === SAFE PARSE HELPERS ===
+            def safe_float(value):
+                try:
+                    if value in [None, "", "null"]:
+                        return 0.0
+                    return float(value)
+                except:
+                    return 0.0
+
+            def get_volume(obj):
+                l = safe_float(obj.length)
+                b = safe_float(obj.breadth)
+                h = safe_float(obj.height)
+                if l == 0 or b == 0 or h == 0:
+                    return 0.0
+                return l * b * h
+
             # === SUMMARY BLOCK ===
             def get_summary(qs):
                 total_weight_g = float(sum(qs.values_list("actual_weight", flat=True)))
                 total_amt = float(sum(qs.values_list("parcel_amount", flat=True)))
+
+                # total volume
+                total_volume = sum(get_volume(w) for w in qs)
+
+                # total weight from weight field (string)
+                total_weight_field = sum(safe_float(w.weight) for w in qs)
 
                 total_weight_kg = total_weight_g / 1000 if total_weight_g else 0
                 avg = total_amt / total_weight_kg if total_weight_kg > 0 else 0
@@ -3707,14 +3730,16 @@ class WarehouseSummaryView(APIView):
                     "total_actual_weight_g": total_weight_g,
                     "total_actual_weight_kg": total_weight_kg,
                     "total_parcel_amount": total_amt,
-                    "average": avg
+                    "average": avg,
+                    "total_volume": total_volume,
+                    "total_weight_field": total_weight_field
                 }
 
             today_summary = get_summary(qs_today)
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # === GROUPED PARCEL SERVICE SUMMARY ===
+            # === GROUPED PARCEL SERVICE SUMMARY (ADD VOLUME & WEIGHT FIELD) ===
             grouped_summary = {}
 
             for w in base_qs:
@@ -3724,10 +3749,16 @@ class WarehouseSummaryView(APIView):
                     grouped_summary[ps_name] = {
                         "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
+                        "total_volume": 0.0,
+                        "total_weight_field": 0.0,
                     }
 
                 grouped_summary[ps_name]["total_actual_weight_g"] += float(w.actual_weight or 0)
                 grouped_summary[ps_name]["total_parcel_amount"] += float(w.parcel_amount or 0)
+
+                # NEW ADDITIONS
+                grouped_summary[ps_name]["total_volume"] += get_volume(w)
+                grouped_summary[ps_name]["total_weight_field"] += safe_float(w.weight)
 
             # === ADD KG + AVERAGE FOR EACH PARCEL SERVICE ===
             for ps_name, data in grouped_summary.items():
@@ -3754,7 +3785,6 @@ class WarehouseSummaryView(APIView):
         except Exception as e:
             return Response({"success": False, "error": str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 class OrderStatusCount(APIView):

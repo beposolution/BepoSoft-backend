@@ -802,21 +802,6 @@ class  WarehousedataSerializer(serializers.ModelSerializer):
         return data
         
 
-class WarehouseSummarySerializer(serializers.ModelSerializer):
-    parcel_service = serializers.CharField(source='parcel_service.name', read_only=True)
-
-    class Meta:
-        model = Warehousedata
-        fields = [
-            'length',
-            'breadth',
-            'height',
-            'parcel_service',
-            'actual_weight',
-            'parcel_amount',
-        ]
-
- 
         
 class WarehouseUpdateSerializers(serializers.ModelSerializer):
     class Meta :
