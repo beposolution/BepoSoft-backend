@@ -3680,7 +3680,6 @@ class WarehouseSummaryView(APIView):
         try:
             order_id = request.GET.get('order', None)
 
-            # Base queryset
             if order_id:
                 base_qs = Warehousedata.objects.filter(order__id=order_id)
             else:
@@ -3691,25 +3690,36 @@ class WarehouseSummaryView(APIView):
             first_day_month = today.replace(day=1)
             last_30_days = today - timedelta(days=30)
 
-            # === FILTERED QUERIES ===
+            # === FILTERED ===
             qs_today = base_qs.filter(shipped_date=today)
             qs_month = base_qs.filter(shipped_date__gte=first_day_month)
             qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
 
-            # === SUMMARY FUNCTION ===
+            # === SUMMARY ===
             def get_summary(qs):
+                total_weight = float(sum(qs.values_list("actual_weight", flat=True)))
+                total_amount = float(sum(qs.values_list("parcel_amount", flat=True)))
+
+                # convert g → kg
+                total_weight_kg = total_weight / 1000 if total_weight else 0
+
+                avg = 0
+                if total_weight_kg > 0:
+                    avg = total_amount / total_weight_kg
+
                 return {
                     "total_boxes": qs.count(),
-                    "total_actual_weight": float(sum(qs.values_list("actual_weight", flat=True))),
-                    "total_parcel_amount": float(sum(qs.values_list("parcel_amount", flat=True))),
+                    "total_actual_weight_g": total_weight,
+                    "total_actual_weight_kg": total_weight_kg,
+                    "total_parcel_amount": total_amount,
+                    "average": avg
                 }
 
-            # === SUMMARY VALUES ===
             today_summary = get_summary(qs_today)
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # === PARCEL SERVICE GROUPING ===
+            # === GROUPED BY PARCEL SERVICE ===
             grouped_data = {}
 
             for w in base_qs:
@@ -3717,12 +3727,12 @@ class WarehouseSummaryView(APIView):
 
                 if ps_name not in grouped_data:
                     grouped_data[ps_name] = {
-                        "total_actual_weight": 0.0,
+                        "total_actual_weight_g": 0.0,
                         "total_parcel_amount": 0.0,
                         "items": []
                     }
 
-                grouped_data[ps_name]["total_actual_weight"] += float(w.actual_weight or 0)
+                grouped_data[ps_name]["total_actual_weight_g"] += float(w.actual_weight or 0)
                 grouped_data[ps_name]["total_parcel_amount"] += float(w.parcel_amount or 0)
 
                 grouped_data[ps_name]["items"].append({
@@ -3732,6 +3742,21 @@ class WarehouseSummaryView(APIView):
                     "actual_weight": float(w.actual_weight or 0),
                     "parcel_amount": float(w.parcel_amount or 0),
                 })
+
+            # === ADD AVERAGE FOR EACH PARCEL SERVICE ===
+            for ps_name, values in grouped_data.items():
+                total_weight_g = values["total_actual_weight_g"]
+                total_amount = values["total_parcel_amount"]
+
+                # convert to kg
+                total_weight_kg = total_weight_g / 1000 if total_weight_g else 0
+
+                average = 0
+                if total_weight_kg > 0:
+                    average = total_amount / total_weight_kg
+
+                grouped_data[ps_name]["total_actual_weight_kg"] = total_weight_kg
+                grouped_data[ps_name]["average"] = average
 
             return Response(
                 {
@@ -3748,8 +3773,7 @@ class WarehouseSummaryView(APIView):
             return Response(
                 {"success": False, "error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-                 
+            )         
 
 from django.shortcuts import get_object_or_404
 
