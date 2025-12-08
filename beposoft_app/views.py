@@ -3754,7 +3754,48 @@ class WarehouseSummaryView(APIView):
         except Exception as e:
             return Response({"success": False, "error": str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                 
+
+
+
+class OrderStatusCount(APIView):
+    def get(self, request):
+        try:
+            required_statuses = [
+                "Invoice Created",
+                "Invoice Approved",
+                "Waiting For Confirmation",
+                "To Print",
+                "Invoice Rejected",
+                "Packing under progress",
+                "Packed",
+                "Ready to ship",
+                "Shipped",
+            ]
+
+            status_counts = (
+                Order.objects
+                .filter(status__in=required_statuses)
+                .values("status")
+                .annotate(count=Count("id"))
+                .order_by()
+            )
+
+            return Response(
+                {"success": True, "data": status_counts},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Failed to fetch filtered status counts",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 
 from django.shortcuts import get_object_or_404
 
