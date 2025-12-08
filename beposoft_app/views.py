@@ -3709,8 +3709,29 @@ class WarehouseSummaryView(APIView):
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # === SERIALIZED FULL DATA ===
-            serializer = WarehouseSummarySerializer(base_qs, many=True)
+            # === PARCEL SERVICE GROUPING ===
+            grouped_data = {}
+
+            for w in base_qs:
+                ps_name = w.parcel_service.name if w.parcel_service else "Others"
+
+                if ps_name not in grouped_data:
+                    grouped_data[ps_name] = {
+                        "total_actual_weight": 0.0,
+                        "total_parcel_amount": 0.0,
+                        "items": []
+                    }
+
+                grouped_data[ps_name]["total_actual_weight"] += float(w.actual_weight or 0)
+                grouped_data[ps_name]["total_parcel_amount"] += float(w.parcel_amount or 0)
+
+                grouped_data[ps_name]["items"].append({
+                    "length": w.length,
+                    "breadth": w.breadth,
+                    "height": w.height,
+                    "actual_weight": float(w.actual_weight or 0),
+                    "parcel_amount": float(w.parcel_amount or 0),
+                })
 
             return Response(
                 {
@@ -3718,7 +3739,7 @@ class WarehouseSummaryView(APIView):
                     "today_summary": today_summary,
                     "current_month_summary": current_month_summary,
                     "last_30_days_summary": last_30_days_summary,
-                    "data": serializer.data
+                    "data": grouped_data
                 },
                 status=status.HTTP_200_OK
             )
@@ -3726,9 +3747,9 @@ class WarehouseSummaryView(APIView):
         except Exception as e:
             return Response(
                 {"success": False, "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            
+                 
 
 from django.shortcuts import get_object_or_404
 
