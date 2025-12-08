@@ -3839,32 +3839,54 @@ class OrderStatusCount(APIView):
                 "Shipped",
             ]
 
-            status_counts = (
-                Order.objects
-                .filter(status__in=required_statuses)
+            today = now().date()
+            month_start = today.replace(day=1)
+            last_30_days = now() - timedelta(days=30)
+
+            queryset = Order.objects.filter(status__in=required_statuses)
+
+            today_data = (
+                queryset.filter(updated_at__date=today)
+                .values("status")
+                .annotate(count=Count("id"))
+                .order_by()
+            )
+
+            current_month_data = (
+                queryset.filter(updated_at__date__gte=month_start)
+                .values("status")
+                .annotate(count=Count("id"))
+                .order_by()
+            )
+
+            last_30_days_data = (
+                queryset.filter(updated_at__gte=last_30_days)
                 .values("status")
                 .annotate(count=Count("id"))
                 .order_by()
             )
 
             return Response(
-                {"success": True, "data": status_counts},
-                status=status.HTTP_200_OK
+                {
+                    "success": True,
+                    "today": list(today_data),
+                    "current_month": list(current_month_data),
+                    "last_30_days": list(last_30_days_data),
+                },
+                status=status.HTTP_200_OK,
             )
 
         except Exception as e:
             return Response(
                 {
                     "success": False,
-                    "message": "Failed to fetch filtered status counts",
-                    "error": str(e)
+                    "message": "Failed to fetch data",
+                    "error": str(e),
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
-
-from django.shortcuts import get_object_or_404
 
 class WarehouseListViewbyDate(BaseTokenView):
     def get(self, request, shipped_date):
