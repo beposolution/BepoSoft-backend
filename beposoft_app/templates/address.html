@@ -73,8 +73,9 @@
       <div><span><strong>Invoice : {{ order.invoice }}</strong></span></div>
       {% if order.cod_amount > 0 %}
       <div class="cod-details">
-        COD COLLECT RS.
-        <span id="cod-amount">{{ order.cod_amount|floatformat:2 }}</span>/-
+        COD COLLECT RS. 
+        <span id="cod-amount">{{ cod_amount_per_box }}</span>/-
+        <br>
       </div>
       <div class="cod-words" id="cod-words">
         In Words RS. <span id="cod-amount-text"></span> Only

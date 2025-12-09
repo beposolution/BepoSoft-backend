@@ -5581,15 +5581,23 @@ def generate_shipping_label(request, order_id):
     if not customer_data:
         raise Http404("Customer data not found.")
 
-    warehouse = Warehousedata.objects.filter(order=order).first()
+    warehouse_boxes = Warehousedata.objects.filter(order=order)
+    warehouse = warehouse_boxes.first()
+
+    # BOX COUNT
+    box_count = warehouse_boxes.count()
+
+    # COD PER BOX
+    if cod_amount and box_count > 0:
+        cod_amount_per_box = round(cod_amount / box_count)
+    else:
+        cod_amount_per_box = None
+
 
     volume_weight = None
     if warehouse and all([warehouse.length, warehouse.breadth, warehouse.height]):
         try:
-            length = float(warehouse.length)
-            breadth = float(warehouse.breadth)
-            height = float(warehouse.height)
-            volume_weight = (length * breadth * height) / 6000
+            volume_weight = (float(warehouse.length) * float(warehouse.breadth) * float(warehouse.height)) / 6000
         except ValueError:
             volume_weight = "Invalid Data"
 
@@ -5601,11 +5609,12 @@ def generate_shipping_label(request, order_id):
         "volume_weight": round(volume_weight, 2) if isinstance(volume_weight, (int, float)) else volume_weight,
         "speed": "0000053866",
         "cod_amount": cod_amount,
+        "cod_amount_per_box": round(cod_amount_per_box),   
+        "box_count": box_count,
         "customer_data": customer_data,
     }
 
     return render(request, "address.html", context)
-
 
 
 class ManagerUnderCustomer(BaseTokenView):
