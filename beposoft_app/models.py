@@ -664,6 +664,13 @@ class Order(models.Model):
         ('Cash on Delivery (COD)', 'Cash on Delivery (COD)'),
     ], default='Net Banking')
 
+    COD_STATUS_CHOICES = [
+        ('FULL_COD', 'Full COD'),
+        ('PARTIAL_COD', 'Partial COD'),
+    ]
+    cod_status = models.CharField(max_length=20, choices=COD_STATUS_CHOICES, null=True, blank=True)
+    adv_cod_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     # def save(self, *args, **kwargs):
