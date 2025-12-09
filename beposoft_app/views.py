@@ -3845,33 +3845,44 @@ class OrderStatusCount(APIView):
 
             queryset = Order.objects.filter(status__in=required_statuses)
 
-            today_data = (
+            # -------- Helper to insert zero counts ----------
+            def normalize(data):
+                formatted = {item["status"]: item["count"] for item in data}
+                return [
+                    {"status": st, "count": formatted.get(st, 0)}
+                    for st in required_statuses
+                ]
+
+            # Today
+            today_raw = (
                 queryset.filter(updated_at__date=today)
                 .values("status")
                 .annotate(count=Count("id"))
-                .order_by()
             )
+            today_data = normalize(today_raw)
 
-            current_month_data = (
+            # Current Month
+            current_month_raw = (
                 queryset.filter(updated_at__date__gte=month_start)
                 .values("status")
                 .annotate(count=Count("id"))
-                .order_by()
             )
+            current_month_data = normalize(current_month_raw)
 
-            last_30_days_data = (
+            # Last 30 Days
+            last_30_days_raw = (
                 queryset.filter(updated_at__gte=last_30_days)
                 .values("status")
                 .annotate(count=Count("id"))
-                .order_by()
             )
+            last_30_days_data = normalize(last_30_days_raw)
 
             return Response(
                 {
                     "success": True,
-                    "today": list(today_data),
-                    "current_month": list(current_month_data),
-                    "last_30_days": list(last_30_days_data),
+                    "today": today_data,
+                    "current_month": current_month_data,
+                    "last_30_days": last_30_days_data,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -3885,7 +3896,6 @@ class OrderStatusCount(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 
 class WarehouseListViewbyDate(BaseTokenView):
