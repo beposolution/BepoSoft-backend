@@ -3214,6 +3214,7 @@ class OrderReceiptDetailView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
    
+
 class CustomerOrderLedgerdata(BaseTokenView):
     def get(self, request, pk):
         try:
@@ -3222,10 +3223,9 @@ class CustomerOrderLedgerdata(BaseTokenView):
             if error_response:
                 return error_response
 
-            # Fetch customer
             customer = get_object_or_404(Customers, pk=pk)
 
-            
+            # ---- ORDER LEDGER ----
             ledger = (
                 Order.objects
                 .filter(customer=customer.pk)
@@ -3256,23 +3256,36 @@ class CustomerOrderLedgerdata(BaseTokenView):
 
             ledger_serializer = LedgerSerializers(ledger, many=True)
 
-            # Fetch advance receipts for the customer (if related to customer)
-            advance_receipts = AdvanceReceipt.objects.filter(customer=customer).order_by('-id')
+            # ---- ADVANCE RECEIPTS ----
+            advance_receipts = AdvanceReceipt.objects.filter(
+                customer=customer
+            ).order_by('-id')
             advance_serializer = AdvanceReceiptSerializer(advance_receipts, many=True)
 
-            # Return combined response
+            # ---- PAYMENT RECEIPTS (ORDER PAYMENTS) ----
+            payment_receipts = PaymentReceipt.objects.filter(
+                order__customer=customer
+            ).select_related('bank', 'created_by', 'order').order_by('-id')
+
+            payment_serializer = PaymentRecieptsViewSerializers(payment_receipts, many=True)
+
             return Response(
                 {
                     "data": {
                         "ledger": ledger_serializer.data,
-                        "advance_receipts": advance_serializer.data
+                        "advance_receipts": advance_serializer.data,
+                        "payment_receipts": payment_serializer.data
                     }
                 },
                 status=status.HTTP_200_OK
             )
+
         except Exception as e:
-            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-     
+            return Response(
+                {"errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
             
 # class CreatePerfomaInvoice(BaseTokenView):
 #     def post(self, request):
