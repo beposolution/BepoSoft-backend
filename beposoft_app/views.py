@@ -5676,7 +5676,7 @@ def generate_shipping_label(request, order_id):
         advance = Decimal(str(order.adv_cod_amount or 0))
 
         if order.cod_status == "PARTIAL_COD":
-            remaining = total_cod - advance
+            remaining = total_cod
             if remaining > 0:
                 cod_amount = float(remaining)
         else:
