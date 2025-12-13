@@ -5661,16 +5661,35 @@ def Deliverynote(request, order_id):
     return render(request, "deliverynote.html", context)
 
 
-def generate_shipping_label(request, order_id):
-    order = get_object_or_404(Order.objects.select_related('customer', 'billing_address'), id=order_id)
 
-    cod_amount = order.cod_amount if order.payment_status == 'COD' and order.cod_amount > 0 else None
+def generate_shipping_label(request, order_id):
+    order = get_object_or_404(
+        Order.objects.select_related('customer', 'billing_address'),
+        id=order_id
+    )
+
+    # --- COD CALCULATION ---
+    cod_amount = None
+
+    if order.payment_status == "COD":
+        total_cod = Decimal(str(order.cod_amount or 0))
+        advance = Decimal(str(order.adv_cod_amount or 0))
+
+        if order.cod_status == "PARTIAL_COD":
+            remaining = total_cod - advance
+            if remaining > 0:
+                cod_amount = float(remaining)
+        else:
+            # FULL_COD or cod_status is None
+            if total_cod > 0:
+                cod_amount = float(total_cod)
+
     order_items = OrderItem.objects.filter(order=order).select_related('product')
 
     shipping_data = order.billing_address
     if not shipping_data:
         raise Http404("Shipping data not found.")
-    
+
     customer_data = order.customer
     if not customer_data:
         raise Http404("Customer data not found.")
@@ -5679,31 +5698,30 @@ def generate_shipping_label(request, order_id):
     warehouse = warehouse_boxes.first()
 
     # BOX COUNT
-    box_count = warehouse_boxes.count()
+    box_count = warehouse_boxes.count() or 1
 
     # COD PER BOX
-    if cod_amount and box_count > 0:
-        cod_amount_per_box = round(cod_amount / box_count)
-    else:
-        cod_amount_per_box = None
-        if order.payment_status == 'COD' and order.cod_amount and box_count > 0:
-            cod_amount_per_box = round(order.cod_amount / box_count)
+    cod_amount_per_box = None
+    if cod_amount is not None and cod_amount > 0:
+        cod_amount_per_box = round(float(cod_amount) / box_count)
 
 
+    # VOLUME WEIGHT
     volume_weight = None
-    if warehouse and all([warehouse.length, warehouse.breadth, warehouse.height]):
-        try:
-            volume_weight = (float(warehouse.length) * float(warehouse.breadth) * float(warehouse.height)) / 6000
-        except ValueError:
-            volume_weight = "Invalid Data"
+    if warehouse and warehouse.length and warehouse.breadth and warehouse.height:
+        volume_weight = (
+            float(warehouse.length)
+            * float(warehouse.breadth)
+            * float(warehouse.height)
+        ) / 6000
+
 
     context = {
         "order": order,
         "order_items": order_items,
         "shipping_data": shipping_data,
         "warehouse": warehouse,
-        "volume_weight": round(volume_weight, 2) if isinstance(volume_weight, (int, float)) else volume_weight,
-        "speed": "0000053866",
+        "volume_weight": round(volume_weight, 2) if volume_weight else None,
         "cod_amount": cod_amount,
         "cod_amount_per_box": cod_amount_per_box,
         "box_count": box_count,
