@@ -3230,7 +3230,16 @@ class CustomerOrderLedgerdata(BaseTokenView):
             ledger = (
                 Order.objects
                 .filter(customer=customer.pk)
-                .exclude(id__in=GRVModel.objects.filter(remark='cod_return').values('order_id'))
+                .annotate(
+                    cod_return_amount=Coalesce(
+                        Sum(
+                            'grvmodel__cod_amount',
+                            filter=Q(grvmodel__remark='cod_return')
+                        ),
+                        Value(0),
+                        output_field=DecimalField(max_digits=10, decimal_places=2)
+                    )
+                )
                 .order_by("order_date")
             )
 
