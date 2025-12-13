@@ -810,17 +810,13 @@ class WarehouseUpdateSerializers(serializers.ModelSerializer):
         
 
 class LedgerSerializers(serializers.ModelSerializer):
-    recived_payment = PaymentRecieptsViewSerializers(many=True, read_only=True)
     company = serializers.CharField(source="company.name")
     customer_name = serializers.CharField(source="customer.name")
 
-    cod_return_amount = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True
-    )
-
-    net_amount = serializers.SerializerMethodField()
+    return_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    refund_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    cod_return_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    exchange_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Order
@@ -830,16 +826,13 @@ class LedgerSerializers(serializers.ModelSerializer):
             "company",
             "customer_name",
             "total_amount",
+            "return_amount",
+            "refund_amount",
             "cod_return_amount",
-            "net_amount",
+            "exchange_amount",
             "order_date",
-            "recived_payment",
             "status",
         ]
-
-    def get_net_amount(self, obj):
-        cod_return = obj.cod_return_amount or 0
-        return float(obj.total_amount) - float(cod_return)
 
 
 class AttributesModelSerializer(serializers.ModelSerializer):
