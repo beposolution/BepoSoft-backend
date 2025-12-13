@@ -3225,20 +3225,31 @@ class CustomerOrderLedgerdata(BaseTokenView):
             # Fetch customer
             customer = get_object_or_404(Customers, pk=pk)
 
-            # Fetch order ledger
-            # ledger = Order.objects.filter(customer=customer.pk).order_by("order_date")
+            
             ledger = (
                 Order.objects
                 .filter(customer=customer.pk)
                 .annotate(
-                    cod_return_amount=Coalesce(
-                        Sum(
-                            'grvmodel__cod_amount',
-                            filter=Q(grvmodel__remark='cod_return')
-                        ),
+                    return_amount=Coalesce(
+                        Sum("grvmodel__price", filter=Q(grvmodel__remark="return")),
                         Value(0),
                         output_field=DecimalField(max_digits=10, decimal_places=2)
-                    )
+                    ),
+                    refund_amount=Coalesce(
+                        Sum("grvmodel__price", filter=Q(grvmodel__remark="refund")),
+                        Value(0),
+                        output_field=DecimalField(max_digits=10, decimal_places=2)
+                    ),
+                    cod_return_amount=Coalesce(
+                        Sum("grvmodel__cod_amount", filter=Q(grvmodel__remark="cod_return")),
+                        Value(0),
+                        output_field=DecimalField(max_digits=10, decimal_places=2)
+                    ),
+                    exchange_amount=Coalesce(
+                        Sum("grvmodel__price", filter=Q(grvmodel__remark="exchange")),
+                        Value(0),
+                        output_field=DecimalField(max_digits=10, decimal_places=2)
+                    ),
                 )
                 .order_by("order_date")
             )
