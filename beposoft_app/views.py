@@ -3254,71 +3254,165 @@ class CustomerOrderLedgerdata(BaseTokenView):
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
      
             
-class CreatePerfomaInvoice(BaseTokenView):
-    def post(self, request):
-        try:
-            # Authenticate user
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
-            warehouse_id = request.data.get("warehouse_id")
-            if not warehouse_id:
-                return Response({"status": "error", "message": "Warehouse ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+# class CreatePerfomaInvoice(BaseTokenView):
+#     def post(self, request):
+#         try:
+#             # Authenticate user
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+#             warehouse_id = request.data.get("warehouse_id")
+#             if not warehouse_id:
+#                 return Response({"status": "error", "message": "Warehouse ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Retrieve and validate the warehouse object
-            warehouse = get_object_or_404(WareHouse, pk=warehouse_id)
-            cart_items = BeposoftCart.objects.filter(user=authUser)
-            serializer = PerfomaInvoiceOrderSerializers(data=request.data)
-            if not serializer.is_valid():
-                return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-         # Retrieve cart items and validate serializer
+#             # Retrieve and validate the warehouse object
+#             warehouse = get_object_or_404(WareHouse, pk=warehouse_id)
+#             cart_items = BeposoftCart.objects.filter(user=authUser)
+#             serializer = PerfomaInvoiceOrderSerializers(data=request.data)
+#             if not serializer.is_valid():
+#                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+#          # Retrieve cart items and validate serializer
             
-              # Create order
-            order = serializer.save()
+#               # Create order
+#             order = serializer.save()
 
-            # Manually assign the warehouse to the order
-            order.warehouses_obj = warehouse
-            order.save()  
-            for item_data in cart_items:
-                product = get_object_or_404(Products, pk=item_data.product.pk)
+#             # Manually assign the warehouse to the order
+#             order.warehouses_obj = warehouse
+#             order.save()  
+#             for item_data in cart_items:
+#                 product = get_object_or_404(Products, pk=item_data.product.pk)
 
-                # Convert values to Decimal for consistency
-                quantity = Decimal(item_data.quantity or 0)
-                selling_price = Decimal(item_data.product.selling_price or 0)
-                discount = Decimal(item_data.discount or 0)  # Handles None discount
-                tax = Decimal(item_data.product.tax or 0)
-                rate = Decimal(item_data.price or 0)
+#                 # Convert values to Decimal for consistency
+#                 quantity = Decimal(item_data.quantity or 0)
+#                 selling_price = Decimal(item_data.product.selling_price or 0)
+#                 discount = Decimal(item_data.discount or 0)  # Handles None discount
+#                 tax = Decimal(item_data.product.tax or 0)
+#                 rate = Decimal(item_data.price or 0)
                
 
                 
 
-                # Check stock and decrement
-                if product.stock < quantity:
-                    return Response({"status": "error", "message": "Insufficient stock for single product"}, status=status.HTTP_400_BAD_REQUEST)
-                product.stock -= int(quantity)
-                product.save()
+#                 # Check stock and decrement
+#                 if product.stock < quantity:
+#                     return Response({"status": "error", "message": "Insufficient stock for single product"}, status=status.HTTP_400_BAD_REQUEST)
+#                 product.stock -= int(quantity)
+#                 product.save()
             
                
 
-                # Create order item for each valid cart item
-                PerfomaInvoiceOrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    quantity=int(quantity),
-                    discount=discount,
-                    tax=tax,
-                    rate=rate,
-                    description=item_data.note,
-                )
+#                 # Create order item for each valid cart item
+#                 PerfomaInvoiceOrderItem.objects.create(
+#                     order=order,
+#                     product=product,
+#                     quantity=int(quantity),
+#                     discount=discount,
+#                     tax=tax,
+#                     rate=rate,
+#                     description=item_data.note,
+#                 )
             
-            # Clear cart after successful order creation
-            cart_items.delete()
-            return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+#             # Clear cart after successful order creation
+#             cart_items.delete()
+#             return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
         
-        except Exception as e:
-            logger.error("Unexpected error in CreateOrder view: %s", str(e))
-            return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#         except Exception as e:
+#             logger.error("Unexpected error in CreateOrder view: %s", str(e))
+#             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class CreatePerfomaInvoice(BaseTokenView):
 
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            warehouse_id = request.data.get("warehouse_id")
+            if not warehouse_id:
+                return Response(
+                    {"status": "error", "message": "warehouse_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            warehouse = get_object_or_404(WareHouse, id=warehouse_id)
+
+            cart_items = (
+                BeposoftCart.objects
+                .select_related("product")
+                .filter(user=authUser)
+            )
+
+            if not cart_items.exists():
+                return Response(
+                    {"status": "error", "message": "Cart is empty"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = PerfomaInvoiceOrderSerializers(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            with transaction.atomic():
+
+                # Create order (warehouse handled inside serializer)
+                order = serializer.save(
+                    manage_staff=authUser,
+                    warehouses_obj=warehouse
+                )
+
+                for cart in cart_items.select_for_update():
+
+                    product = Products.objects.select_for_update().get(id=cart.product_id)
+
+                    quantity = int(cart.quantity)
+                    rate = Decimal(cart.price or product.selling_price or 0)
+                    discount = Decimal(cart.discount or 0)
+                    tax = Decimal(product.tax or 0)
+
+                    # 🔒 Lock stock instead of reducing
+                    if quantity > (product.stock - product.locked_stock):
+                        raise ValueError(
+                            f"Insufficient stock for {product.name}"
+                        )
+
+                    product.lock_stock(quantity)
+
+                    PerfomaInvoiceOrderItem.objects.create(
+                        order=order,
+                        product=product,
+                        quantity=quantity,
+                        rate=rate,
+                        discount=discount,
+                        tax=tax,
+                        description=cart.note
+                    )
+
+                # Clear cart ONLY after success
+                cart_items.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Performa invoice created successfully",
+                    "invoice": order.invoice
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except ValueError as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception("CreatePerfomaInvoice failed")
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Internal server error",
+                    "details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class PerfomaInvoiceListView(BaseTokenView):
     def get(self, request):
