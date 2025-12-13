@@ -5686,6 +5686,8 @@ def generate_shipping_label(request, order_id):
         cod_amount_per_box = round(cod_amount / box_count)
     else:
         cod_amount_per_box = None
+        if order.payment_status == 'COD' and order.cod_amount and box_count > 0:
+            cod_amount_per_box = round(order.cod_amount / box_count)
 
 
     volume_weight = None
@@ -5703,7 +5705,7 @@ def generate_shipping_label(request, order_id):
         "volume_weight": round(volume_weight, 2) if isinstance(volume_weight, (int, float)) else volume_weight,
         "speed": "0000053866",
         "cod_amount": cod_amount,
-        "cod_amount_per_box": round(cod_amount_per_box),   
+        "cod_amount_per_box": cod_amount_per_box,
         "box_count": box_count,
         "customer_data": customer_data,
     }
