@@ -8162,3 +8162,129 @@ class AnswersByFamilyView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class RefundReceiptView(BaseTokenView):
+    def post(self, request):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            request.data['created_by'] = authUser.pk
+
+            serializer = RefundReceiptSerializer(data=request.data)
+            if serializer.is_valid():
+                receipt = serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Refund receipt created successfully",
+                        "data": RefundReceiptSerializer(receipt).data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def get(self, request):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            receipts = RefundReceipt.objects.all().order_by('-id')
+            serializer = RefundReceiptSerializer(receipts, many=True)
+
+            return Response(
+                {"status": "success", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class RefundReceiptDetailView(BaseTokenView):
+    def get(self, request, pk):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                receipt = RefundReceipt.objects.get(pk=pk)
+            except RefundReceipt.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Refund receipt not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = RefundReceiptSerializer(receipt)
+            return Response(
+                {"status": "success", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                receipt = RefundReceipt.objects.get(pk=pk)
+            except RefundReceipt.DoesNotExist:
+                return Response(
+                    {"status": "error", "message": "Refund receipt not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = RefundReceiptSerializer(
+                receipt,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Refund receipt updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"status": "error", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

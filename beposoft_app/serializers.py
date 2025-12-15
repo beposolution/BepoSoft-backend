@@ -1682,15 +1682,22 @@ class CompanyExpenseSeriizers(serializers.ModelSerializer):
         fields = ['id','amount','expense_date','purpose_of_payment']
 
 
-    
-
-
-
 
 class BankbasedReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentReceipt
         fields = ['payment_receipt','amount','received_at']
+
+
+class RefundReceiptSerializer(serializers.Serializer):
+    created_name = serializers.CharField(source='created_by.name', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    invoice_no = serializers.CharField(source='invoice.invoice', read_only=True)
+    bank_name = serializers.CharField(source='bank.name', read_only=True)
+    class Meta:
+        model = RefundReceipt
+        fields = "__all__"
+        
 
 class UnifiedPaymentSerializer(serializers.Serializer):
     payment_receipt = serializers.CharField(allow_null=True)
