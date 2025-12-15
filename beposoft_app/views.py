@@ -3218,7 +3218,6 @@ class OrderReceiptDetailView(APIView):
 class CustomerOrderLedgerdata(BaseTokenView):
     def get(self, request, pk):
         try:
-            # Authenticate user
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
@@ -3228,7 +3227,7 @@ class CustomerOrderLedgerdata(BaseTokenView):
             # ---- ORDER LEDGER ----
             ledger = (
                 Order.objects
-                .filter(customer=customer.pk)
+                .filter(customer=customer)
                 .annotate(
                     return_amount=Coalesce(
                         Sum("grvmodel__price", filter=Q(grvmodel__remark="return")),
@@ -3257,24 +3256,34 @@ class CustomerOrderLedgerdata(BaseTokenView):
             ledger_serializer = LedgerSerializers(ledger, many=True)
 
             # ---- ADVANCE RECEIPTS ----
-            advance_receipts = AdvanceReceipt.objects.filter(
-                customer=customer
-            ).order_by('-id')
+            advance_receipts = AdvanceReceipt.objects.filter(customer=customer).order_by("-id")
             advance_serializer = AdvanceReceiptSerializer(advance_receipts, many=True)
 
-            # ---- PAYMENT RECEIPTS (ORDER PAYMENTS) ----
-            payment_receipts = PaymentReceipt.objects.filter(
-                order__customer=customer
-            ).select_related('bank', 'created_by', 'order').order_by('-id')
-
+            # ---- PAYMENT RECEIPTS ----
+            payment_receipts = (
+                PaymentReceipt.objects
+                .filter(order__customer=customer)
+                .select_related("bank", "created_by", "order")
+                .order_by("-id")
+            )
             payment_serializer = PaymentRecieptsViewSerializers(payment_receipts, many=True)
+
+            # ---- GRV DATA ----
+            grv_qs = (
+                GRVModel.objects
+                .filter(order__customer=customer)
+                .select_related("order")
+                .order_by("-date", "-id")
+            )
+            grv_serializer = GRVLedgerSerializer(grv_qs, many=True)
 
             return Response(
                 {
                     "data": {
                         "ledger": ledger_serializer.data,
                         "advance_receipts": advance_serializer.data,
-                        "payment_receipts": payment_serializer.data
+                        "payment_receipts": payment_serializer.data,
+                        "grv": grv_serializer.data
                     }
                 },
                 status=status.HTTP_200_OK

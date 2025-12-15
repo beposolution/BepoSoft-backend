@@ -835,6 +835,29 @@ class LedgerSerializers(serializers.ModelSerializer):
         ]
 
 
+class GRVLedgerSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField(source="order.id", read_only=True)
+    invoice = serializers.CharField(source="order.invoice", read_only=True)
+
+    class Meta:
+        model = GRVModel
+        fields = [
+            "id",
+            "order_id",
+            "invoice",
+            "product",
+            "quantity",
+            "price",
+            "cod_amount",
+            "remark",
+            "status",
+            "date",
+            "time",
+            "note",
+        ]
+
+
+
 class AttributesModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attributes
