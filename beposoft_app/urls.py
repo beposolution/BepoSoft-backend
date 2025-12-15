@@ -147,6 +147,8 @@ urlpatterns = [
     path('api/advancereceipt/view/<int:pk>/', AdvanceReceiptDetailView.as_view(), name='advance-receipt-detail'),
     path('api/bankreceipt/view/<int:pk>/', BankReceiptDetailView.as_view(), name='bank-receipt-detail'),
     path('api/orderreceipt/view/<int:pk>/', OrderReceiptDetailView.as_view(), name='order-receipt-detail'),
+    path('api/refund/receipts/', RefundReceiptView.as_view()),
+    path('api/refund/receipts/<int:pk>/', RefundReceiptDetailView.as_view()),
     
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),

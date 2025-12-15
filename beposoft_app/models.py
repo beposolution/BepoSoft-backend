@@ -1328,6 +1328,24 @@ class PaymentReceipt(models.Model):
         
     
 
+class RefundReceipt(models.Model):
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="refund_customer")
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, related_name="refund_invoice")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="refund_bank")
+    date = models.DateField()
+    note = models.CharField(max_length=50, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="refund_created")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "Refund_Receipts"
+
+    def __str__(self):
+        return f"{self.amount} by {self.customer.name}"
+
+
 class PerfomaInvoiceOrder(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE)
     warehouses_obj = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True)

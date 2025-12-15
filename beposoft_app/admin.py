@@ -50,6 +50,7 @@ admin.site.register(Answers)
 admin.site.register(Districts)
 admin.site.register(StaffOrderUpdate)
 admin.site.register(StaffOrderUpdateItem)
+admin.site.register(RefundReceipt)
 
 
 
