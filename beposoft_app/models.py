@@ -1337,11 +1337,20 @@ class RefundReceipt(models.Model):
     note = models.CharField(max_length=50, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="refund_created")
     transactionID = models.CharField(max_length=50, default="")
+    refund_no = models.CharField( max_length=20, unique=True, null=True, blank=True, editable=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "Refund_Receipts"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+
+        if is_new and not self.refund_no:
+            self.refund_no = f"REFR-{self.id:05d}"
+            super().save(update_fields=["refund_no"])
 
     def __str__(self):
         return f"{self.amount} by {self.customer.name}"
