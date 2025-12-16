@@ -34,6 +34,9 @@ from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Cast, NullIf
+from django.db.models import (
+    Count, Sum, Case, When, IntegerField, FloatField
+)
 
 logger = logging.getLogger(__name__)
 
@@ -8286,5 +8289,94 @@ class RefundReceiptDetailView(BaseTokenView):
         except Exception as e:
             return Response(
                 {"status": "error", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FamilyWiseCallReportView(APIView):
+
+    def get(self, request):
+        try:
+            data = (
+                CallReport.objects
+                .filter(created_by__family__isnull=False)
+                .annotate(
+                    duration_int=Cast('duration', IntegerField())
+                )
+                .values(
+                    'created_by__family__id',
+                    'created_by__family__name'
+                )
+                .annotate(
+                    # --------------------
+                    # TOTAL
+                    # --------------------
+                    total_calls=Count('id'),
+                    total_duration=Sum('duration_int'),
+                    total_amount=Sum('amount'),
+
+                    # --------------------
+                    # ACTIVE
+                    # --------------------
+                    active_calls=Count(
+                        Case(
+                            When(status='Active', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    active_duration=Sum(
+                        Case(
+                            When(status='Active', then='duration_int'),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    active_amount=Sum(
+                        Case(
+                            When(status='Active', then='amount'),
+                            output_field=FloatField()
+                        )
+                    ),
+
+                    # --------------------
+                    # PRODUCTIVE
+                    # --------------------
+                    productive_calls=Count(
+                        Case(
+                            When(status='Productive', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    productive_duration=Sum(
+                        Case(
+                            When(status='Productive', then='duration_int'),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    productive_amount=Sum(
+                        Case(
+                            When(status='Productive', then='amount'),
+                            output_field=FloatField()
+                        )
+                    ),
+                )
+                .order_by('created_by__family__name')
+            )
+
+            return Response(
+                {
+                    "success": True,
+                    "count": len(data),
+                    "data": data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Failed to fetch family-wise call report",
+                    "error": str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
