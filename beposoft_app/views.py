@@ -33,7 +33,7 @@ from bepocart.models import *
 from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
-from django.db.models.functions import Cast, NullIf
+from django.db.models.functions import Cast, RegexReplace
 from django.db.models import (
     Count, Sum, Case, When, IntegerField, FloatField
 )
@@ -8301,11 +8301,103 @@ class FamilyWiseCallReportView(APIView):
                 CallReport.objects
                 .filter(created_by__family__isnull=False)
                 .annotate(
-                    duration_int=Cast('duration', IntegerField())
+                    # remove non-numeric characters like " sec"
+                    duration_clean=RegexReplace(
+                        'duration',
+                        r'[^0-9]',
+                        Value('')
+                    ),
+                    duration_int=Cast('duration_clean', IntegerField())
                 )
                 .values(
                     'created_by__family__id',
                     'created_by__family__name'
+                )
+                .annotate(
+                    # --------------------
+                    # TOTAL
+                    # --------------------
+                    total_calls=Count('id'),
+                    total_duration=Sum('duration_int'),
+                    total_amount=Sum('amount'),
+
+                    # --------------------
+                    # ACTIVE
+                    # --------------------
+                    active_calls=Count(
+                        Case(When(status='Active', then=1),
+                             output_field=IntegerField())
+                    ),
+                    active_duration=Sum(
+                        Case(
+                            When(status='Active', then='duration_int'),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    active_amount=Sum(
+                        Case(
+                            When(status='Active', then='amount'),
+                            output_field=FloatField()
+                        )
+                    ),
+
+                    # --------------------
+                    # PRODUCTIVE
+                    # --------------------
+                    productive_calls=Count(
+                        Case(When(status='Productive', then=1),
+                             output_field=IntegerField())
+                    ),
+                    productive_duration=Sum(
+                        Case(
+                            When(status='Productive', then='duration_int'),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    productive_amount=Sum(
+                        Case(
+                            When(status='Productive', then='amount'),
+                            output_field=FloatField()
+                        )
+                    ),
+                )
+                .order_by('created_by__family__name')
+            )
+
+            return Response(
+                {
+                    "success": True,
+                    "count": len(data),
+                    "data": data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Failed to fetch family-wise call report",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FamilyUserWiseCallReportView(APIView):
+
+    def get(self, request, family_id):
+        try:
+            queryset = (
+                CallReport.objects
+                .filter(created_by__family_id=family_id)
+                .annotate(
+                    duration_int=Cast('duration', IntegerField())
+                )
+                .values(
+                    'created_by_id',
+                    'created_by__name',
+                    'created_by__designation',
                 )
                 .annotate(
                     # --------------------
@@ -8359,14 +8451,15 @@ class FamilyWiseCallReportView(APIView):
                         )
                     ),
                 )
-                .order_by('created_by__family__name')
+                .order_by('created_by__name')
             )
 
             return Response(
                 {
                     "success": True,
-                    "count": len(data),
-                    "data": data
+                    "family_id": family_id,
+                    "count": queryset.count(),
+                    "data": queryset
                 },
                 status=status.HTTP_200_OK
             )
@@ -8375,7 +8468,7 @@ class FamilyWiseCallReportView(APIView):
             return Response(
                 {
                     "success": False,
-                    "message": "Failed to fetch family-wise call report",
+                    "message": "Failed to fetch user-wise call report",
                     "error": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
