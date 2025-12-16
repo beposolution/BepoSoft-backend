@@ -1689,7 +1689,7 @@ class BankbasedReceiptSerializer(serializers.ModelSerializer):
         fields = ['payment_receipt','amount','received_at']
 
 
-class RefundReceiptSerializer(serializers.Serializer):
+class RefundReceiptSerializer(serializers.ModelSerializer):
     created_name = serializers.CharField(source='created_by.name', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     invoice_no = serializers.CharField(source='invoice.invoice', read_only=True)
