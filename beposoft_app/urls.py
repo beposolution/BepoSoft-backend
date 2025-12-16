@@ -260,7 +260,7 @@ urlpatterns = [
     path('api/call/report/filter/', CallReportFilterView.as_view(), name='call-report-filter'),
     path('api/call/report/summary/', CallReportSummaryView.as_view(), name='call-report-summary'),
     path('api/call/reports/family/wise/call/report/', FamilyWiseCallReportView.as_view()),
-    path('api/call/reports/family/<int:family_id>/user/wise/call/report/', FamilyUserWiseCallReportView.as_view())
+    path('api/call/reports/family/<int:family_id>/user/wise/call/report/', FamilyUserWiseCallReportView.as_view()),
 
     path('api/staff/custom/order/update/', StaffOrderUpdateView.as_view()),
     path('api/staff/custom/order/update/<int:pk>/', StaffOrderUpdateDetailView.as_view()),
