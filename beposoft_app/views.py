@@ -8294,70 +8294,108 @@ from django.db.models import (
     Count, Sum, Case, When, IntegerField, FloatField, Value, Func
 )
 from django.db.models.functions import Cast
-
 class FamilyWiseCallReportView(APIView):
+
+    def get_family_queryset(self, base_qs):
+        """
+        Shared aggregation logic (DOES NOT change existing logic)
+        """
+        return (
+            base_qs
+            .annotate(
+                duration_clean=Func(
+                    'duration',
+                    Value('[^0-9]'),
+                    Value(''),
+                    Value('g'),
+                    function='regexp_replace'
+                ),
+                duration_int=Cast('duration_clean', IntegerField())
+            )
+            .values(
+                'created_by__family__id',
+                'created_by__family__name'
+            )
+            .annotate(
+                # -------- TOTAL --------
+                total_calls=Count('id'),
+                total_duration=Sum('duration_int'),
+                total_amount=Sum('amount'),
+
+                # -------- ACTIVE --------
+                active_calls=Count(
+                    Case(When(status='Active', then=1),
+                         output_field=IntegerField())
+                ),
+                active_duration=Sum(
+                    Case(When(status='Active', then='duration_int'),
+                         output_field=IntegerField())
+                ),
+                active_amount=Sum(
+                    Case(When(status='Active', then='amount'),
+                         output_field=FloatField())
+                ),
+
+                # -------- PRODUCTIVE --------
+                productive_calls=Count(
+                    Case(When(status='Productive', then=1),
+                         output_field=IntegerField())
+                ),
+                productive_duration=Sum(
+                    Case(When(status='Productive', then='duration_int'),
+                         output_field=IntegerField())
+                ),
+                productive_amount=Sum(
+                    Case(When(status='Productive', then='amount'),
+                         output_field=FloatField())
+                ),
+            )
+            .order_by('created_by__family__name')
+        )
 
     def get(self, request):
         try:
-            data = (
-                CallReport.objects
-                .filter(created_by__family__isnull=False)
-                .annotate(
-                    duration_clean=Func(
-                        'duration',
-                        Value('[^0-9]'),
-                        Value(''),
-                        Value('g'),
-                        function='regexp_replace'
-                    ),
-                    duration_int=Cast('duration_clean', IntegerField())
-                )
-                .values(
-                    'created_by__family__id',
-                    'created_by__family__name'
-                )
-                .annotate(
-                    # ---------------- TOTAL ----------------
-                    total_calls=Count('id'),
-                    total_duration=Sum('duration_int'),
-                    total_amount=Sum('amount'),
+            base_qs = CallReport.objects.filter(
+                created_by__family__isnull=False,
+                call_datetime__isnull=False
+            )
 
-                    # ---------------- ACTIVE ----------------
-                    active_calls=Count(
-                        Case(When(status='Active', then=1),
-                             output_field=IntegerField())
-                    ),
-                    active_duration=Sum(
-                        Case(When(status='Active', then='duration_int'),
-                             output_field=IntegerField())
-                    ),
-                    active_amount=Sum(
-                        Case(When(status='Active', then='amount'),
-                             output_field=FloatField())
-                    ),
+            today = now().date()
+            last_30_days = now() - timedelta(days=30)
 
-                    # ---------------- PRODUCTIVE ----------------
-                    productive_calls=Count(
-                        Case(When(status='Productive', then=1),
-                             output_field=IntegerField())
-                    ),
-                    productive_duration=Sum(
-                        Case(When(status='Productive', then='duration_int'),
-                             output_field=IntegerField())
-                    ),
-                    productive_amount=Sum(
-                        Case(When(status='Productive', then='amount'),
-                             output_field=FloatField())
-                    ),
+            # ---------------- EXISTING (UNCHANGED) ----------------
+            overall_data = self.get_family_queryset(base_qs)
+
+            # ---------------- TODAY ----------------
+            today_data = self.get_family_queryset(
+                base_qs.filter(call_datetime__date=today)
+            )
+
+            # ---------------- THIS MONTH ----------------
+            month_data = self.get_family_queryset(
+                base_qs.filter(
+                    call_datetime__year=today.year,
+                    call_datetime__month=today.month
                 )
-                .order_by('created_by__family__name')
+            )
+
+            # ---------------- LAST 30 DAYS ----------------
+            last_30_days_data = self.get_family_queryset(
+                base_qs.filter(call_datetime__gte=last_30_days)
             )
 
             return Response(
                 {
                     "success": True,
-                    "count": len(data),
-                    "data": data
+                    "count": len(overall_data),
+
+                    # EXISTING RESPONSE (UNCHANGED)
+                    "data": overall_data,
+
+                    # NEW ADDITIONS
+                    "today": today_data,
+                    "this_month": month_data,
+                    "last_30_days": last_30_days_data,
                 },
                 status=status.HTTP_200_OK
             )
@@ -8371,13 +8409,13 @@ class FamilyWiseCallReportView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
+        
 
 class FamilyUserWiseCallReportView(APIView):
 
     def get(self, request, family_id):
         try:
-            
+
             from_date = request.GET.get('from_date')
             to_date = request.GET.get('to_date')
 
