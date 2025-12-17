@@ -8373,14 +8373,28 @@ class FamilyWiseCallReportView(APIView):
             )
 
 
-
 class FamilyUserWiseCallReportView(APIView):
 
     def get(self, request, family_id):
         try:
+            
+            from_date = request.GET.get('from_date')
+            to_date = request.GET.get('to_date')
+
+            queryset = CallReport.objects.filter(
+                created_by__family_id=family_id
+            )
+
+            # --------------------------------------------
+            # DATE RANGE FILTER (call_datetime)
+            # --------------------------------------------
+            if from_date and to_date:
+                queryset = queryset.filter(
+                    call_datetime__date__range=[from_date, to_date]
+                )
+
             data = (
-                CallReport.objects
-                .filter(created_by__family_id=family_id)
+                queryset
                 .annotate(
                     duration_clean=Func(
                         'duration',
@@ -8404,30 +8418,42 @@ class FamilyUserWiseCallReportView(APIView):
 
                     # ---------------- ACTIVE ----------------
                     active_calls=Count(
-                        Case(When(status='Active', then=1),
-                             output_field=IntegerField())
+                        Case(
+                            When(status='Active', then=1),
+                            output_field=IntegerField()
+                        )
                     ),
                     active_duration=Sum(
-                        Case(When(status='Active', then='duration_int'),
-                             output_field=IntegerField())
+                        Case(
+                            When(status='Active', then='duration_int'),
+                            output_field=IntegerField()
+                        )
                     ),
                     active_amount=Sum(
-                        Case(When(status='Active', then='amount'),
-                             output_field=FloatField())
+                        Case(
+                            When(status='Active', then='amount'),
+                            output_field=FloatField()
+                        )
                     ),
 
                     # ---------------- PRODUCTIVE ----------------
                     productive_calls=Count(
-                        Case(When(status='Productive', then=1),
-                             output_field=IntegerField())
+                        Case(
+                            When(status='Productive', then=1),
+                            output_field=IntegerField()
+                        )
                     ),
                     productive_duration=Sum(
-                        Case(When(status='Productive', then='duration_int'),
-                             output_field=IntegerField())
+                        Case(
+                            When(status='Productive', then='duration_int'),
+                            output_field=IntegerField()
+                        )
                     ),
                     productive_amount=Sum(
-                        Case(When(status='Productive', then='amount'),
-                             output_field=FloatField())
+                        Case(
+                            When(status='Productive', then='amount'),
+                            output_field=FloatField()
+                        )
                     ),
                 )
                 .order_by('created_by__name')
