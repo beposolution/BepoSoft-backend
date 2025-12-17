@@ -763,44 +763,90 @@ class FamilyOrderWarehouseModelSerilizer(serializers.ModelSerializer):
         fields = ['id','box','tracking_id']
 
 
-class  WarehousedataSerializer(serializers.ModelSerializer):
+# class  WarehousedataSerializer(serializers.ModelSerializer):
+#     customer = serializers.CharField(source="order.billing_address.name")
+#     phone=serializers.CharField(source="order.billing_address.phone")
+#     zip_code=serializers.CharField(source="order.billing_address.zipcode")
+#     invoice = serializers.CharField(source="order.invoice")
+#     family = serializers.CharField(source="order.family.name")
+#     packed_by=serializers.CharField(source="packed_by.name")
+#     packed_by_id=serializers.CharField(source="packed_by.id")
+#     parcel_service_id=serializers.CharField(source="parcel_service.id")
+#     checked_by = serializers.SerializerMethodField()
+#     verified_by = serializers.SerializerMethodField()
+#     cod_amount=serializers.IntegerField(source="order.cod_amount")
+#     order_state = serializers.CharField(source="order.billing_address.state")
+
+#     def get_checked_by(self, obj):
+#         return obj.checked_by.name if obj.checked_by is not None else None
+
+#     def get_verified_by(self, obj):
+#         return obj.verified_by.name if obj.verified_by is not None else None
+
+
+#     class Meta:
+#         model = Warehousedata
+#         fields = [
+#             'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before','cod_amount',
+#             'parcel_service', 'tracking_id', 'shipping_charge', 'status', 'packed_by_id', 'parcel_service_id',
+#             'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','order_state',
+#             'zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
+#         ]
+
+#     def to_representation(self, instance):
+#         data = super().to_representation(instance)
+#         # Handle None for parcel_service
+#         data['parcel_service'] = (
+#             instance.parcel_service.name if instance.parcel_service else None
+#         )
+#         return data
+        
+
+class WarehousedataSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source="order.billing_address.name")
-    phone=serializers.CharField(source="order.billing_address.phone")
-    zip_code=serializers.CharField(source="order.billing_address.zipcode")
+    phone = serializers.CharField(source="order.billing_address.phone")
+    zip_code = serializers.CharField(source="order.billing_address.zipcode")
     invoice = serializers.CharField(source="order.invoice")
     family = serializers.CharField(source="order.family.name")
-    packed_by=serializers.CharField(source="packed_by.name")
-    packed_by_id=serializers.CharField(source="packed_by.id")
-    parcel_service_id=serializers.CharField(source="parcel_service.id")
+    packed_by = serializers.CharField(source="packed_by.name")
+    packed_by_id = serializers.CharField(source="packed_by.id")
+
+    parcel_service_id = serializers.SerializerMethodField()
+    parcel_service_name = serializers.SerializerMethodField()
+
     checked_by = serializers.SerializerMethodField()
     verified_by = serializers.SerializerMethodField()
-    cod_amount=serializers.IntegerField(source="order.cod_amount")
+
+    cod_amount = serializers.IntegerField(source="order.cod_amount")
     order_state = serializers.CharField(source="order.billing_address.state")
-
-    def get_checked_by(self, obj):
-        return obj.checked_by.name if obj.checked_by is not None else None
-
-    def get_verified_by(self, obj):
-        return obj.verified_by.name if obj.verified_by is not None else None
-
 
     class Meta:
         model = Warehousedata
         fields = [
-            'id', 'box', 'weight', 'length', 'breadth', 'height', 'image','image_before','cod_amount',
-            'parcel_service', 'tracking_id', 'shipping_charge', 'status', 'packed_by_id', 'parcel_service_id',
-            'shipped_date', 'order', 'packed_by','verified_by','checked_by', 'customer','phone','order_state',
-            'zip_code', 'invoice', 'family','actual_weight','parcel_amount','postoffice_date','message_status'
+            'id', 'box', 'weight', 'length', 'breadth', 'height',
+            'image', 'image_before', 'cod_amount',
+            'parcel_service_id', 'parcel_service_name',
+            'tracking_id', 'shipping_charge', 'status',
+            'packed_by_id', 'shipped_date', 'order',
+            'packed_by', 'verified_by', 'checked_by',
+            'customer', 'phone', 'order_state',
+            'zip_code', 'invoice', 'family',
+            'actual_weight', 'parcel_amount',
+            'postoffice_date', 'message_status'
         ]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Handle None for parcel_service
-        data['parcel_service'] = (
-            instance.parcel_service.name if instance.parcel_service else None
-        )
-        return data
-        
+    def get_parcel_service_id(self, obj):
+        return obj.parcel_service.id if obj.parcel_service else None
+
+    def get_parcel_service_name(self, obj):
+        return obj.parcel_service.name if obj.parcel_service else None
+
+    def get_checked_by(self, obj):
+        return obj.checked_by.name if obj.checked_by else None
+
+    def get_verified_by(self, obj):
+        return obj.verified_by.name if obj.verified_by else None
+
 
         
 class WarehouseUpdateSerializers(serializers.ModelSerializer):
