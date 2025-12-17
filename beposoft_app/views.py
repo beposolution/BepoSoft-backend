@@ -3372,6 +3372,7 @@ class CustomerOrderLedgerdata(BaseTokenView):
 #         except Exception as e:
 #             logger.error("Unexpected error in CreateOrder view: %s", str(e))
 #             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class CreatePerfomaInvoice(BaseTokenView):
 
     def post(self, request):
@@ -3406,29 +3407,22 @@ class CreatePerfomaInvoice(BaseTokenView):
 
             with transaction.atomic():
 
-                # Create order (warehouse handled inside serializer)
+                # Create order
                 order = serializer.save(
                     manage_staff=authUser,
                     warehouses_obj=warehouse
                 )
 
-                for cart in cart_items.select_for_update():
+                for cart in cart_items:
 
-                    product = Products.objects.select_for_update().get(id=cart.product_id)
+                    product = cart.product
 
                     quantity = int(cart.quantity)
                     rate = Decimal(cart.price or product.selling_price or 0)
                     discount = Decimal(cart.discount or 0)
                     tax = Decimal(product.tax or 0)
 
-                    # 🔒 Lock stock instead of reducing
-                    if quantity > (product.stock - product.locked_stock):
-                        raise ValueError(
-                            f"Insufficient stock for {product.name}"
-                        )
-
-                    product.lock_stock(quantity)
-
+                    # ❌ NO STOCK LOCK / NO STOCK REDUCTION
                     PerfomaInvoiceOrderItem.objects.create(
                         order=order,
                         product=product,
@@ -3439,7 +3433,7 @@ class CreatePerfomaInvoice(BaseTokenView):
                         description=cart.note
                     )
 
-                # Clear cart ONLY after success
+                # Clear cart after success
                 cart_items.delete()
 
             return Response(
@@ -3449,12 +3443,6 @@ class CreatePerfomaInvoice(BaseTokenView):
                     "invoice": order.invoice
                 },
                 status=status.HTTP_201_CREATED
-            )
-
-        except ValueError as e:
-            return Response(
-                {"status": "error", "message": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
             )
 
         except Exception as e:
@@ -3467,6 +3455,7 @@ class CreatePerfomaInvoice(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
 
 class PerfomaInvoiceListView(BaseTokenView):
     def get(self, request):
