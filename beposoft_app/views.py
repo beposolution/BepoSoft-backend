@@ -8413,19 +8413,13 @@ class FamilyWiseCallReportView(APIView):
 
 class FamilyUserWiseCallReportView(APIView):
 
-    def get(self, request, family_id):
+    def get(self, request, family_id, from_date, to_date):
         try:
-
-            from_date = request.GET.get('from_date')
-            to_date = request.GET.get('to_date')
-
             queryset = CallReport.objects.filter(
                 created_by__family_id=family_id
             )
 
-            # --------------------------------------------
-            # DATE RANGE FILTER (call_datetime)
-            # --------------------------------------------
+      
             if from_date and to_date:
                 queryset = queryset.filter(
                     call_datetime__date__range=[from_date, to_date]
@@ -8501,6 +8495,8 @@ class FamilyUserWiseCallReportView(APIView):
                 {
                     "success": True,
                     "family_id": family_id,
+                    "from_date": from_date,
+                    "to_date": to_date,
                     "count": len(data),
                     "data": data
                 },
