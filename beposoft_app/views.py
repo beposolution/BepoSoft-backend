@@ -3277,10 +3277,22 @@ class CustomerOrderLedgerdata(BaseTokenView):
             )
             grv_serializer = GRVLedgerSerializer(grv_qs, many=True)
 
+            # ---- REFUND RECEIPTS ----
+            refund_receipts = (
+                RefundReceipt.objects
+                .filter(customer=customer)
+                .select_related("bank", "created_by", "invoice", "customer")
+                .order_by("-date", "-id")
+            )
+
+            refund_serializer = RefundReceiptSerializer(refund_receipts, many=True)
+
+
             return Response(
                 {
                     "data": {
                         "ledger": ledger_serializer.data,
+                        "refund_receipts": refund_serializer.data,
                         "advance_receipts": advance_serializer.data,
                         "payment_receipts": payment_serializer.data,
                         "grv": grv_serializer.data
