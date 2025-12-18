@@ -1581,86 +1581,205 @@ class VariantProductsByProductView(BaseTokenView):
 
 import traceback
             
+# class CreateOrder(BaseTokenView):
+#     @transaction.atomic
+#     def post(self, request):
+#         try:
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+
+#             cart_items = BeposoftCart.objects.filter(user=authUser)
+#             if not cart_items.exists():
+#                 return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+
+            
+#             serializer = OrderSerializer(data=request.data)
+#             if not serializer.is_valid():
+#                 return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+#             order = serializer.save()
+
+#             # Aggregate product quantities and other data
+#             product_data = {}
+#             product_ids = set()
+#             for item in cart_items:
+#                 product_id = item.product.pk
+#                 product_ids.add(product_id)
+#                 if product_id not in product_data:
+#                     product_data[product_id] = {
+#                         "product": item.product,
+#                         "quantity": Decimal(item.quantity),
+#                         "discount": Decimal(item.discount or 0),
+#                         "tax": Decimal(item.product.tax or 0),
+#                         "rate": Decimal(item.price or 0),
+#                         "description": item.note,
+#                     }
+#                 else:
+#                     product_data[product_id]["quantity"] += Decimal(item.quantity)
+#                     product_data[product_id]["discount"] += Decimal(item.discount or 0)
+
+            
+#             for product_id, data in product_data.items():
+#                 OrderItem.objects.create(
+#                     order=order,
+#                     product=data["product"],
+#                     quantity=int(data["quantity"]),
+#                     discount=data["discount"],
+#                     tax=data["tax"],
+#                     rate=data["rate"],
+#                     description=data["description"],
+#                 )
+
+
+#             # Clear cart after order creation
+#             cart_items.delete()
+#             return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+
+#         except Exception as e:
+#             logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
+#             traceback.print_exc()
+#             return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class CreateOrder(BaseTokenView):
+
     @transaction.atomic
     def post(self, request):
         try:
+            #  Authenticate user
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
+            # Fetch cart items
             cart_items = BeposoftCart.objects.filter(user=authUser)
             if not cart_items.exists():
-                return Response({"status": "error", "message": " Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"status": "error", "message": "Cart is empty"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            
+            # Validate order serializer
             serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
-                return Response({"status": "error", "message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Validation failed",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            order = serializer.save()
-
-            # Aggregate product quantities and other data
+            # Aggregate cart → product-wise quantity
             product_data = {}
             product_ids = set()
+
             for item in cart_items:
-                product_id = item.product.pk
-                product_ids.add(product_id)
-                if product_id not in product_data:
-                    product_data[product_id] = {
-                        "product": item.product,
+                product = item.product
+                product_ids.add(product.id)
+
+                if product.id not in product_data:
+                    product_data[product.id] = {
+                        "product": product,
                         "quantity": Decimal(item.quantity),
                         "discount": Decimal(item.discount or 0),
-                        "tax": Decimal(item.product.tax or 0),
+                        "tax": Decimal(product.tax or 0),
                         "rate": Decimal(item.price or 0),
                         "description": item.note,
                     }
                 else:
-                    product_data[product_id]["quantity"] += Decimal(item.quantity)
-                    product_data[product_id]["discount"] += Decimal(item.discount or 0)
+                    product_data[product.id]["quantity"] += Decimal(item.quantity)
+                    product_data[product.id]["discount"] += Decimal(item.discount or 0)
 
-            # Lock all products in one go
-            # products = Products.objects.select_for_update().filter(pk__in=product_ids)
-            # products_map = {p.pk: p for p in products}
+            # Lock product rows & validate stock
+            products = Products.objects.select_for_update().filter(id__in=product_ids)
+            product_map = {p.id: p for p in products}
 
-            # Create order items and update locked_stock once per product
-            # for product_id, data in product_data.items():
-            #     OrderItem.objects.create(
-            #         order=order,
-            #         product=data["product"],
-            #         quantity=int(data["quantity"]),
-            #         discount=data["discount"],
-            #         tax=data["tax"],
-            #         rate=data["rate"],
-            #         description=data["description"],
-                    
-            #     )
-            #     product = products_map[product_id]
+            stock_errors = []
 
-            #     old_locked_stock = product.locked_stock or 0
-            #     product.locked_stock = old_locked_stock + data["quantity"]
-            #     product.save()
             for product_id, data in product_data.items():
+                product = product_map.get(product_id)
+
+                if not product:
+                    stock_errors.append({
+                        "product_id": product_id,
+                        "message": "Product not found"
+                    })
+                    continue
+
+                requested_qty = int(data["quantity"])
+                available_stock = product.stock - product.locked_stock
+
+                if requested_qty > available_stock:
+                    stock_errors.append({
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "requested_quantity": requested_qty,
+                        "available_stock": available_stock,
+                        "message": f"Out of stock. Only {available_stock} available."
+                    })
+
+            # Stop order creation if stock fails
+            if stock_errors:
+                return Response(
+                    {
+                        "status": "error",
+                        "error_code": "OUT_OF_STOCK",
+                        "message": "Some products are out of stock",
+                        "errors": stock_errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create Order
+            order = serializer.save(created_by=authUser)
+
+            #  Lock stock & create order items
+            for product_id, data in product_data.items():
+                product = product_map[product_id]
+                qty = int(data["quantity"])
+
+                # Lock stock
+                Products.objects.filter(id=product.id).update(
+                    locked_stock=F("locked_stock") + qty
+                )
+
+                # Create order item
                 OrderItem.objects.create(
                     order=order,
-                    product=data["product"],
-                    quantity=int(data["quantity"]),
+                    product=product,
+                    quantity=qty,
                     discount=data["discount"],
                     tax=data["tax"],
                     rate=data["rate"],
                     description=data["description"],
                 )
 
-
-            # Clear cart after order creation
+            # Clear cart
             cart_items.delete()
-            return Response({"status": "success", "message": "Order created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Order created successfully",
+                    "data": OrderSerializer(order).data
+                },
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
-            logger.error(f"Unexpected error during order creation: {e}", exc_info=True)
+            logger.error("Unexpected error during order creation", exc_info=True)
             traceback.print_exc()
-            return Response({"status": "error", "message": "An unexpected error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An unexpected error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class OrderItemCreateView(APIView):
