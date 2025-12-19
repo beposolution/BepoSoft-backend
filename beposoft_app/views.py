@@ -4178,6 +4178,7 @@ class WarehouseListViewbyDate(BaseTokenView):
                 invoice_id = warehouse.get("order")
                 invoice = warehouse.get("invoice") or "No Invoice"
                 cod_amount = warehouse.get("cod_amount")
+                box_count = warehouse.get("box_count")
 
                 # Initialize family group if not exists
                 if family not in grouped_families:
@@ -4198,6 +4199,7 @@ class WarehouseListViewbyDate(BaseTokenView):
                         "invoice_id": invoice_id,
                         "invoice": invoice,
                         "cod_amount":cod_amount,
+                        "box_count": box_count,
                         "warehouses": [warehouse]
                     })
                     
