@@ -2010,3 +2010,14 @@ class StaffOrderUpdateSerializer(serializers.ModelSerializer):
             StaffOrderUpdateItem.objects.create(parent=instance, **item)
 
         return instance
+
+
+class OrderCODSplitUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ["box_count"]
+
+    def validate_box_count(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Box count must be greater than zero.")
+        return value
