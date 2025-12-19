@@ -5862,11 +5862,18 @@ def generate_shipping_label(request, order_id):
 
     # COD PER BOX
     cod_amount_per_box = None
-    if cod_amount is not None and cod_amount > 0:
-        cod_amount_per_box = round(float(cod_amount) / box_count)
 
+    if cod_amount and cod_amount > 0:
+        if order.box_count and order.box_count > 0:
+           
+            divisor = order.box_count
+        else:
+            
+            divisor = warehouse_boxes.count() or 1
 
-    # VOLUME WEIGHT
+        cod_amount_per_box = round(cod_amount / divisor, 2)
+
+    # --- VOLUME WEIGHT ---
     volume_weight = None
     if warehouse and warehouse.length and warehouse.breadth and warehouse.height:
         volume_weight = (
@@ -5874,7 +5881,6 @@ def generate_shipping_label(request, order_id):
             * float(warehouse.breadth)
             * float(warehouse.height)
         ) / 6000
-
 
     context = {
         "order": order,
@@ -5884,7 +5890,7 @@ def generate_shipping_label(request, order_id):
         "volume_weight": round(volume_weight, 2) if volume_weight else None,
         "cod_amount": cod_amount,
         "cod_amount_per_box": cod_amount_per_box,
-        "box_count": box_count,
+        "box_count": box_count, 
         "customer_data": customer_data,
     }
 
@@ -8627,6 +8633,52 @@ class FamilyUserWiseCallReportView(APIView):
                     "success": False,
                     "message": "Failed to fetch user-wise call report",
                     "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UpdateOrderCODSplitView(BaseTokenView):
+    def patch(self, request, order_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            order = get_object_or_404(Order, pk=order_id)
+
+            serializer = OrderCODSplitUpdateSerializer(
+                order,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Box count updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to update box count",
+                    "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

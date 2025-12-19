@@ -670,6 +670,7 @@ class Order(models.Model):
     ]
     cod_status = models.CharField(max_length=20, choices=COD_STATUS_CHOICES, null=True, blank=True)
     adv_cod_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    box_count = models.PositiveIntegerField(null=True, blank=True, help_text="Number of parts to split COD amount")
 
     updated_at = models.DateTimeField(auto_now=True)
 
