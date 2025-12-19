@@ -818,13 +818,14 @@ class WarehousedataSerializer(serializers.ModelSerializer):
     verified_by = serializers.SerializerMethodField()
 
     cod_amount = serializers.IntegerField(source="order.cod_amount")
+    box_count = serializers.IntegerField( source="order.box_count",)
     order_state = serializers.CharField(source="order.billing_address.state")
 
     class Meta:
         model = Warehousedata
         fields = [
             'id', 'box', 'weight', 'length', 'breadth', 'height',
-            'image', 'image_before', 'cod_amount',
+            'image', 'image_before', 'cod_amount', 'box_count',
             'parcel_service_id', 'parcel_service_name',
             'tracking_id', 'shipping_charge', 'status',
             'packed_by_id', 'shipped_date', 'order',
