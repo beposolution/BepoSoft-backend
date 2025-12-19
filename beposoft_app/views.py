@@ -1741,9 +1741,9 @@ class CreateOrder(BaseTokenView):
                 product = product_map[product_id]
                 qty = int(data["quantity"])
 
-                Products.objects.filter(id=product.id).update(
-                    locked_stock=F("locked_stock") + qty
-                )
+                # Products.objects.filter(id=product.id).update(
+                #     locked_stock=F("locked_stock") + qty
+                # )
 
                 OrderItem.objects.create(
                     order=order,
