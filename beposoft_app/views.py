@@ -5802,7 +5802,6 @@ def Deliverynote(request, order_id):
         OrderItem.objects
         .filter(order=order)
         .select_related("product")
-        .prefetch_related("rack_details")
     )
     company = order.company  
     warehouse = Warehousedata.objects.filter(order=order).first()

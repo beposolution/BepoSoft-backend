@@ -130,21 +130,21 @@
         </thead>
         <tbody>
           {% for warehouse_item in warehouse_items %}
-            {% if warehouse_item.rack_details.all|length > 0 %}
-              {% for rack in warehouse_item.rack_details.all %}
+            {% if warehouse_item.rack_details %}
+              {% for rack in warehouse_item.rack_details %}
                 <tr>
                   {% if forloop.first %}
-                    <td rowspan="{{ warehouse_item.rack_details.all|length }}">{{ forloop.parentloop.counter }}</td>
-                    <td rowspan="{{ warehouse_item.rack_details.all|length }}">
+                    <td rowspan="{{ warehouse_item.rack_details|length }}">{{ forloop.parentloop.counter }}</td>
+                    <td rowspan="{{ warehouse_item.rack_details|length }}">
                       {% if warehouse_item.product.image %}
                         <img src="{{ warehouse_item.product.image.url }}" alt="{{ warehouse_item.product.name }}" width="50" />
                       {% else %} No Image {% endif %}
                     </td>
-                    <td rowspan="{{ warehouse_item.rack_details.all|length }}">{{ warehouse_item.product.name }}</td>
-                    <td rowspan="{{ warehouse_item.rack_details.all|length }}">
+                    <td rowspan="{{ warehouse_item.rack_details|length }}">{{ warehouse_item.product.name }}</td>
+                    <td rowspan="{{ warehouse_item.rack_details|length }}">
                       {{ warehouse_item.description|default:"None" }}
                     </td>
-                    <td rowspan="{{ warehouse_item.rack_details.all|length }}">
+                    <td rowspan="{{ warehouse_item.rack_details|length }}">
                       {{ warehouse_item.quantity }} {{ warehouse_item.product.unit }}
                     </td>
                   {% endif %}
