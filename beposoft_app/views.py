@@ -3031,11 +3031,11 @@ class RemoveExistsOrderItems(BaseTokenView):
     def get_order_item(self, pk):
         try:
             order_item = get_object_or_404(OrderItem, pk=pk)
-
             return order_item
         except OrderItem.DoesNotExist:
             return None
-    def delete(self,request,pk):
+
+    def delete(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
@@ -3044,27 +3044,35 @@ class RemoveExistsOrderItems(BaseTokenView):
             order_item = self.get_order_item(pk)
             if not order_item:
                 return Response({"status": "error", "message": "Order item not found"}, status=status.HTTP_404_NOT_FOUND)
+
             order_item.delete()
             return Response({"status": "success"}, status=status.HTTP_200_OK)
-        except Exception as e :
+
+        except Exception as e:
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def put(self, request, pk):
-        try:
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
-                        
-            item = self.get_order_item(pk)
-            if not item:
-                return Response({"status": "error", "message": "Order item not found"}, status=status.HTTP_404_NOT_FOUND)
-            serializer = ExistedOrderAddProductsSerializer(item, data=request.data, partial=True)
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        with transaction.atomic():
+            item = get_object_or_404(OrderItem, pk=pk)
+
+            serializer = ExistedOrderAddProductsSerializer(
+                item, data=request.data, partial=True
+            )
             if serializer.is_valid():
                 serializer.save()
-                return Response({"status": "success", "message": "Order item updated successfully"}, status=status.HTTP_200_OK)
-            return Response({"status": "error", "message": "Invalid data provided"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e :
-            return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response(
+                    {"status": "success", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
+        return Response(
+            {"status": "error", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 class OrderTotalAmountSave(BaseTokenView):
     def put(self,request,pk):
@@ -5790,7 +5798,12 @@ from collections import defaultdict
 
 def Deliverynote(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    warehouse_items = OrderItem.objects.filter(order=order)
+    warehouse_items = (
+        OrderItem.objects
+        .filter(order=order)
+        .select_related("product")
+        .prefetch_related("rack_details")
+    )
     company = order.company  
     warehouse = Warehousedata.objects.filter(order=order).first()
 
