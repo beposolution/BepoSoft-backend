@@ -2454,11 +2454,21 @@ class CustomerOrderItems(BaseTokenView):
             if not orderItems.exists():
                 return Response({"status": "error", "message": "No order items found"}, status=status.HTTP_404_NOT_FOUND)
             
+            grv_qs = GRVModel.objects.filter(order_id=order_id)
+            
             manage_staff_designation = order.manage_staff.designation
             orderSerilizer = OrderModelSerilizer(order, many=False)
             serializer = OrderItemModelSerializer(orderItems, many=True, context={'manage_staff_designation': manage_staff_designation})
 
-            return Response({"order": orderSerilizer.data, "items": serializer.data}, status=status.HTTP_200_OK)
+            grv_serializer = GRVLedgerSerializer(grv_qs, many=True)
+
+            return Response(
+                {
+                    "order": orderSerilizer.data, 
+                    "items": serializer.data,
+                    "grv": grv_serializer.data 
+                    }, 
+                    status=status.HTTP_200_OK)
 
         except ObjectDoesNotExist:
             return Response({"status": "error", "message": "Orders not found"}, status=status.HTTP_404_NOT_FOUND)
