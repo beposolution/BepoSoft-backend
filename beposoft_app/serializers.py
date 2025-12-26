@@ -142,6 +142,7 @@ class CustomerSerilizers(serializers.ModelSerializer):
         
 class CustomerModelSerializer(serializers.ModelSerializer):
     gst = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    gst_confirm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     customer_type = serializers.PrimaryKeyRelatedField(
         queryset=CustomerType.objects.all(),
         required=False, allow_null=True
@@ -153,7 +154,7 @@ class CustomerModelSerializer(serializers.ModelSerializer):
             'phone', 'alt_phone', 'email',
             'address', 'zip_code', 'city', 
             'state', 'comment', 'created_at',
-            'customer_type'
+            'customer_type', 'gst_confirm'
         ]
 
     def validate(self, data):
