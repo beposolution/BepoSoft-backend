@@ -3464,12 +3464,20 @@ class CustomerOrderLedgerdata(BaseTokenView):
                 received_transfers, many=True
             )
 
+            def normalize_date(value):
+                if isinstance(value, datetime):
+                    return value.date()
+                if isinstance(value, date):
+                    return value
+                if isinstance(value, str):
+                    try:
+                        return datetime.strptime(value, "%Y-%m-%d").date()
+                    except ValueError:
+                        return None
+                return None
+
             ledger_data.sort(
-                key=lambda x: (
-                    x.get("order_date")
-                    if not isinstance(x.get("order_date"), str)
-                    else datetime.strptime(x.get("order_date"), "%Y-%m-%d")
-                )
+                key=lambda x: normalize_date(x.get("order_date"))
             )
 
             return Response(
