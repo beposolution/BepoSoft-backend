@@ -3430,27 +3430,9 @@ class CustomerOrderLedgerdata(BaseTokenView):
                 .order_by("date", "id")
             )
 
-            ledger_data = list(ledger_serializer.data)
-            for t in sent_transfers:
-                ledger_data.append({
-                    "id": f"AT-{t.id}",
-                    "invoice": "-",
-                    "company": None,
-                    "customer_name": customer.name,
-                    "total_amount": None,
-                    "return_amount": "0.00",
-                    "refund_amount": "0.00",
-                    "cod_return_amount": "0.00",
-                    "exchange_amount": "0.00",
-                    "order_date": t.date,
-                    "status": "Advance Transfer Sent",
-                    "advance_transfer": {
-                        "to": t.send_to.name,
-                        "amount": str(t.amount),
-                        "note": t.note,
-                    },
-                    "type": "ADVANCE_TRANSFER_SENT",
-                })
+            sent_transfer_serializer = AdvanceAmountTransferSerializer(
+                sent_transfers, many=True
+            )
 
             # ---- ADVANCE TRANSFERS (RECEIVED BY CUSTOMER) ----
             received_transfers = (
@@ -3464,26 +3446,11 @@ class CustomerOrderLedgerdata(BaseTokenView):
                 received_transfers, many=True
             )
 
-            def normalize_date(value):
-                if isinstance(value, datetime):
-                    return value.date()
-                if isinstance(value, date):
-                    return value
-                if isinstance(value, str):
-                    try:
-                        return datetime.strptime(value, "%Y-%m-%d").date()
-                    except ValueError:
-                        return None
-                return None
-
-            ledger_data.sort(
-                key=lambda x: normalize_date(x.get("order_date"))
-            )
-
             return Response(
                 {
                     "data": {
-                        "ledger": ledger_data,
+                        "ledger": ledger_serializer.data,
+                        "ledger_sent_transfers": sent_transfer_serializer.data, 
                         "refund_receipts": refund_serializer.data,
                         "advance_receipts": advance_serializer.data,
                         "payment_receipts": payment_serializer.data,
