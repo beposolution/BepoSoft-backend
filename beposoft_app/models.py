@@ -1357,6 +1357,35 @@ class RefundReceipt(models.Model):
         return f"{self.amount} by {self.customer.name}"
 
 
+class AdvanceAmountTransfer(models.Model):
+    send_from = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="amount_send_customer")
+    send_to = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="amount_received_customer")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    note = models.CharField(max_length=100)
+    date=models.DateField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transfer_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "advance_amount_transfer"
+
+    def __str__(self):
+        return f"{self.send_from.name} send ₹ {self.amount} to {self.send_to.name}"
+    
+
+class AdvanceAmountTransferImage(models.Model):
+    transfer = models.ForeignKey(AdvanceAmountTransfer, on_delete=models.CASCADE, related_name="amount_transfer_images")
+    image = models.ImageField(upload_to="advance_transfers/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "advance_amount_transfer_images"
+
+    def __str__(self):
+        return f"Image for Transfer ID {self.transfer.id}"
+
+
 class PerfomaInvoiceOrder(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE)
     warehouses_obj = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True)
