@@ -2023,3 +2023,27 @@ class OrderCODSplitUpdateSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Box count must be greater than zero.")
         return value
+
+
+class AdvanceAmountTransferImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdvanceAmountTransferImage
+        fields = ["id", "image", "uploaded_at"]
+
+
+class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
+    amount_transfer_images = AdvanceAmountTransferImageSerializer(many=True, read_only=True)
+    send_from_name = serializers.CharField(source="send_from.name", read_only=True)
+    send_to_name = serializers.CharField(source="send_to.name", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+
+    class Meta:
+        model = AdvanceAmountTransfer
+        fields = [
+            "id", "send_from", "send_from_name",
+            "send_to", "send_to_name", "amount",
+            "note", "date", "created_by",
+            "created_by_name", "created_at",
+            "updated_at", "amount_transfer_images",
+        ]
+        read_only_fields = ["created_by", "created_at", "updated_at"]

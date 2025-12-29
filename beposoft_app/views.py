@@ -8706,3 +8706,112 @@ class UpdateOrderCODSplitView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class AdvanceAmountTransferListCreateView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        transfers = AdvanceAmountTransfer.objects.all().order_by("-id")
+        serializer = AdvanceAmountTransferSerializer(transfers, many=True)
+        return Response(
+            {"message": "Transfers fetched successfully", "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        serializer = AdvanceAmountTransferSerializer(data=request.data)
+        if serializer.is_valid():
+            transfer = serializer.save(created_by=user)
+
+            images = request.FILES.getlist("images")
+            for img in images:
+                AdvanceAmountTransferImage.objects.create(
+                    transfer=transfer, image=img
+                )
+
+            return Response(
+                {
+                    "message": "Advance amount transfer created successfully",
+                    "data": AdvanceAmountTransferSerializer(transfer).data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(
+            {"message": "Validation error", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+class AdvanceAmountTransferDetailView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_object(self, pk):
+        return get_object_or_404(AdvanceAmountTransfer, pk=pk)
+
+    def get(self, request, pk):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        transfer = self.get_object(pk)
+        serializer = AdvanceAmountTransferSerializer(transfer)
+        return Response(
+            {"message": "Transfer fetched successfully", "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, pk):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        transfer = self.get_object(pk)
+        serializer = AdvanceAmountTransferSerializer(
+            transfer, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            images = request.FILES.getlist("images")
+            for img in images:
+                AdvanceAmountTransferImage.objects.create(
+                    transfer=transfer, image=img
+                )
+
+            return Response(
+                {
+                    "message": "Transfer updated successfully",
+                    "data": AdvanceAmountTransferSerializer(transfer).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {"message": "Validation error", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+class AdvanceAmountTransferImageDeleteView(BaseTokenView):
+    def delete(self, request, image_id):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        image = get_object_or_404(AdvanceAmountTransferImage, pk=image_id)
+        image.image.delete(save=False)
+        image.delete()
+
+        return Response(
+            {"message": "Transfer image deleted successfully"},
+            status=status.HTTP_200_OK,
+        )

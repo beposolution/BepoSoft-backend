@@ -51,6 +51,8 @@ admin.site.register(Districts)
 admin.site.register(StaffOrderUpdate)
 admin.site.register(StaffOrderUpdateItem)
 admin.site.register(RefundReceipt)
+admin.site.register(AdvanceAmountTransfer)
+admin.site.register(AdvanceAmountTransferImage)
 
 
 
