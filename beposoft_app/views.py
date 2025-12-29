@@ -3422,6 +3422,16 @@ class CustomerOrderLedgerdata(BaseTokenView):
 
             refund_serializer = RefundReceiptSerializer(refund_receipts, many=True)
 
+            advance_transfers = (
+                AdvanceAmountTransfer.objects
+                .filter(Q(send_from=customer) | Q(send_to=customer))
+                .select_related("send_from", "send_to", "created_by")
+                .order_by("date", "id")
+            )
+
+            advance_transfer_serializer = AdvanceAmountTransferSerializer(
+                advance_transfers, many=True
+            )
 
             return Response(
                 {
@@ -3430,7 +3440,8 @@ class CustomerOrderLedgerdata(BaseTokenView):
                         "refund_receipts": refund_serializer.data,
                         "advance_receipts": advance_serializer.data,
                         "payment_receipts": payment_serializer.data,
-                        "grv": grv_serializer.data
+                        "grv": grv_serializer.data,
+                        "advance_transfers": advance_transfer_serializer.data,
                     }
                 },
                 status=status.HTTP_200_OK
