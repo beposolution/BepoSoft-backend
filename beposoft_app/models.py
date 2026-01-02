@@ -1361,7 +1361,7 @@ class AdvanceAmountTransfer(models.Model):
     send_from = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="amount_send_customer")
     send_to = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="amount_received_customer")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    note = models.CharField(max_length=100)
+    note = models.CharField(max_length=250)
     date=models.DateField()
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transfer_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
