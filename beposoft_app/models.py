@@ -547,7 +547,16 @@ class InternalTransfer(models.Model):
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(null=True, blank=True)
     transactionID = models.CharField(max_length=50, null=True, blank=True)
+    payment_receipt = models.CharField(max_length=15, unique=True, editable=False, null=True)  # Auto-generated ID
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.payment_receipt:
+            last_id = InternalTransfer.objects.all().order_by('id').last()
+            next_id = last_id.id + 1 if last_id else 1
+            self.payment_receipt = f"INT-T-{str(next_id).zfill(4)}{chr(65 + (next_id % 26))}"
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = "internal_transfer"
@@ -563,7 +572,16 @@ class CODTransfer(models.Model):
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(null=True, blank=True)
     transactionID = models.CharField(max_length=50, null=True, blank=True)
+    payment_receipt = models.CharField(max_length=15, unique=True, editable=False, null=True)  # Auto-generated ID
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.payment_receipt:
+            last_id = CODTransfer.objects.all().order_by('id').last()
+            next_id = last_id.id + 1 if last_id else 1
+            self.payment_receipt = f"COD-T-{str(next_id).zfill(4)}{chr(65 + (next_id % 26))}"
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = "cod_transfer"
