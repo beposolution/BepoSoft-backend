@@ -1785,7 +1785,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         ).values(
             'amount',
             'received_at',
-            payment_receipt=F('transactionID')
+            'payment_receipt'
         )
 
         # COD transfers received
@@ -1796,7 +1796,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         ).values(
             'amount',
             'received_at',
-            payment_receipt=F('transactionID')
+            'payment_receipt'
         )
 
         combined = chain(
