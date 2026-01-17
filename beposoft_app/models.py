@@ -549,7 +549,6 @@ class InternalTransfer(models.Model):
     transactionID = models.CharField(max_length=50, null=True, blank=True)
     payment_receipt = models.CharField(max_length=15, unique=True, editable=False, null=True)  # Auto-generated ID
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         if not self.payment_receipt:
@@ -574,7 +573,6 @@ class CODTransfer(models.Model):
     transactionID = models.CharField(max_length=50, null=True, blank=True)
     payment_receipt = models.CharField(max_length=15, unique=True, editable=False, null=True)  # Auto-generated ID
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
         if not self.payment_receipt:
