@@ -1765,12 +1765,22 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         from django.db.models import F
         from django.db.models.functions import TruncDate
 
-        payments_qs = bank.payments.all().values('payment_receipt', 'amount', 'received_at')
-        advance_qs = bank.advance_receipts.all().values('payment_receipt', 'amount', 'received_at')
-        bank_receipt_qs = bank.bank_receipts.all().values('payment_receipt', 'amount', 'received_at')
+        payments_qs = bank.payments.all().values(
+            'payment_receipt', 'amount', 'received_at'
+        )
 
-        # Received transfers
-        internal_received = InternalTransfer.objects.filter(receiver_bank=bank).annotate(
+        advance_qs = bank.advance_receipts.all().values(
+            'payment_receipt', 'amount', 'received_at'
+        )
+
+        bank_receipt_qs = bank.bank_receipts.all().values(
+            'payment_receipt', 'amount', 'received_at'
+        )
+
+        # Internal transfers received
+        internal_received = InternalTransfer.objects.filter(
+            receiver_bank=bank
+        ).annotate(
             received_at=TruncDate('created_at')
         ).values(
             'amount',
@@ -1778,45 +1788,84 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
             payment_receipt=F('transactionID')
         )
 
-        combined = chain(payments_qs, advance_qs, bank_receipt_qs, internal_received)
+        # COD transfers received
+        cod_received = CODTransfer.objects.filter(
+            receiver_bank=bank
+        ).annotate(
+            received_at=TruncDate('created_at')
+        ).values(
+            'amount',
+            'received_at',
+            payment_receipt=F('transactionID')
+        )
+
+        combined = chain(
+            payments_qs,
+            advance_qs,
+            bank_receipt_qs,
+            internal_received,
+            cod_received
+        )
+
         return UnifiedPaymentSerializer(combined, many=True).data
+
 
     def get_banks(self, bank):
         from django.db.models import F
         from django.db.models.functions import TruncDate
 
-        # Step 1: Get actual expenses
-        expenses_qs = ExpenseModel.objects.filter(bank=bank).values(
+        # Actual expenses
+        expenses_qs = ExpenseModel.objects.filter(
+            bank=bank
+        ).values(
             'id', 'amount', 'expense_date', 'purpose_of_payment'
         )
 
-        # Step 2: Get internal transfers (sent transfers)
-        transfers_qs = InternalTransfer.objects.filter(sender_bank=bank).annotate(
+        # Internal transfers sent
+        internal_transfers_qs = InternalTransfer.objects.filter(
+            sender_bank=bank
+        ).annotate(
             expense_date=TruncDate('created_at')
         ).values(
-            'id',  # if InternalTransfer has an id field
             'amount',
             'expense_date',
             'transactionID'
         )
 
-        # Step 3: Convert transfers to match ExpenseModel format
-        transfers_as_expenses = [
+        internal_transfers = [
             {
-                'id': None,  # or use t['id'] if needed
+                'id': None,
                 'amount': t['amount'],
                 'expense_date': t['expense_date'],
                 'purpose_of_payment': t['transactionID'],
             }
-            for t in transfers_qs
+            for t in internal_transfers_qs
         ]
 
-        # Step 4: Combine both
-        combined = list(expenses_qs) + transfers_as_expenses
+        # COD transfers sent (NEW)
+        cod_transfers_qs = CODTransfer.objects.filter(
+            sender_bank=bank
+        ).annotate(
+            expense_date=TruncDate('created_at')
+        ).values(
+            'amount',
+            'expense_date',
+            'transactionID'
+        )
 
-        # Step 5: Serialize
+        cod_transfers = [
+            {
+                'id': None,
+                'amount': t['amount'],
+                'expense_date': t['expense_date'],
+                'purpose_of_payment': t['transactionID'],
+            }
+            for t in cod_transfers_qs
+        ]
+
+        combined = list(expenses_qs) + internal_transfers + cod_transfers
+
         return CompanyExpenseSeriizers(combined, many=True).data
-
 
 
 
