@@ -570,6 +570,7 @@ class CODTransfer(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(null=True, blank=True)
+    created_end = models.DateTimeField(null=True, blank=True)
     transactionID = models.CharField(max_length=50, null=True, blank=True)
     payment_receipt = models.CharField(max_length=15, unique=True, editable=False, null=True)  # Auto-generated ID
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
