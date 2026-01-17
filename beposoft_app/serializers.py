@@ -1836,6 +1836,23 @@ class InternalTransferViewSerializer(serializers.ModelSerializer):
         fields = ['sender_bank','sender_bank_name','receiver_bank','id',
                   'receiver_bank_name','amount','description','created_at',
                   'transactionID','created_by','created_by_name']
+        
+
+class CODTransferSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CODTransfer
+        fields = '__all__'
+        
+class CODTransferViewSerializer(serializers.ModelSerializer):
+    sender_bank_name = serializers.CharField(source='sender_bank.name', read_only=True)
+    receiver_bank_name = serializers.CharField(source='receiver_bank.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    
+    class Meta:
+        model = CODTransfer
+        fields = ['sender_bank','sender_bank_name','receiver_bank','id',
+                  'receiver_bank_name','amount','description','created_at',
+                  'transactionID','created_by','created_by_name']
 
 class AttendanceSummarySerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
