@@ -554,6 +554,22 @@ class InternalTransfer(models.Model):
 
     def __str__(self):
         return f"Transfer of {self.amount} from {self.sender_bank} to {self.receiver_bank}"
+    
+
+class CODTransfer(models.Model):
+    sender_bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='cod_sent_transfers')
+    receiver_bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='cod_received_transfers')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    transactionID = models.CharField(max_length=50, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
+
+    class Meta:
+        db_table = "cod_transfer"
+
+    def __str__(self):
+        return f"Transfer of {self.amount} from {self.sender_bank} to {self.receiver_bank}"
 
 
 def reduce_product_rack_stock_on_ship(order):

@@ -6120,6 +6120,78 @@ class InternalTransferByIdView(BaseTokenView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
+class CODTransferView(BaseTokenView):
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            data = request.data.copy()
+            data["created_by"] = authUser.pk
+
+            serializer = CODTransferSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"message": "COD transfer created successfully", "data": serializer.data},
+                    status=status.HTTP_201_CREATED
+                )
+            return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            transfers = CODTransfer.objects.all().order_by('-id')
+            serializer = CODTransferViewSerializer(transfers, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class CODTransferByIdView(BaseTokenView):
+    def get(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            transfer = CODTransfer.objects.get(id=id)
+            serializer = CODTransferViewSerializer(transfer)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except CODTransfer.DoesNotExist:
+            return Response({"error": "COD Transfer not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            transfer = CODTransfer.objects.get(id=id)
+            serializer = CODTransferSerializer(transfer, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "COD Transfer updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except CODTransfer.DoesNotExist:
+            return Response({"error": "COD Transfer not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         
 
 class ProductByWarehouseView(BaseTokenView):
@@ -6185,8 +6257,10 @@ class LockedStockInvoicesView(APIView):
         try:
             # Only consider active orders that might lock stock
             active_statuses = [
-                "Pending", "Waiting For Confirmation", "Packing under progress", "To Print",
-                "Packed", "Ready to ship", "Invoice Created", "Invoice Approved"
+                "Pending", "Waiting For Confirmation", 
+                "Packing under progress", "To Print",
+                "Packed", "Ready to ship", 
+                "Invoice Created", "Invoice Approved"
             ]
 
             order_items = OrderItem.objects.filter(
