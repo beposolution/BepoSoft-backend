@@ -1792,7 +1792,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         cod_received = CODTransfer.objects.filter(
             receiver_bank=bank
         ).annotate(
-            received_at=TruncDate('created_at')
+            received_at=TruncDate('created_end')
         ).values(
             'amount',
             'received_at',
@@ -1901,7 +1901,7 @@ class CODTransferViewSerializer(serializers.ModelSerializer):
         model = CODTransfer
         fields = ['sender_bank','sender_bank_name','receiver_bank','id',
                   'receiver_bank_name','amount','description','created_at',
-                  'transactionID','created_by','created_by_name']
+                  'created_end','transactionID','created_by','created_by_name']
 
 class AttendanceSummarySerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
