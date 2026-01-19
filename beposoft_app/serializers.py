@@ -1792,7 +1792,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         cod_received = CODTransfer.objects.filter(
             receiver_bank=bank
         ).annotate(
-            received_at=TruncDate('created_end')
+            received_at=TruncDate('created_at')
         ).values(
             'amount',
             'received_at',
@@ -1846,7 +1846,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         cod_transfers_qs = CODTransfer.objects.filter(
             sender_bank=bank
         ).annotate(
-            expense_date=TruncDate('created_at')
+            expense_date=TruncDate('created_end')
         ).values(
             'amount',
             'expense_date',
