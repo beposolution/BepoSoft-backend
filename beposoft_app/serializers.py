@@ -1899,7 +1899,7 @@ class CODTransferViewSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CODTransfer
-        fields = ['sender_bank','sender_bank_name','receiver_bank','id',
+        fields = ['sender_bank','sender_bank_name','receiver_bank','id', 'payment_receipt',
                   'receiver_bank_name','amount','description','created_at',
                   'created_end','transactionID','created_by','created_by_name']
 
