@@ -1850,7 +1850,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
         ).values(
             'amount',
             'expense_date',
-            'transactionID'
+            'payment_receipt'
         )
 
         cod_transfers = [
@@ -1858,7 +1858,7 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
                 'id': None,
                 'amount': t['amount'],
                 'expense_date': t['expense_date'],
-                'purpose_of_payment': t['transactionID'],
+                'purpose_of_payment': t['payment_receipt'],
             }
             for t in cod_transfers_qs
         ]
