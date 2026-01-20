@@ -1853,17 +1853,17 @@ class FinanaceReceiptSerializer(serializers.ModelSerializer):
             'payment_receipt'
         )
 
-        cod_transfers = [
-            {
-                'id': None,
-                'amount': t['amount'],
-                'expense_date': t['expense_date'],
-                'purpose_of_payment': t['payment_receipt'],
-            }
-            for t in cod_transfers_qs
-        ]
+        # cod_transfers = [
+        #     {
+        #         'id': None,
+        #         'amount': t['amount'],
+        #         'expense_date': t['expense_date'],
+        #         'purpose_of_payment': t['payment_receipt'],
+        #     }
+        #     for t in cod_transfers_qs
+        # ]
 
-        combined = list(expenses_qs) + internal_transfers + cod_transfers
+        combined = list(expenses_qs) + internal_transfers + cod_transfers_qs
 
         return CompanyExpenseSeriizers(combined, many=True).data
 
