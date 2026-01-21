@@ -4411,8 +4411,8 @@ class ExpenseDashboardSummaryView(BaseTokenView):
             qs = (
                 ExpenseModel.objects
                 .filter(
-                    expense_date__date__gte=month_start,
-                    expense_date__date__lte=today
+                    expense_date__gte=month_start,
+                    expense_date__lte=today
                 )
                 .values("expense_type")
                 .annotate(total=Sum("amount"))
