@@ -4392,6 +4392,62 @@ class ExpensAddView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
+
+
+class ExpenseDashboardSummaryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            # Token validation
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # Date range (MTD)
+            today = date.today()
+            month_start = today.replace(day=1)
+
+            # Aggregated query
+            qs = (
+                ExpenseModel.objects
+                .filter(
+                    expense_date__date__gte=month_start,
+                    expense_date__date__lte=today
+                )
+                .values("expense_type")
+                .annotate(total=Sum("amount"))
+                .order_by("expense_type")
+            )
+
+            summary = []
+            grand_total = 0.0
+
+            for row in qs:
+                total = float(row.get("total") or 0)
+                summary.append({
+                    "expense_type": row.get("expense_type"),
+                    "total": round(total, 2)
+                })
+                grand_total += total
+
+            return Response({
+                "range": {
+                    "from": month_start,
+                    "to": today
+                },
+                "summary": summary,
+                "grand_total": round(grand_total, 2)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
   
 class ExpensAddViewExpectEmi(BaseTokenView):
     def post(self, request):
