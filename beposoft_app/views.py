@@ -6055,6 +6055,34 @@ class FamilyBasedOrderGetView(BaseTokenView):
             return Response({"error": "An unexpected error occurred.", "details": str(e)}, status=500)
         
 
+
+class FamilyBasedBDOBDMOrderGetView(BaseTokenView):
+    def get(self, request):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            orders = Order.objects.filter(
+                family=authUser.family.pk,
+                manage_staff__department_id__name__in=["BDO", "BDM"]
+            ).order_by("-id")
+
+            serializer = FamilyOrderModelSerilizer(orders, many=True)
+            return Response(serializer.data, status=200)
+
+        except Exception as e:
+            return Response(
+                {
+                    "error": "An unexpected error occurred.",
+                    "details": str(e)
+                },
+                status=500
+            )
+
+        
+
 class WarehouseAddView(BaseTokenView):
     def post(self, request):
         try:
