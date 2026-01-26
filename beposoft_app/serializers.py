@@ -1350,6 +1350,7 @@ class OrderModelSerilizer(serializers.ModelSerializer):
         
 class FamilyOrderModelSerilizer(serializers.ModelSerializer):
     manage_staff = serializers.CharField(source="manage_staff.name")
+    manage_staff_dep = serializers.CharField(source="manage_staff.department_id.name")
     staffID = serializers.CharField(source="manage_staff.pk")
     family = serializers.CharField(source="family.name")
     billing_address = ShippingAddressView(read_only=True)
