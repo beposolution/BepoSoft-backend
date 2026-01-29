@@ -154,44 +154,61 @@ class LoanEMIView(APIView):
 
 
 class EmiExpenseView(BaseTokenView):
+    
     def get(self, request, emi_id=None):
-        """Fetch all loans for the user or specific EMI expenses if emi_id is provided."""
+        # Only token validation (NO data restriction)
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        if emi_id:
+            return self.get_loan_expenses(emi_id)
+
+        return self.get_all_loans()
+
+    # ---------------------------------------------------------
+    # Get EMI expenses for a specific loan (NO user filter)
+    # ---------------------------------------------------------
+    def get_loan_expenses(self, emi_id):
         try:
-            # Authenticate user from token
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
+            loan = Loan.objects.get(id=emi_id)
+        except Loan.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Loan not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-            if emi_id:
-                return self.get_loan_expenses(authUser, emi_id)
-            else:
-                return self.get_user_loans(authUser)
+        emi_choice = Choices.objects.filter(name__iexact="emi").first()
+        if not emi_choice:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "EMI choice not configured"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        except Exception as e:
-            return Response({
-                "status": "error",
-                "message": "An error occurred",
-                "errors": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_loan_expenses(self, user, emi_id):
-        """Fetch detailed EMI expenses for a specific loan."""
-        loan = get_object_or_404(Loan, id=emi_id, user=user)
-
-        # Fetch the correct EMI-related `Choices` instance
-        emi_choice = Choices.objects.get(name__iexact="emi")
-
-        # Fetching EMI-related expenses with all required fields
-        expenses = ExpenseModel.objects.filter(loan=loan, purpose_of_payment=emi_choice).values(
-            "expense_date", "amount", "transaction_id", "description", "added_by", "bank_id", "category_id", "name"
+        expenses = ExpenseModel.objects.filter(
+            loan=loan,
+            purpose_of_payment=emi_choice
+        ).values(
+            "expense_date",
+            "amount",
+            "transaction_id",
+            "description",
+            "added_by",
+            "bank_id",
+            "category_id",
+            "name"
         )
 
-        # Calculating total amount paid (including down payment)
         total_emi_paid = sum(exp["amount"] for exp in expenses)
-        total_amount_paid = loan.down_payment + total_emi_paid  # Adding down payment to EMI payments
+        total_amount_paid = (loan.down_payment or Decimal(0)) + total_emi_paid
 
-        # Structuring EMI data
-        emi_data = {
+        response_data = {
             "emi_name": loan.emi_name,
             "principal": loan.principal,
             "tenure_months": loan.tenure_months,
@@ -202,8 +219,8 @@ class EmiExpenseView(BaseTokenView):
             "total_payment": loan.total_payment,
             "startdate": loan.startdate,
             "enddate": loan.enddate,
-            "total_emi_paid": total_emi_paid,  # Only EMI payments
-            "total_amount_paid": total_amount_paid,  # EMI + Down Payment
+            "total_emi_paid": total_emi_paid,
+            "total_amount_paid": total_amount_paid,
             "emidata": [
                 {
                     "date": exp["expense_date"],
@@ -219,27 +236,45 @@ class EmiExpenseView(BaseTokenView):
             ]
         }
 
-        return Response(emi_data, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
-    def get_user_loans(self, user):
-        """Fetch all EMI loans along with their expenses."""
-        loans = Loan.objects.filter(user=user)
+    # ---------------------------------------------------------
+    # Get all loans with EMI expenses (NO user filter)
+    # ---------------------------------------------------------
+    def get_all_loans(self):
+        loans = Loan.objects.all()
 
-        # Fetch the correct EMI-related `Choices` instance
-        emi_choice = Choices.objects.get(name__iexact="emi")
+        emi_choice = Choices.objects.filter(name__iexact="emi").first()
+        if not emi_choice:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "EMI choice not configured"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         response_data = []
+
         for loan in loans:
-            # Fetching all EMI expenses related to this loan
-            expenses = ExpenseModel.objects.filter(loan=loan, purpose_of_payment=emi_choice).values(
-                "expense_date", "amount", "transaction_id", "description", "added_by", "bank_id", "category_id", "name"
+            expenses = ExpenseModel.objects.filter(
+                loan=loan,
+                purpose_of_payment=emi_choice
+            ).values(
+                "expense_date",
+                "amount",
+                "transaction_id",
+                "description",
+                "added_by",
+                "bank_id",
+                "category_id",
+                "name"
             )
 
             total_emi_paid = sum(exp["amount"] for exp in expenses)
-            total_amount_paid = loan.down_payment + total_emi_paid 
+            total_amount_paid = (loan.down_payment or Decimal(0)) + total_emi_paid
 
-            # Structuring the response
-            loan_data = {
+            response_data.append({
                 "id": loan.id,
                 "emi_name": loan.emi_name,
                 "principal": loan.principal,
@@ -251,8 +286,8 @@ class EmiExpenseView(BaseTokenView):
                 "total_payment": loan.total_payment,
                 "startdate": loan.startdate,
                 "enddate": loan.enddate,
-                "total_emi_paid": total_emi_paid,  # Only EMI payments
-                "total_amount_paid": total_amount_paid,  # EMI + Down Payment
+                "total_emi_paid": total_emi_paid,
+                "total_amount_paid": total_amount_paid,
                 "emidata": [
                     {
                         "date": exp["expense_date"],
@@ -266,12 +301,10 @@ class EmiExpenseView(BaseTokenView):
                     }
                     for exp in expenses
                 ]
-            }
-            response_data.append(loan_data)
+            })
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    
 
 class AssetsAPIView(BaseTokenView):
     def get(self, request):
