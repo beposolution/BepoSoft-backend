@@ -9005,3 +9005,146 @@ class AdvanceAmountTransferImageDeleteView(BaseTokenView):
             {"message": "Transfer image deleted successfully"},
             status=status.HTTP_200_OK,
         )
+
+
+# Bank Account Type Views
+
+class BankAccountTypeView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = BankAccountType.objects.all().order_by("id")
+            serializer = BankAccountTypeSerializer(queryset, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Bank account types fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError:
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = BankAccountTypeSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "status": "success",
+                    "message": "Bank account type created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+class BankAccountTypeDetailView(BaseTokenView):
+
+    def get_object(self, pk):
+        return get_object_or_404(BankAccountType, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk)
+            serializer = BankAccountTypeSerializer(obj)
+
+            return Response({
+                "status": "success",
+                "message": "Bank account type fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk)
+            serializer = BankAccountTypeSerializer(obj, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "status": "success",
+                    "message": "Bank account type updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk)
+            obj.delete()
+
+            return Response({
+                "status": "success",
+                "message": "Bank account type deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
