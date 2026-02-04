@@ -593,7 +593,13 @@ class OrderMonthSerializer(serializers.ModelSerializer):
             'family_name','staff_name','customer_id','family_id','staff_id'
         ]
         
-        
+
+
+class BankAccountTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankAccountType 
+        fields = "__all__"
+
 class BankSerializer(serializers.ModelSerializer):
     # created_user = serializers.CharField(source="created_user.name")
     class Meta:

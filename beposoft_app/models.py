@@ -524,6 +524,19 @@ class ProductAttributeVariant(models.Model):
     
 
 
+class BankAccountType(models.Model):
+    account_type = models.CharField(max_length=100)
+    note = models.CharField(max_length=500, null=True, blank=True)
+    created_at = models.DateField(auto_now_add=True)
+    updated_at = models.DateField(auto_now=True)
+    
+    class Meta:
+        db_table = "Bank_Account_Type"
+        
+    def __str__(self):
+        return self.account_type
+
+
     
 class Bank(models.Model):
     created_user = models.ForeignKey(User,on_delete=models.CASCADE,null=True)
@@ -532,6 +545,7 @@ class Bank(models.Model):
     ifsc_code = models.CharField(max_length=100)
     branch = models.CharField(max_length=100)
     open_balance = models.FloatField()
+    account_type = models.ForeignKey(BankAccountType, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateField(null=True, blank=True)
     class Meta:
         db_table = "Bank"
