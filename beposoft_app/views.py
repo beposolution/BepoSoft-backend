@@ -34,6 +34,7 @@ from django.core.files.base import ContentFile
 from django.db.models.functions import Coalesce
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Cast, NullIf
+from django.db.models.functions import TruncDate
 
 logger = logging.getLogger(__name__)
 
@@ -6564,6 +6565,217 @@ class FinancereportAPIView(BaseTokenView):
 
             return Response({
                 "bank_data": bank_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class BankAccountTypeReportView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            banks = Bank.objects.filter(account_type__account_type="OD ACCOUNT")
+
+            final_data = []
+
+            for bank in banks:
+
+                # CREDIT (PAYMENTS)
+
+                payments_qs = bank.payments.all().annotate(
+                    date=TruncDate('received_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'payment_receipt'
+                )
+
+                advance_qs = bank.advance_receipts.all().annotate(
+                    date=TruncDate('received_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'payment_receipt'
+                )
+
+                bank_receipt_qs = bank.bank_receipts.all().annotate(
+                    date=TruncDate('received_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'payment_receipt'
+                )
+
+                internal_received_qs = InternalTransfer.objects.filter(
+                    receiver_bank=bank
+                ).annotate(
+                    date=TruncDate('created_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'transactionID'
+                )
+
+                cod_received_qs = CODTransfer.objects.filter(
+                    receiver_bank=bank
+                ).annotate(
+                    date=TruncDate('created_end')
+                ).values(
+                    'date',
+                    'amount',
+                    'payment_receipt'
+                )
+
+                credit_entries = []
+
+                for p in payments_qs:
+                    credit_entries.append({
+                        "date": p["date"],
+                        "type": "CREDIT",
+                        "amount": p["amount"],
+                        "reference": p["payment_receipt"]
+                    })
+
+                for a in advance_qs:
+                    credit_entries.append({
+                        "date": a["date"],
+                        "type": "CREDIT",
+                        "amount": a["amount"],
+                        "reference": a["payment_receipt"]
+                    })
+
+                for b in bank_receipt_qs:
+                    credit_entries.append({
+                        "date": b["date"],
+                        "type": "CREDIT",
+                        "amount": b["amount"],
+                        "reference": b["payment_receipt"]
+                    })
+
+                for i in internal_received_qs:
+                    credit_entries.append({
+                        "date": i["date"],
+                        "type": "CREDIT",
+                        "amount": i["amount"],
+                        "reference": f"INTERNAL RECEIVED - {i['transactionID']}"
+                    })
+
+                for c in cod_received_qs:
+                    credit_entries.append({
+                        "date": c["date"],
+                        "type": "CREDIT",
+                        "amount": c["amount"],
+                        "reference": f"COD RECEIVED - {c['payment_receipt']}"
+                    })
+
+                # DEBIT (BANK EXPENSES)
+
+                expenses_qs = ExpenseModel.objects.filter(
+                    bank=bank
+                ).annotate(
+                    date=TruncDate('expense_date')
+                ).values(
+                    'date',
+                    'amount',
+                    'purpose_of_payment'
+                )
+
+                internal_sent_qs = InternalTransfer.objects.filter(
+                    sender_bank=bank
+                ).annotate(
+                    date=TruncDate('created_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'transactionID'
+                )
+
+                cod_sent_qs = CODTransfer.objects.filter(
+                    sender_bank=bank
+                ).annotate(
+                    date=TruncDate('created_at')
+                ).values(
+                    'date',
+                    'amount',
+                    'payment_receipt'
+                )
+
+                debit_entries = []
+
+                for e in expenses_qs:
+                    debit_entries.append({
+                        "date": e["date"],
+                        "type": "DEBIT",
+                        "amount": e["amount"],
+                        "reference": e["purpose_of_payment"]
+                    })
+
+                for t in internal_sent_qs:
+                    debit_entries.append({
+                        "date": t["date"],
+                        "type": "DEBIT",
+                        "amount": t["amount"],
+                        "reference": f"INTERNAL TRANSFER - {t['transactionID']}"
+                    })
+
+                for c in cod_sent_qs:
+                    debit_entries.append({
+                        "date": c["date"],
+                        "type": "DEBIT",
+                        "amount": c["amount"],
+                        "reference": f"COD TRANSFER - {c['payment_receipt']}"
+                    })
+
+
+                grouped = defaultdict(lambda: {"debit": [], "credit": []})
+
+                for d in debit_entries:
+                    grouped[str(d["date"])]["debit"].append({
+                        "amount": d["amount"],
+                        "reference": d["reference"]
+                    })
+
+                for c in credit_entries:
+                    grouped[str(c["date"])]["credit"].append({
+                        "amount": c["amount"],
+                        "reference": c["reference"]
+                    })
+
+
+                daily_data = []
+                for date, values in grouped.items():
+                    daily_data.append({
+                        "date": date,
+                        "debit": values["debit"],
+                        "credit": values["credit"],
+                        "total_debit": sum(float(x["amount"]) for x in values["debit"]),
+                        "total_credit": sum(float(x["amount"]) for x in values["credit"]),
+                    })
+
+
+                daily_data = sorted(daily_data, key=lambda x: x["date"])
+
+                final_data.append({
+                    "bank_id": bank.id,
+                    "bank_name": bank.name,
+                    "interest_rate": bank.interest_rate,
+                    "open_balance": bank.open_balance,
+                    "daily_data": daily_data
+                })
+
+
+            return Response({
+                "status": "success",
+                "bank_data": final_data
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
