@@ -546,6 +546,7 @@ class Bank(models.Model):
     branch = models.CharField(max_length=100)
     open_balance = models.FloatField()
     account_type = models.ForeignKey(BankAccountType, on_delete=models.SET_NULL, null=True, blank=True)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     created_at = models.DateField(null=True, blank=True)
     class Meta:
         db_table = "Bank"
