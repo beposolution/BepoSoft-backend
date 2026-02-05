@@ -4255,6 +4255,68 @@ class WarehouseListViewbyDate(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+class CategoryWiseProductCountView(BaseTokenView):
+
+    def get(self, request, date):
+        try:
+            user = self.get_user_from_token(request)
+
+            if not user:
+                return Response(
+                    {"status": "error", "message": "Unauthorized"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # Convert string date -> Date object
+            try:
+                selected_date = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {"status": "error", "message": "Invalid date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            category_data = (
+                Warehousedata.objects.filter(postoffice_date=selected_date)
+                .annotate(
+                    category_name=Coalesce(
+                        "order__items__product__product_category__category_name",
+                        Value("Uncategorized")
+                    )
+                )
+                .values("category_name")
+                .annotate(total_quantity=Sum("order__items__quantity"))
+                .order_by("-total_quantity")
+            )
+
+            result = []
+            for row in category_data:
+                result.append({
+                    "category": row["category_name"],
+                    "total_quantity": row["total_quantity"] or 0
+                })
+
+            return Response(
+                {
+                    "status": "success",
+                    "postoffice_date": str(selected_date),
+                    "category_wise_products": result
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class OrderListByMonthView(APIView):
     def get(self, request, year, month):
         try:
