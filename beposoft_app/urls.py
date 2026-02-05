@@ -172,6 +172,7 @@ urlpatterns = [
     path('api/warehouse/get/',WarehouseListView.as_view()),
     path('api/warehouse/get/summary/', WarehouseSummaryView.as_view()),
     path('api/warehousesdataget/<str:shipped_date>/', WarehouseListViewbyDate.as_view(), name='warehouse-list'),
+    path("api/category/wise/product/count/<str:date>/", CategoryWiseProductCountView.as_view()),
     path('warehouse/update-checked-by/<str:shipped_date>/', WarehouseUpdateCheckedByView.as_view(), name='update-checked-by'),
     path('api/orders/monthly/<int:year>/<int:month>/', OrderListByMonthView.as_view(), name='orders-by-month'),
     path('api/orders/status/count/', OrderStatusCount.as_view(), name='orders-count-status'),
