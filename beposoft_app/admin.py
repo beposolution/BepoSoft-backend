@@ -55,10 +55,4 @@ admin.site.register(AdvanceAmountTransfer)
 admin.site.register(AdvanceAmountTransferImage)
 admin.site.register(CODTransfer)
 admin.site.register(BankAccountType)
-
-
-
-
-
-
-
+admin.site.register(ProductSellerDetails)

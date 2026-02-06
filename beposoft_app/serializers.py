@@ -2119,3 +2119,10 @@ class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
             "updated_at", "amount_transfer_images",
         ]
         read_only_fields = ["created_by", "created_at", "updated_at"]
+
+
+class ProductSellerDetailsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductSellerDetails
+        fields = "__all__"
+        read_only_fields = ["created_by", "created_at", "updated_at"]
