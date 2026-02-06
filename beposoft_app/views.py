@@ -6652,50 +6652,29 @@ class BankAccountTypeReportView(BaseTokenView):
             for bank in banks:
 
                 # CREDIT (PAYMENTS)
-
                 payments_qs = bank.payments.all().annotate(
                     date=TruncDate('received_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'payment_receipt'
-                )
+                ).values('date', 'amount', 'payment_receipt')
 
                 advance_qs = bank.advance_receipts.all().annotate(
                     date=TruncDate('received_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'payment_receipt'
-                )
+                ).values('date', 'amount', 'payment_receipt')
 
                 bank_receipt_qs = bank.bank_receipts.all().annotate(
                     date=TruncDate('received_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'payment_receipt'
-                )
+                ).values('date', 'amount', 'payment_receipt')
 
                 internal_received_qs = InternalTransfer.objects.filter(
                     receiver_bank=bank
                 ).annotate(
                     date=TruncDate('created_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'transactionID'
-                )
+                ).values('date', 'amount', 'transactionID')
 
                 cod_received_qs = CODTransfer.objects.filter(
                     receiver_bank=bank
                 ).annotate(
                     date=TruncDate('created_end')
-                ).values(
-                    'date',
-                    'amount',
-                    'payment_receipt'
-                )
+                ).values('date', 'amount', 'payment_receipt')
 
                 credit_entries = []
 
@@ -6740,36 +6719,23 @@ class BankAccountTypeReportView(BaseTokenView):
                     })
 
                 # DEBIT (BANK EXPENSES)
-
                 expenses_qs = ExpenseModel.objects.filter(
                     bank=bank
                 ).annotate(
                     date=TruncDate('expense_date')
-                ).values(
-                    'date',
-                    'amount',
-                    'purpose_of_payment'
-                )
+                ).values('date', 'amount', 'purpose_of_payment')
 
                 internal_sent_qs = InternalTransfer.objects.filter(
                     sender_bank=bank
                 ).annotate(
                     date=TruncDate('created_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'transactionID'
-                )
+                ).values('date', 'amount', 'transactionID')
 
                 cod_sent_qs = CODTransfer.objects.filter(
                     sender_bank=bank
                 ).annotate(
                     date=TruncDate('created_at')
-                ).values(
-                    'date',
-                    'amount',
-                    'payment_receipt'
-                )
+                ).values('date', 'amount', 'payment_receipt')
 
                 debit_entries = []
 
@@ -6797,7 +6763,6 @@ class BankAccountTypeReportView(BaseTokenView):
                         "reference": f"COD TRANSFER - {c['payment_receipt']}"
                     })
 
-
                 grouped = defaultdict(lambda: {"debit": [], "credit": []})
 
                 for d in debit_entries:
@@ -6812,7 +6777,6 @@ class BankAccountTypeReportView(BaseTokenView):
                         "reference": c["reference"]
                     })
 
-
                 daily_data = []
                 for date, values in grouped.items():
                     daily_data.append({
@@ -6823,8 +6787,16 @@ class BankAccountTypeReportView(BaseTokenView):
                         "total_credit": sum(float(x["amount"]) for x in values["credit"]),
                     })
 
-
+                # SORT BY DATE
                 daily_data = sorted(daily_data, key=lambda x: x["date"])
+
+                # ADD OPENING + CLOSING CALCULATION IN BACKEND
+                running_balance = float(bank.open_balance or 0)
+
+                for entry in daily_data:
+                    entry["opening"] = running_balance
+                    entry["closing"] = running_balance + float(entry["total_credit"]) - float(entry["total_debit"])
+                    running_balance = entry["closing"]
 
                 final_data.append({
                     "bank_id": bank.id,
@@ -6833,7 +6805,6 @@ class BankAccountTypeReportView(BaseTokenView):
                     "open_balance": bank.open_balance,
                     "daily_data": daily_data
                 })
-
 
             return Response({
                 "status": "success",
