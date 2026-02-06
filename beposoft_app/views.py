@@ -9421,3 +9421,157 @@ class BankAccountTypeDetailView(BaseTokenView):
                 "message": "An error occurred",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# Product Buying from another company/industries - Seller Details
+
+class ProductSellerDetailsView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = ProductSellerDetails.objects.all().order_by("-id")
+            serializer = ProductSellerDetailsSerializer(queryset, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Seller details fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError:
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = ProductSellerDetailsSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+
+                return Response({
+                    "status": "success",
+                    "message": "Seller details created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except DatabaseError:
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProductSellerDetailsByIdView(BaseTokenView):
+
+    def get(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            seller = ProductSellerDetails.objects.get(id=id)
+            serializer = ProductSellerDetailsSerializer(seller)
+
+            return Response({
+                "status": "success",
+                "message": "Seller details fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except ProductSellerDetails.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "Seller not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except DatabaseError:
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            seller = ProductSellerDetails.objects.get(id=id)
+
+            serializer = ProductSellerDetailsSerializer(
+                seller,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()   # created_by not changing in update
+
+                return Response({
+                    "status": "success",
+                    "message": "Seller details updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except ProductSellerDetails.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "Seller not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except DatabaseError:
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An unexpected error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
