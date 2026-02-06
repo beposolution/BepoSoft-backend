@@ -6793,6 +6793,7 @@ class BankAccountTypeReportView(BaseTokenView):
 
                 # OPENING + CLOSING + INTEREST CALCULATION
                 running_balance = float(bank.open_balance or 0)
+                first_opening_balance = running_balance
 
                 # Interest Rate
                 rate = float(bank.interest_rate or 0)
@@ -6808,10 +6809,9 @@ class BankAccountTypeReportView(BaseTokenView):
                         2
                     )
 
-                    opening_balance = float(entry["opening"])
                     closing_balance = float(entry["closing"])
 
-                    used_amount = opening_balance - closing_balance
+                    used_amount = first_opening_balance - closing_balance
 
                     if used_amount < 0:
                         used_amount = 0
