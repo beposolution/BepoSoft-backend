@@ -6810,14 +6810,16 @@ class BankAccountTypeReportView(BaseTokenView):
 
                     closing_balance = float(entry["closing"])
 
+                    debit_amount = float(entry["total_debit"] or 0)
+
                     # DAILY INTEREST (ONLY IF OD NEGATIVE)
-                    daily_interest = (closing_balance * rate) / (100 * 365)
+                    daily_interest = (debit_amount * rate) / (100 * 365)
 
                     # Running total (sheet style)
                     total_interest += daily_interest
 
-                    entry["daily_interest"] = round(daily_interest, 2)
-                    entry["total_interest"] = round(total_interest, 2)
+                    entry["daily_interest"] = round(daily_interest, 4)
+                    entry["total_interest"] = round(total_interest, 4)
 
                     running_balance = closing_balance
 
