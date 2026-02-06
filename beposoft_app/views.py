@@ -6682,7 +6682,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     credit_entries.append({
                         "date": p["date"],
                         "type": "CREDIT",
-                        "amount": p["amount"],
+                        "amount": float(p["amount"] or 0),
                         "reference": p["payment_receipt"]
                     })
 
@@ -6690,7 +6690,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     credit_entries.append({
                         "date": a["date"],
                         "type": "CREDIT",
-                        "amount": a["amount"],
+                        "amount": float(a["amount"] or 0),
                         "reference": a["payment_receipt"]
                     })
 
@@ -6698,7 +6698,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     credit_entries.append({
                         "date": b["date"],
                         "type": "CREDIT",
-                        "amount": b["amount"],
+                        "amount": float(b["amount"] or 0),
                         "reference": b["payment_receipt"]
                     })
 
@@ -6706,7 +6706,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     credit_entries.append({
                         "date": i["date"],
                         "type": "CREDIT",
-                        "amount": i["amount"],
+                        "amount": float(i["amount"] or 0),
                         "reference": f"INTERNAL RECEIVED - {i['transactionID']}"
                     })
 
@@ -6714,7 +6714,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     credit_entries.append({
                         "date": c["date"],
                         "type": "CREDIT",
-                        "amount": c["amount"],
+                        "amount": float(c["amount"] or 0),
                         "reference": f"COD RECEIVED - {c['payment_receipt']}"
                     })
 
@@ -6743,7 +6743,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     debit_entries.append({
                         "date": e["date"],
                         "type": "DEBIT",
-                        "amount": e["amount"],
+                        "amount": float(e["amount"] or 0),
                         "reference": e["purpose_of_payment"]
                     })
 
@@ -6751,7 +6751,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     debit_entries.append({
                         "date": t["date"],
                         "type": "DEBIT",
-                        "amount": t["amount"],
+                        "amount": float(t["amount"] or 0),
                         "reference": f"INTERNAL TRANSFER - {t['transactionID']}"
                     })
 
@@ -6759,21 +6759,22 @@ class BankAccountTypeReportView(BaseTokenView):
                     debit_entries.append({
                         "date": c["date"],
                         "type": "DEBIT",
-                        "amount": c["amount"],
+                        "amount": float(c["amount"] or 0),
                         "reference": f"COD TRANSFER - {c['payment_receipt']}"
                     })
 
+                # GROUP DATA BY DATE
                 grouped = defaultdict(lambda: {"debit": [], "credit": []})
 
                 for d in debit_entries:
                     grouped[str(d["date"])]["debit"].append({
-                        "amount": d["amount"],
+                        "amount": float(d["amount"]),
                         "reference": d["reference"]
                     })
 
                 for c in credit_entries:
                     grouped[str(c["date"])]["credit"].append({
-                        "amount": c["amount"],
+                        "amount": float(c["amount"]),
                         "reference": c["reference"]
                     })
 
@@ -6790,19 +6791,41 @@ class BankAccountTypeReportView(BaseTokenView):
                 # SORT BY DATE
                 daily_data = sorted(daily_data, key=lambda x: x["date"])
 
-                # ADD OPENING + CLOSING CALCULATION IN BACKEND
+                # OPENING + CLOSING + INTEREST CALCULATION
                 running_balance = float(bank.open_balance or 0)
 
+                # Interest Rate
+                rate = float(bank.interest_rate or 0)
+
+                # Running total interest
+                total_interest = 0
+
                 for entry in daily_data:
-                    entry["opening"] = running_balance
-                    entry["closing"] = running_balance + float(entry["total_credit"]) - float(entry["total_debit"])
-                    running_balance = entry["closing"]
+                    entry["opening"] = round(running_balance, 2)
+
+                    entry["closing"] = round(
+                        running_balance + float(entry["total_credit"]) - float(entry["total_debit"]),
+                        2
+                    )
+
+                    closing_balance = float(entry["closing"])
+
+                    # DAILY INTEREST (ONLY IF OD NEGATIVE)
+                    daily_interest = (closing_balance * rate) / (100 * 365)
+
+                    # Running total (sheet style)
+                    total_interest += daily_interest
+
+                    entry["daily_interest"] = round(daily_interest, 2)
+                    entry["total_interest"] = round(total_interest, 2)
+
+                    running_balance = closing_balance
 
                 final_data.append({
                     "bank_id": bank.id,
                     "bank_name": bank.name,
-                    "interest_rate": bank.interest_rate,
-                    "open_balance": bank.open_balance,
+                    "interest_rate": float(bank.interest_rate or 0),
+                    "open_balance": float(bank.open_balance or 0),
                     "daily_data": daily_data
                 })
 
