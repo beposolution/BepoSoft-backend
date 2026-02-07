@@ -2131,6 +2131,20 @@ class ProductSellerDetailsSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_by", "created_at", "updated_at"]
 
 
+class ProductSellerDetailsViewSerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source="country.country_code", read_only=True)
+    state_name = serializers.CharField(source="state.name", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+    class Meta:
+        model = ProductSellerDetails
+        fields = [
+            "id", "name", "company_name", "gstin",
+            "reg_no", "phone", "alt_phone", "email",
+            "address", "zipcode", "state", "country",
+            "created_by", "country_name", "state_name",
+            "created_by_name",
+        ]
+
 
 class ProductSellerInvoiceItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
