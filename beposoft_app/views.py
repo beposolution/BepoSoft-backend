@@ -9575,3 +9575,221 @@ class ProductSellerDetailsByIdView(BaseTokenView):
                 "message": "An unexpected error occurred",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class CreateProductSellerInvoice(BaseTokenView):
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            seller_id = request.data.get("seller_id")
+            note = request.data.get("note")
+
+            if not seller_id:
+                return Response({"status": "error", "message": "seller_id is required"}, status=400)
+
+            seller = get_object_or_404(ProductSellerDetails, id=seller_id)
+
+            cart_items = ProductSellerCartDetails.objects.filter(user=user)
+
+            if not cart_items.exists():
+                return Response({"status": "error", "message": "Cart is empty"}, status=400)
+
+            invoice = ProductSellerInvoice.objects.create(
+                created_by=user,
+                seller=seller,
+                note=note
+            )
+
+            total_amount = 0
+
+            for cart in cart_items:
+                product = cart.product
+                qty = int(cart.quantity)
+                price = float(cart.price or product.purchase_rate or 0)
+                discount = float(cart.discount or 0)
+                tax = float(product.tax or 0)
+
+                line_total = (qty * price) - discount
+                total_amount += line_total
+
+                ProductSellerInvoiceItem.objects.create(
+                    invoice=invoice,
+                    product=product,
+                    quantity=qty,
+                    price=price,
+                    discount=discount,
+                    tax=tax,
+                    total=line_total
+                )
+
+                # Increase Stock because buying product
+                # product.stock += qty
+                # product.save()
+
+            invoice.total_amount = total_amount
+            invoice.save()
+
+            cart_items.delete()
+
+            return Response({
+                "status": "success",
+                "message": "Purchase invoice created successfully",
+                "data": ProductSellerInvoiceSerializer(invoice).data
+            }, status=201)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
+
+class ProductSellerInvoiceListView(BaseTokenView):
+
+    def get(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        invoices = ProductSellerInvoice.objects.all().order_by("-id")
+        serializer = ProductSellerInvoiceSerializer(invoices, many=True)
+
+        return Response({
+            "status": "success",
+            "data": serializer.data
+        }, status=200)
+
+
+
+class ProductSellerCartView(BaseTokenView):
+
+    def get(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        cart = ProductSellerCartDetails.objects.filter(user=user).order_by("-id")
+
+        data = []
+        for item in cart:
+            data.append({
+                "id": item.id,
+                "product_id": item.product.id,
+                "product_name": item.product.name,
+                "quantity": item.quantity,
+                "price": item.price,
+                "discount": item.discount,
+                "note": item.note
+            })
+
+        return Response({"status": "success", "data": data})
+
+
+    def post(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        product_id = request.data.get("product")
+        quantity = request.data.get("quantity", 1)
+        discount = request.data.get("discount", 0)
+        note = request.data.get("note", "")
+        price = request.data.get("price", None)
+
+        product = get_object_or_404(Products, id=product_id)
+
+        cart_item, created = ProductSellerCartDetails.objects.get_or_create(
+            user=user,
+            product=product,
+            defaults={
+                "quantity": quantity,
+                "discount": discount,
+                "note": note,
+                "price": price
+            }
+        )
+
+        if not created:
+            cart_item.quantity += int(quantity)
+            cart_item.discount = discount
+            cart_item.note = note
+            cart_item.price = price
+            cart_item.save()
+
+        return Response({"status": "success", "message": "Added to seller cart"})
+
+
+
+class ProductSellerCartUpdateView(BaseTokenView):
+
+    def put(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            cart_item = get_object_or_404(ProductSellerCartDetails, id=id, user=user)
+
+            quantity = request.data.get("quantity")
+            discount = request.data.get("discount")
+            price = request.data.get("price")
+            note = request.data.get("note")
+
+            if quantity is not None:
+                cart_item.quantity = int(quantity)
+
+            if discount is not None:
+                cart_item.discount = discount
+
+            if price is not None:
+                cart_item.price = price
+
+            if note is not None:
+                cart_item.note = note
+
+            cart_item.save()
+
+            return Response({
+                "status": "success",
+                "message": "Cart item updated successfully"
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
+
+
+class ProductSellerCartDeleteView(BaseTokenView):
+
+    def delete(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            cart_item = get_object_or_404(ProductSellerCartDetails, id=id, user=user)
+            cart_item.delete()
+
+            return Response({
+                "status": "success",
+                "message": "Product removed from cart successfully"
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+

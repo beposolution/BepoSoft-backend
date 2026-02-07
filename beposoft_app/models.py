@@ -1751,6 +1751,7 @@ class StaffOrderUpdateItem(models.Model):
 
 
 
+# Seller related models
 
 class ProductSellerDetails(models.Model):
     name = models.CharField(max_length=100, null=True, blank=True)
@@ -1773,3 +1774,68 @@ class ProductSellerDetails(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.company_name})"
+    
+
+
+class ProductSellerCartDetails(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    product = models.ForeignKey(Products, on_delete=models.CASCADE,related_name='products_seller_cart')
+    quantity = models.PositiveIntegerField(default=1)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    note = models.TextField(blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True) 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.product.name} - {self.quantity}" 
+    
+    class Meta:
+        db_table = "Product_Seller_Cart_Details"
+
+
+
+class ProductSellerInvoice(models.Model):
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    seller = models.ForeignKey(ProductSellerDetails, on_delete=models.CASCADE)
+    invoice_no = models.CharField(max_length=30, unique=True, blank=True)
+    invoice_date = models.DateField()
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    note = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_seller_invoice"
+
+    def __str__(self):
+        return self.invoice_no
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_no:
+            last = ProductSellerInvoice.objects.order_by("-id").first()
+            new_id = (last.id + 1) if last else 1
+            self.invoice_no = f"PSINV{str(new_id).zfill(6)}"
+        super().save(*args, **kwargs)
+
+
+
+
+class ProductSellerInvoiceItem(models.Model):
+    invoice = models.ForeignKey(ProductSellerInvoice, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Products, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_seller_invoice_items"
+
+    def save(self, *args, **kwargs):
+        self.total = (self.quantity * self.price) - self.discount
+        super().save(*args, **kwargs)
+

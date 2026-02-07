@@ -290,6 +290,11 @@ urlpatterns = [
 
     path("api/product/sellers/details/add/", ProductSellerDetailsView.as_view()),
     path("api/product/sellers/details/edit/<int:id>/", ProductSellerDetailsByIdView.as_view()),
+    path("api/product/seller/invoice/create/", CreateProductSellerInvoice.as_view()),
+    path("api/product/seller/invoices/", ProductSellerInvoiceListView.as_view()),
+    path("api/product/seller/cart/", ProductSellerCartView.as_view()),
+    path("api/product/seller/cart/update/<int:id>/", ProductSellerCartUpdateView.as_view()),
+    path("api/product/seller/cart/delete/<int:id>/", ProductSellerCartDeleteView.as_view()),
 
 ]
 
