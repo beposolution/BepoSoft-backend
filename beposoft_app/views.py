@@ -9693,37 +9693,53 @@ class ProductSellerCartView(BaseTokenView):
 
 
     def post(self, request):
-        user, error_response = self.get_user_from_token(request)
-        if error_response:
-            return error_response
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
 
-        product_id = request.data.get("product")
-        quantity = request.data.get("quantity", 1)
-        discount = request.data.get("discount", 0)
-        note = request.data.get("note", "")
-        price = request.data.get("price", None)
+            product_id = request.data.get("product_id")
+            quantity = request.data.get("quantity", 1)
+            discount = request.data.get("discount", 0)
 
-        product = get_object_or_404(Products, id=product_id)
+            if not product_id:
+                return Response({
+                    "status": "error",
+                    "message": "product_id is required"
+                }, status=400)
 
-        cart_item, created = ProductSellerCartDetails.objects.get_or_create(
-            user=user,
-            product=product,
-            defaults={
-                "quantity": quantity,
-                "discount": discount,
-                "note": note,
-                "price": price
-            }
-        )
+            product = get_object_or_404(Products, id=product_id)
 
-        if not created:
-            cart_item.quantity += int(quantity)
-            cart_item.discount = discount
-            cart_item.note = note
-            cart_item.price = price
-            cart_item.save()
+            # Take price from Product model
+            price = product.purchase_rate  # or product.selling_price
 
-        return Response({"status": "success", "message": "Added to seller cart"})
+            cart_item, created = ProductSellerCartDetails.objects.get_or_create(
+                user=user,
+                product=product,
+                defaults={
+                    "quantity": quantity,
+                    "discount": discount,
+                    "price": price
+                }
+            )
+
+            if not created:
+                cart_item.quantity = int(quantity)
+                cart_item.discount = discount
+                cart_item.price = price
+                cart_item.save()
+
+            return Response({
+                "status": "success",
+                "message": "Product added to seller cart successfully"
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
 
 
 
