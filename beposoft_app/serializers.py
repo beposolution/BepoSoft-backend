@@ -2121,8 +2121,29 @@ class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_by", "created_at", "updated_at"]
 
 
+
+# Seller related serializers
+
 class ProductSellerDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSellerDetails
         fields = "__all__"
         read_only_fields = ["created_by", "created_at", "updated_at"]
+
+
+
+class ProductSellerInvoiceItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+
+    class Meta:
+        model = ProductSellerInvoiceItem
+        fields = "__all__"
+
+
+class ProductSellerInvoiceSerializer(serializers.ModelSerializer):
+    items = ProductSellerInvoiceItemSerializer(many=True, read_only=True)
+    seller_name = serializers.CharField(source="seller.name", read_only=True)
+
+    class Meta:
+        model = ProductSellerInvoice
+        fields = "__all__"
