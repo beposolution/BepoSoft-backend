@@ -9435,7 +9435,7 @@ class ProductSellerDetailsView(BaseTokenView):
                 return error_response
 
             queryset = ProductSellerDetails.objects.all().order_by("-id")
-            serializer = ProductSellerDetailsSerializer(queryset, many=True)
+            serializer = ProductSellerDetailsViewSerializer(queryset, many=True)
 
             return Response({
                 "status": "success",
@@ -9501,7 +9501,7 @@ class ProductSellerDetailsByIdView(BaseTokenView):
                 return error_response
 
             seller = ProductSellerDetails.objects.get(id=id)
-            serializer = ProductSellerDetailsSerializer(seller)
+            serializer = ProductSellerDetailsViewSerializer(seller)
 
             return Response({
                 "status": "success",
