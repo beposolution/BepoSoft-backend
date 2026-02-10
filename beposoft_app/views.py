@@ -9807,7 +9807,7 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
                 # Seller Details
                 "seller_id": invoice.seller.id,
                 "seller_name": invoice.seller.name,
-                "company_name": invoice.company.name,
+                "company_name": invoice.company.name if invoice.company else None,
                 "gstin": invoice.seller.gstin,
                 "phone": invoice.seller.phone,
                 "email": invoice.seller.email,
