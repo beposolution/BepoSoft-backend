@@ -9694,6 +9694,12 @@ class ProductSellerCartView(BaseTokenView):
 
         data = []
         for item in cart:
+            product = item.product
+
+            image_url = None
+            if product.image:
+                image_url = request.build_absolute_uri(product.image.url)
+
             data.append({
                 "id": item.id,
                 "product_id": item.product.id,
@@ -9701,7 +9707,8 @@ class ProductSellerCartView(BaseTokenView):
                 "quantity": item.quantity,
                 "price": item.price,
                 "discount": item.discount,
-                "note": item.note
+                "note": item.note,
+                "image": image_url
             })
 
         return Response({"status": "success", "data": data})
