@@ -9827,6 +9827,82 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             }, status=500)
 
 
+    
+    @transaction.atomic
+    def put(self, request, invoice_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            invoice = get_object_or_404(ProductSellerInvoice, id=invoice_id)
+
+            note = request.data.get("note")
+            invoice_date = request.data.get("invoice_date")
+            company_id = request.data.get("company_id")
+            items = request.data.get("items", [])
+
+            # update invoice fields
+            if note is not None:
+                invoice.note = note
+
+            if invoice_date:
+                parsed_date = parse_date(invoice_date)
+                if not parsed_date:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid invoice_date format. Use YYYY-MM-DD"
+                    }, status=400)
+
+                invoice.invoice_date = parsed_date
+
+            # update company (change company foreign key)
+            if company_id:
+                company = get_object_or_404(Company, id=company_id)
+                invoice.company = company
+
+            total_amount = 0
+
+            # update invoice items
+            for item in items:
+                item_id = item.get("id")
+                qty = item.get("quantity")
+                price = item.get("price")
+                discount = item.get("discount")
+                tax = item.get("tax")
+
+                invoice_item = get_object_or_404(ProductSellerInvoiceItem, id=item_id, invoice=invoice)
+
+                if qty is not None:
+                    invoice_item.quantity = qty
+                if price is not None:
+                    invoice_item.price = price
+                if discount is not None:
+                    invoice_item.discount = discount
+                if tax is not None:
+                    invoice_item.tax = tax
+
+                invoice_item.total = (invoice_item.quantity * invoice_item.price) - invoice_item.discount
+                invoice_item.save()
+
+                total_amount += float(invoice_item.total)
+
+            invoice.total_amount = total_amount
+            invoice.save()
+
+            return Response({
+                "status": "success",
+                "message": "Invoice updated successfully"
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
+
 
 class ProductSellerCartUpdateView(BaseTokenView):
 
