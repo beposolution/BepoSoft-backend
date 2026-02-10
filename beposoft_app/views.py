@@ -9590,12 +9590,12 @@ class CreateProductSellerInvoice(BaseTokenView):
             seller_id = request.data.get("seller_id")
             note = request.data.get("note")
             invoice_date = request.data.get("invoice_date")
-            company = request.data.get("company")
+            company_id = request.data.get("company")
 
             if not seller_id:
                 return Response({"status": "error", "message": "seller_id is required"}, status=400)
             
-            if not company:
+            if not company_id:
                 return Response({"status": "error", "message": "company is required"}, status=400)
 
             if not invoice_date:
@@ -9607,6 +9607,8 @@ class CreateProductSellerInvoice(BaseTokenView):
                 return Response({"status": "error", "message": "Invalid invoice_date format. Use YYYY-MM-DD"}, status=400)
 
             seller = get_object_or_404(ProductSellerDetails, id=seller_id)
+
+            company = get_object_or_404(Company, id=company_id)
 
             cart_items = ProductSellerCartDetails.objects.filter(user=user)
 
@@ -9643,10 +9645,7 @@ class CreateProductSellerInvoice(BaseTokenView):
                     total=line_total
                 )
 
-                # Increase Stock because buying product
-                # product.stock += qty
-                # product.save()
-
+               
             invoice.total_amount = total_amount
             invoice.save()
 
