@@ -15,7 +15,7 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from django.contrib.auth import authenticate
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from decimal import Decimal
 from django.db.models import Sum
 from django.http import Http404, JsonResponse
@@ -9827,7 +9827,6 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             }, status=500)
 
 
-    
     @transaction.atomic
     def put(self, request, invoice_id):
         try:
@@ -9837,17 +9836,23 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
 
             invoice = get_object_or_404(ProductSellerInvoice, id=invoice_id)
 
-            note = request.data.get("note")
-            invoice_date = request.data.get("invoice_date")
-            company_id = request.data.get("company_id")
-            seller_id = request.data.get("seller_id")
-            items = request.data.get("items", [])
+            note = request.data.get("note", None)
+            invoice_date = request.data.get("invoice_date", None)
+            company_id = request.data.get("company_id", None)
+            seller_id = request.data.get("seller_id", None)
 
-            # update invoice fields
+            # items key should be checked properly
+            items = request.data.get("items", None)
+
+            updated = False
+
+            # update note only if provided
             if note is not None:
                 invoice.note = note
+                updated = True
 
-            if invoice_date:
+            # update invoice_date only if provided
+            if invoice_date is not None:
                 parsed_date = parse_date(invoice_date)
                 if not parsed_date:
                     return Response({
@@ -9856,45 +9861,61 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
                     }, status=400)
 
                 invoice.invoice_date = parsed_date
+                updated = True
 
-            # update company (change company foreign key)
-            if company_id:
+            # update company only if provided
+            if company_id is not None:
                 company = get_object_or_404(Company, id=company_id)
                 invoice.company = company
+                updated = True
 
-            # update seller
-            if seller_id:
+            # update seller only if provided
+            if seller_id is not None:
                 seller = get_object_or_404(ProductSellerDetails, id=seller_id)
                 invoice.seller = seller
+                updated = True
 
-            total_amount = 0
+            # update items only if items is sent
+            if items is not None:
+                total_amount = 0
 
-            # update invoice items
-            for item in items:
-                item_id = item.get("id")
-                qty = item.get("quantity")
-                price = item.get("price")
-                discount = item.get("discount")
-                tax = item.get("tax")
+                for item in items:
+                    item_id = item.get("id")
 
-                invoice_item = get_object_or_404(ProductSellerInvoiceItem, id=item_id, invoice=invoice)
+                    if not item_id:
+                        continue
 
-                if qty is not None:
-                    invoice_item.quantity = qty
-                if price is not None:
-                    invoice_item.price = price
-                if discount is not None:
-                    invoice_item.discount = discount
-                if tax is not None:
-                    invoice_item.tax = tax
+                    invoice_item = get_object_or_404(
+                        ProductSellerInvoiceItem,
+                        id=item_id,
+                        invoice=invoice
+                    )
 
-                invoice_item.total = (invoice_item.quantity * invoice_item.price) - invoice_item.discount
-                invoice_item.save()
+                    if "quantity" in item:
+                        invoice_item.quantity = item["quantity"]
 
-                total_amount += float(invoice_item.total)
+                    if "price" in item:
+                        invoice_item.price = item["price"]
 
-            invoice.total_amount = total_amount
-            invoice.save()
+                    if "discount" in item:
+                        invoice_item.discount = item["discount"]
+
+                    if "tax" in item:
+                        invoice_item.tax = item["tax"]
+
+                    invoice_item.total = (invoice_item.quantity * invoice_item.price) - invoice_item.discount
+                    invoice_item.save()
+
+                # recalculate total from DB after update
+                all_items = ProductSellerInvoiceItem.objects.filter(invoice=invoice)
+                for it in all_items:
+                    total_amount += float(it.total)
+
+                invoice.total_amount = total_amount
+                updated = True
+
+            if updated:
+                invoice.save()
 
             return Response({
                 "status": "success",
@@ -9907,7 +9928,7 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
                 "message": "Something went wrong",
                 "errors": str(e)
             }, status=500)
-
+            
 
 
 class ProductSellerCartUpdateView(BaseTokenView):
