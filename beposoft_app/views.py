@@ -9840,6 +9840,7 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             note = request.data.get("note")
             invoice_date = request.data.get("invoice_date")
             company_id = request.data.get("company_id")
+            seller_id = request.data.get("seller_id")
             items = request.data.get("items", [])
 
             # update invoice fields
@@ -9860,6 +9861,11 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             if company_id:
                 company = get_object_or_404(Company, id=company_id)
                 invoice.company = company
+
+            # update seller
+            if seller_id:
+                seller = get_object_or_404(ProductSellerDetails, id=seller_id)
+                invoice.seller = seller
 
             total_amount = 0
 
