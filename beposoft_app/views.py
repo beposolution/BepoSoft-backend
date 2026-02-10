@@ -9894,3 +9894,26 @@ class ProductSellerCartDeleteView(BaseTokenView):
                 "errors": str(e)
             }, status=500)
 
+
+
+
+class PrintSellerInvoiceView(BaseTokenView):
+
+    def get(self, request, invoice_id):
+        try:
+
+            invoice = get_object_or_404(ProductSellerInvoice, id=invoice_id)
+
+            items = ProductSellerInvoiceItem.objects.filter(invoice=invoice)
+
+            return render(request, "seller_invoice.html", {
+                "invoice": invoice,
+                "items": items
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
