@@ -9765,6 +9765,69 @@ class ProductSellerCartView(BaseTokenView):
 
 
 
+class ProductSellerInvoiceDetailView(BaseTokenView):
+
+    def get(self, request, invoice_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            invoice = get_object_or_404(ProductSellerInvoice, id=invoice_id)
+
+            items = ProductSellerInvoiceItem.objects.filter(invoice=invoice)
+
+            items_data = []
+            for item in items:
+                product = item.product
+
+                image_url = None
+                if product.image:
+                    image_url = request.build_absolute_uri(product.image.url)
+
+                items_data.append({
+                    "id": item.id,
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "quantity": item.quantity,
+                    "price": item.price,
+                    "discount": item.discount,
+                    "tax": item.tax,
+                    "total": item.total,
+                    "image": image_url
+                })
+
+            data = {
+                "invoice_id": invoice.id,
+                "invoice_no": invoice.invoice_no,
+                "invoice_date": invoice.invoice_date,
+                "total_amount": invoice.total_amount,
+                "note": invoice.note,
+
+                # Seller Details
+                "seller_id": invoice.seller.id,
+                "seller_name": invoice.seller.name,
+                "company_name": invoice.seller.company_name,
+                "gstin": invoice.seller.gstin,
+                "phone": invoice.seller.phone,
+                "email": invoice.seller.email,
+                "address": invoice.seller.address,
+
+                # Items
+                "items": items_data
+            }
+
+            return Response({"status": "success", "data": data}, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
+
+
 class ProductSellerCartUpdateView(BaseTokenView):
 
     def put(self, request, id):
