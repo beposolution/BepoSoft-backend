@@ -1798,6 +1798,7 @@ class ProductSellerCartDetails(models.Model):
 class ProductSellerInvoice(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     seller = models.ForeignKey(ProductSellerDetails, on_delete=models.CASCADE)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="seller_invoices", null=True, blank=True)
     invoice_no = models.CharField(max_length=30, unique=True, blank=True)
     invoice_date = models.DateField()
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)

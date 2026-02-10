@@ -9589,9 +9589,18 @@ class CreateProductSellerInvoice(BaseTokenView):
 
             seller_id = request.data.get("seller_id")
             note = request.data.get("note")
+            invoice_date = request.data.get("invoice_date")
 
             if not seller_id:
                 return Response({"status": "error", "message": "seller_id is required"}, status=400)
+
+            if not invoice_date:
+                return Response({"status": "error", "message": "invoice_date is required"}, status=400)
+
+            parsed_date = parse_date(invoice_date)
+
+            if not parsed_date:
+                return Response({"status": "error", "message": "Invalid invoice_date format. Use YYYY-MM-DD"}, status=400)
 
             seller = get_object_or_404(ProductSellerDetails, id=seller_id)
 
@@ -9603,7 +9612,8 @@ class CreateProductSellerInvoice(BaseTokenView):
             invoice = ProductSellerInvoice.objects.create(
                 created_by=user,
                 seller=seller,
-                note=note
+                note=note,
+                invoice_date=parsed_date
             )
 
             total_amount = 0
