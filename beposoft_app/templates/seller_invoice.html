@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seller Invoice</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <script>
+      function numberToWordsIndia(num) {
+        const ones = [
+          "",
+          "one",
+          "two",
+          "three",
+          "four",
+          "five",
+          "six",
+          "seven",
+          "eight",
+          "nine",
+          "ten",
+          "eleven",
+          "twelve",
+          "thirteen",
+          "fourteen",
+          "fifteen",
+          "sixteen",
+          "seventeen",
+          "eighteen",
+          "nineteen",
+        ];
+
+        const tens = [
+          "",
+          "",
+          "twenty",
+          "thirty",
+          "forty",
+          "fifty",
+          "sixty",
+          "seventy",
+          "eighty",
+          "ninety",
+        ];
+
+        function twoDigit(n) {
+          if (n < 20) return ones[n];
+          const t = Math.floor(n / 10);
+          const o = n % 10;
+          return tens[t] + (o ? " " + ones[o] : "");
+        }
+
+        function threeDigit(n) {
+          const h = Math.floor(n / 100);
+          const rem = n % 100;
+          let str = "";
+          if (h) str += ones[h] + " hundred";
+          if (rem) str += (str ? " " : "") + twoDigit(rem);
+          return str;
+        }
+
+        if (num === 0) return "zero";
+
+        const parts = [];
+        const crore = Math.floor(num / 10000000);
+        if (crore) parts.push(threeDigit(crore) + " crore");
+        num = num % 10000000;
+
+        const lakh = Math.floor(num / 100000);
+        if (lakh) parts.push(threeDigit(lakh) + " lakh");
+        num = num % 100000;
+
+        const thousand = Math.floor(num / 1000);
+        if (thousand) parts.push(threeDigit(thousand) + " thousand");
+        num = num % 1000;
+
+        if (num) parts.push(threeDigit(num));
+
+        return parts.join(" ").replace(/\s+/g, " ").trim();
+      }
+
+      function amountToWords(amount) {
+        const n = Number(String(amount).replace(/,/g, "").trim());
+        if (!isFinite(n)) return "";
+
+        const intPart = Math.floor(Math.abs(n));
+        const decPart = Math.round((Math.abs(n) - intPart) * 100);
+
+        let words =
+          numberToWordsIndia(intPart) +
+          (intPart === 1 ? " rupee" : " rupees");
+
+        if (decPart) {
+          words +=
+            " and " +
+            numberToWordsIndia(decPart) +
+            (decPart === 1 ? " paise" : " paise");
+        }
+
+        words += " only";
+        if (n < 0) words = "minus " + words;
+        return words;
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        const grandTotalElement = document.getElementById("grand-total");
+
+        if (!grandTotalElement) return;
+
+        const totalVal = grandTotalElement.textContent
+          .replace(/[^\d.,-]/g, "")
+          .trim();
+
+        if (!totalVal) return;
+
+        const words = amountToWords(totalVal);
+
+        const outputCell = document.getElementById("payable-in-words");
+        if (outputCell) {
+          outputCell.textContent = words.toUpperCase();
+        }
+      });
+    </script>
+
+    <style>
+      body {
+        font-size: 12px;
+      }
+
+      .no-print {
+        display: block;
+      }
+
+      #payable-in-words {
+        font-weight: bold !important;
+        text-transform: uppercase;
+        white-space: normal;
+        word-break: break-word;
+        text-align: right;
+      }
+
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+      }
+
+      .button-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20px;
+        padding-bottom: 20px;
+      }
+
+      #invoice {
+        width: 210mm;
+        padding: 20px;
+        border: 1px solid #000;
+        background: #fff;
+        box-sizing: border-box;
+      }
+
+      .company-details div {
+        margin-bottom: 2px;
+        line-height: 1.3;
+      }
+
+      .invoice-table {
+        width: 100%;
+        border-collapse: collapse;
+        page-break-inside: auto;
+      }
+
+      .invoice-table th,
+      .invoice-table td {
+        border: 1px solid #ccc;
+        padding: 6px;
+        text-align: center;
+      }
+
+      .invoice-table th {
+        background-color: #f2f2f2;
+      }
+
+      .invoice-table tr {
+        page-break-inside: avoid;
+      }
+
+      @media print {
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+          width: 210mm;
+          box-sizing: border-box;
+        }
+
+        .container {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+
+        #invoice {
+          border: none;
+          box-shadow: none;
+          page-break-after: auto;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container mt-5">
+      <div class="container" id="invoice">
+        <!-- Company Details -->
+        <div class="text-center company-details">
+          <h2 style="font-size: 28px; margin-bottom: 25px; margin-top: 30px">
+            {{ invoice.company.name }}
+          </h2>
+
+          <div style="font-size: 14px">
+            <div>{{ invoice.company.address }}</div>
+            <div>
+              Mobile: {{ invoice.company.phone }},
+              Email: {{ invoice.company.email }}
+            </div>
+            <div><strong>GSTIN: {{ invoice.company.gst }}</strong></div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-2">
+            <p><strong>Invoice No:</strong> {{ invoice.invoice_no }}</p>
+            <p><strong>Invoice Date:</strong> {{ invoice.invoice_date }}</p>
+          </div>
+        </div>
+
+        <!-- Seller Details -->
+        <table class="table table-bordered mt-3">
+          <thead>
+            <tr>
+              <th>Seller Details</th>
+              <th>Company Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>{{ invoice.seller.name }}</strong><br />
+                {{ invoice.seller.company_name }}<br />
+                {{ invoice.seller.address }}<br />
+                Phone: {{ invoice.seller.phone }},
+                {{ invoice.seller.alt_phone }}<br />
+                Email: {{ invoice.seller.email }}<br />
+                GSTIN: {{ invoice.seller.gstin }}
+              </td>
+              <td>
+                <strong>{{ invoice.company.name }}</strong><br />
+                {{ invoice.company.address }}<br />
+                Phone: {{ invoice.company.phone }}<br />
+                Email: {{ invoice.company.email }}<br />
+                GSTIN: {{ invoice.company.gst }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Items Table -->
+        <table class="invoice-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Image</th>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Discount</th>
+              <th>Tax</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td>
+                {% if item.product.image %}
+                <img
+                    src="{{ item.product.image.url }}"
+                    alt="Product Image"
+                    style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px;"
+                />
+                {% else %}
+                No Image
+                {% endif %}
+              </td>
+              <td style="text-align: left">{{ item.product.name }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.price }}</td>
+              <td>{{ item.discount }}</td>
+              <td>{{ item.tax }}</td>
+              <td>{{ item.total }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- Total Section -->
+        <table class="table table-bordered mt-3">
+          <tbody>
+            <tr>
+              <td><strong>Total Payable Amount</strong></td>
+              <td id="grand-total" style="text-align: right">
+                {{ invoice.total_amount }}
+              </td>
+            </tr>
+
+            <tr>
+              <td><strong>Total Amount in Words</strong></td>
+              <td id="payable-in-words"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Note -->
+        {% if invoice.note %}
+        <div class="mt-3">
+          <strong>Note:</strong> {{ invoice.note }}
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="mt-5 text-end">
+          <p><strong>Authorized Signature</strong></p>
+        </div>
+      </div>
+
+      <!-- Print Button -->
+      <div class="button-container no-print">
+        <button class="btn btn-primary" onclick="window.print()">
+          Print Invoice
+        </button>
+      </div>
+    </div>
+  </body>
+</html>

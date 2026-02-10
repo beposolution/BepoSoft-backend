@@ -296,6 +296,7 @@ urlpatterns = [
     path("api/product/seller/invoice/<int:invoice_id>/", ProductSellerInvoiceDetailView.as_view()),
     path("api/product/seller/cart/update/<int:id>/", ProductSellerCartUpdateView.as_view()),
     path("api/product/seller/cart/delete/<int:id>/", ProductSellerCartDeleteView.as_view()),
+    path("api/product/seller/invoice/print/<int:invoice_id>/", PrintSellerInvoiceView.as_view()),
 
 ]
 
