@@ -2161,3 +2161,15 @@ class ProductSellerInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSellerInvoice
         fields = "__all__"
+
+class ProductSellerInvoiceListSerializer(serializers.ModelSerializer):
+    seller_name = serializers.CharField(source="seller.name", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
+    class Meta:
+        model = ProductSellerInvoice
+        fields = [
+            'id', 'invoice_no', 'seller_name', 'company_name',
+            'invoice_date', 'total_amount',
+        ]
+
