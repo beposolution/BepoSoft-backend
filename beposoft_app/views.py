@@ -9590,9 +9590,13 @@ class CreateProductSellerInvoice(BaseTokenView):
             seller_id = request.data.get("seller_id")
             note = request.data.get("note")
             invoice_date = request.data.get("invoice_date")
+            company = request.data.get("company")
 
             if not seller_id:
                 return Response({"status": "error", "message": "seller_id is required"}, status=400)
+            
+            if not company:
+                return Response({"status": "error", "message": "company is required"}, status=400)
 
             if not invoice_date:
                 return Response({"status": "error", "message": "invoice_date is required"}, status=400)
@@ -9613,7 +9617,8 @@ class CreateProductSellerInvoice(BaseTokenView):
                 created_by=user,
                 seller=seller,
                 note=note,
-                invoice_date=parsed_date
+                invoice_date=parsed_date,
+                company=company
             )
 
             total_amount = 0
@@ -9669,7 +9674,7 @@ class ProductSellerInvoiceListView(BaseTokenView):
             return error_response
 
         invoices = ProductSellerInvoice.objects.all().order_by("-id")
-        serializer = ProductSellerInvoiceSerializer(invoices, many=True)
+        serializer = ProductSellerInvoiceListSerializer(invoices, many=True)
 
         return Response({
             "status": "success",
