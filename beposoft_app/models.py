@@ -1751,6 +1751,27 @@ class StaffOrderUpdateItem(models.Model):
 
 
 
+# Reports and Analytics models based on daily sales
+
+class DailySalesReport(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="daily_sales_reports")
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="daily_sales_reports")
+    district = models.ForeignKey(Districts, on_delete=models.CASCADE, related_name="daily_sales_reports")
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="daily_sales_reports")
+    category = models.ForeignKey(ProductCategoryModel, on_delete=models.CASCADE, related_name="daily_sales_reports")
+    count = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "daily_sales_report"
+
+    def __str__(self):
+        return f"{self.user.name} - {self.invoice.invoice} - {self.category.category_name} - {self.count}"
+
+
+
+
 # Seller related models
 
 class ProductSellerDetails(models.Model):

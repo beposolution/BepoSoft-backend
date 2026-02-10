@@ -2122,6 +2122,28 @@ class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
 
 
 
+# Reports and Analytics serializers based on daily sales
+
+class DailySalesReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailySalesReport
+        fields = "__all__"
+
+
+class DailySalesReportGETSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.category_name", read_only=True)
+    user_name = serializers.CharField(source="user.name", read_only=True)
+    state_name = serializers.CharField(source="state.name", read_only=True)
+    district_name = serializers.CharField(source="district.name", read_only=True)
+    invoice_no = serializers.CharField(source="invoice.invoice", read_only=True)
+    class Meta:
+        model = DailySalesReport
+        fields = "__all__"
+
+
+# End of  Reports and Analytics serializers section based on daily sales
+
+
 # Seller related serializers
 
 class ProductSellerDetailsSerializer(serializers.ModelSerializer):
