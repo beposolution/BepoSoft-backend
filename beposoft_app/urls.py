@@ -287,6 +287,10 @@ urlpatterns = [
     path("api/questionnaires/family/<int:family_id>/", QuestionnaireByFamilyView.as_view(),name="questionnaires-by-family"),
     path("api/answers/family/<int:family_id>/", AnswersByFamilyView.as_view(),name="answers-by-family"),
 
+    path("api/daily/sales/report/add/", DailySalesReportView.as_view()),
+    path("api/daily/sales/report/update/<int:pk>/", DailySalesReportUpdateView.as_view()),
+    path("api/daily/sales/report/all/", DailySalesReportAllView.as_view()),
+
 
     path("api/product/sellers/details/add/", ProductSellerDetailsView.as_view()),
     path("api/product/sellers/details/edit/<int:id>/", ProductSellerDetailsByIdView.as_view()),

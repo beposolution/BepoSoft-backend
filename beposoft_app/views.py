@@ -9424,6 +9424,249 @@ class BankAccountTypeDetailView(BaseTokenView):
 
 
 
+# Reports and Analytics functions only for CRUD operations based on daily sales
+
+class DailySalesReportView(BaseTokenView):
+    
+    # return logged-in user's created daily sales reports
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            reports = DailySalesReport.objects.filter(user=authUser).order_by("-id")
+            serializer = DailySalesReportGETSerializer(reports, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily sales reports fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in DailySalesReportView GET: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # user auto from token
+            data = request.data.copy()
+            data["user"] = authUser.pk
+
+            serializer = DailySalesReportSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Daily sales report created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception("Error in DailySalesReportView POST: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class DailySalesReportUpdateView(BaseTokenView):
+
+    def get_object(self, pk):
+        return get_object_or_404(DailySalesReport, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk)
+            serializer = DailySalesReportGETSerializer(report)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily sales report fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Daily Sales Report Update View GET: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk)
+
+            # prevent changing user
+            data = request.data.copy()
+            data["user"] = report.user.pk
+
+            serializer = DailySalesReportSerializer(report, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Daily sales report updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception("Error in DailySalesReportUpdateView PUT: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk)
+
+            # ONLY creator can delete
+            if report.user != authUser:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "You are not allowed to delete this report"
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            report.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily sales report deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in DailySalesReportUpdateView DELETE: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class DailySalesReportAllView(BaseTokenView):
+    
+    # return all daily sales reports
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            #  If you want only Admin to access, 
+            # currently can't, need to show for Admin, CEO, COO, & Accounts
+            # uncomment below
+            # if authUser.department_id.name != "Admin":
+            #     return Response(
+            #         {"status": "error", "message": "Permission denied"},
+            #         status=status.HTTP_403_FORBIDDEN
+            #     )
+
+            reports = DailySalesReport.objects.all().order_by("-id")
+            serializer = DailySalesReportGETSerializer(reports, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "All Daily Sales Reports fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Daily Sales Report All View GET: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
 # Product Buying from another company/industries - Seller Details
 
 class ProductSellerDetailsView(BaseTokenView):
