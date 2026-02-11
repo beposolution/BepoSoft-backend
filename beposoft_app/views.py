@@ -6816,8 +6816,7 @@ class BankAccountTypeReportView(BaseTokenView):
                     if used_amount < 0:
                         used_amount = 0
 
-                    daily_interest = ((used_amount * rate) / 100 )
-
+                    daily_interest = ((closing_balance * rate) / 100 ) / 365
                     total_interest += daily_interest
 
                     entry["daily_interest"] = round(daily_interest, 4)
