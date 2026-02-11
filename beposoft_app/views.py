@@ -35,6 +35,7 @@ from django.db.models.functions import Coalesce
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Cast, NullIf
 from django.db.models.functions import TruncDate
+import calendar
 
 logger = logging.getLogger(__name__)
 
@@ -1898,7 +1899,7 @@ class MyOrderListView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-            
+
 class GSTOrderListView(BaseTokenView):
     def get(self, request):
         # follow the same get_user_from_token pattern as your DataLogListView
@@ -10296,4 +10297,197 @@ class PrintSellerInvoiceView(BaseTokenView):
                 "status": "error",
                 "message": "Something went wrong",
                 "errors": str(e)
+            }, status=500)
+
+
+
+class MyDailySalesReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+            
+            month = request.GET.get("month")
+            year = request.GET.get("year")
+            state_id = request.GET.get("state_id")
+
+            if not month or not year or not state_id:
+                return Response({
+                    "status": "error",
+                    "message": "month, year and state_id are required"
+                }, status=400)
+
+            month = int(month)
+            year = int(year)
+            state_id = int(state_id)
+
+            # Validate month
+            if month < 1 or month > 12:
+                return Response({
+                    "status": "error",
+                    "message": "month must be between 1 and 12"
+                }, status=400)
+
+            state = State.objects.get(id=state_id)
+
+            days_in_month = calendar.monthrange(year, month)[1]
+            dates = list(range(1, days_in_month + 1))
+
+            reports = DailySalesReport.objects.filter(
+                user=user,
+                state_id=state_id,
+                created_at__year=year,
+                created_at__month=month
+            )
+
+            district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+
+            final_data = []
+            column_totals = {str(day): 0 for day in dates}
+            grand_total = 0
+
+            for dist in district_list:
+                daily_counts = {str(day): 0 for day in dates}
+                row_total = 0
+
+                dist_reports = reports.filter(district=dist)
+
+                for r in dist_reports:
+                    day = r.created_at.day
+                    daily_counts[str(day)] += r.count if r.count else 0
+
+                for day in dates:
+                    row_total += daily_counts[str(day)]
+                    column_totals[str(day)] += daily_counts[str(day)]
+
+                grand_total += row_total
+
+                final_data.append({
+                    "district": dist.name,
+                    "daily_counts": daily_counts,
+                    "total": row_total
+                })
+
+            month_name = datetime(year, month, 1).strftime("%B %Y")
+
+            return Response({
+                "status": "success",
+                "user": user.name,
+                "state": state.name,
+                "month": month_name,
+                "dates": dates,
+                "districts": final_data,
+                "column_totals": column_totals,
+                "grand_total": grand_total
+            })
+
+        except State.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "State not found"
+            }, status=404)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "error": str(e)
+            }, status=500)
+
+
+
+
+class AllUsersDailySalesReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            month = request.GET.get("month")
+            year = request.GET.get("year")
+            state_id = request.GET.get("state_id")
+
+            if not month or not year or not state_id:
+                return Response({
+                    "status": "error",
+                    "message": "month, year and state_id are required"
+                }, status=400)
+
+            month = int(month)
+            year = int(year)
+            state_id = int(state_id)
+
+            # Validate month
+            if month < 1 or month > 12:
+                return Response({
+                    "status": "error",
+                    "message": "month must be between 1 and 12"
+                }, status=400)
+
+            state = State.objects.get(id=state_id)
+
+            days_in_month = calendar.monthrange(year, month)[1]
+            dates = list(range(1, days_in_month + 1))
+
+            reports = DailySalesReport.objects.filter(
+                state_id=state_id,
+                created_at__year=year,
+                created_at__month=month
+            )
+
+            district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+
+            final_data = []
+            column_totals = {str(day): 0 for day in dates}
+            grand_total = 0
+
+            for dist in district_list:
+                daily_counts = {str(day): 0 for day in dates}
+                row_total = 0
+
+                dist_reports = reports.filter(district=dist)
+
+                for r in dist_reports:
+                    day = r.created_at.day
+                    daily_counts[str(day)] += r.count if r.count else 0
+
+                for day in dates:
+                    row_total += daily_counts[str(day)]
+                    column_totals[str(day)] += daily_counts[str(day)]
+
+                grand_total += row_total
+
+                final_data.append({
+                    "district": dist.name,
+                    "daily_counts": daily_counts,
+                    "total": row_total
+                })
+
+            month_name = datetime(year, month, 1).strftime("%B %Y")
+
+            return Response({
+                "status": "success",
+                "state": state.name,
+                "month": month_name,
+                "dates": dates,
+                "districts": final_data,
+                "column_totals": column_totals,
+                "grand_total": grand_total
+            })
+
+        except State.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "State not found"
+            }, status=404)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "error": str(e)
             }, status=500)
