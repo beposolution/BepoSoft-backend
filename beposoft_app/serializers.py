@@ -1236,6 +1236,16 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
 
+
+class MyOrderSerializer(serializers.ModelSerializer):
+    manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
+    manage_staff_id = serializers.IntegerField(source="manage_staff.id", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ["id", "invoice", "manage_staff", "manage_staff_id"]
+        
+
 class GSTOrderSerializer(serializers.ModelSerializer):
     customerName = serializers.CharField(source="customer.name", read_only=True)
     gst = serializers.CharField(source="customer.gst", read_only=True)

@@ -1864,6 +1864,41 @@ class OrderListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+class MyOrderListView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            orders = Order.objects.filter(
+                manage_staff=authUser
+            ).select_related("manage_staff").order_by("-id")
+
+            serializer = MyOrderSerializer(orders, many=True)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ObjectDoesNotExist:
+            return Response(
+                {"status": "error", "message": "Orders not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except DatabaseError:
+            return Response(
+                {"status": "error", "message": "Database error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+            
 class GSTOrderListView(BaseTokenView):
     def get(self, request):
         # follow the same get_user_from_token pattern as your DataLogListView
