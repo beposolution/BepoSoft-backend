@@ -10354,13 +10354,12 @@ class MyDailySalesReportView(BaseTokenView):
 
                 dist_reports = reports.filter(district=dist)
 
-                for r in dist_reports:
-                    day = r.created_at.day
-                    daily_counts[str(day)] += r.count if r.count else 0
-
                 for day in dates:
-                    row_total += daily_counts[str(day)]
-                    column_totals[str(day)] += daily_counts[str(day)]
+                    invoice_count = dist_reports.filter(created_at__day=day).count()
+                    daily_counts[str(day)] = invoice_count
+
+                    row_total += invoice_count
+                    column_totals[str(day)] += invoice_count
 
                 grand_total += row_total
 
@@ -10451,13 +10450,12 @@ class AllUsersDailySalesReportView(BaseTokenView):
 
                 dist_reports = reports.filter(district=dist)
 
-                for r in dist_reports:
-                    day = r.created_at.day
-                    daily_counts[str(day)] += r.count if r.count else 0
-
                 for day in dates:
-                    row_total += daily_counts[str(day)]
-                    column_totals[str(day)] += daily_counts[str(day)]
+                    invoice_count = dist_reports.filter(created_at__day=day).count()
+                    daily_counts[str(day)] = invoice_count
+
+                    row_total += invoice_count
+                    column_totals[str(day)] += invoice_count
 
                 grand_total += row_total
 
