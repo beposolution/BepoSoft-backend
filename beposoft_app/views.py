@@ -10397,7 +10397,6 @@ class MyDailySalesReportView(BaseTokenView):
 
 
 
-
 class AllUsersDailySalesReportView(BaseTokenView):
 
     def get(self, request):
@@ -10420,7 +10419,6 @@ class AllUsersDailySalesReportView(BaseTokenView):
             year = int(year)
             state_id = int(state_id)
 
-            # Validate month
             if month < 1 or month > 12:
                 return Response({
                     "status": "error",
@@ -10440,41 +10438,58 @@ class AllUsersDailySalesReportView(BaseTokenView):
 
             district_list = Districts.objects.filter(state_id=state_id).order_by("name")
 
-            final_data = []
-            column_totals = {str(day): 0 for day in dates}
-            grand_total = 0
-
-            for dist in district_list:
-                daily_counts = {str(day): 0 for day in dates}
-                row_total = 0
-
-                dist_reports = reports.filter(district=dist)
-
-                for day in dates:
-                    invoice_count = dist_reports.filter(created_at__day=day).count()
-                    daily_counts[str(day)] = invoice_count
-
-                    row_total += invoice_count
-                    column_totals[str(day)] += invoice_count
-
-                grand_total += row_total
-
-                final_data.append({
-                    "district": dist.name,
-                    "daily_counts": daily_counts,
-                    "total": row_total
-                })
-
             month_name = datetime(year, month, 1).strftime("%B %Y")
+
+            # GROUP REPORTS BY USER
+            
+            users = reports.values_list("user_id", flat=True).distinct()
+
+            final_users_data = []
+
+            for uid in users:
+                user_obj = User.objects.get(id=uid)
+
+                user_data = []
+                column_totals = {str(day): 0 for day in dates}
+                grand_total = 0
+
+                user_reports = reports.filter(user_id=uid)
+
+                for dist in district_list:
+                    daily_counts = {str(day): 0 for day in dates}
+                    row_total = 0
+
+                    dist_reports = user_reports.filter(district=dist)
+
+                    for day in dates:
+                        invoice_count = dist_reports.filter(created_at__day=day).count()
+                        daily_counts[str(day)] = invoice_count
+
+                        row_total += invoice_count
+                        column_totals[str(day)] += invoice_count
+
+                    grand_total += row_total
+
+                    user_data.append({
+                        "district": dist.name,
+                        "daily_counts": daily_counts,
+                        "total": row_total
+                    })
+
+                final_users_data.append({
+                    "user_id": user_obj.id,
+                    "user_name": user_obj.name,
+                    "districts": user_data,
+                    "column_totals": column_totals,
+                    "grand_total": grand_total
+                })
 
             return Response({
                 "status": "success",
                 "state": state.name,
                 "month": month_name,
                 "dates": dates,
-                "districts": final_data,
-                "column_totals": column_totals,
-                "grand_total": grand_total
+                "users": final_users_data
             })
 
         except State.DoesNotExist:
