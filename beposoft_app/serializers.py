@@ -1244,7 +1244,7 @@ class MyOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ["id", "invoice", "manage_staff", "manage_staff_id"]
-        
+
 
 class GSTOrderSerializer(serializers.ModelSerializer):
     customerName = serializers.CharField(source="customer.name", read_only=True)
@@ -2141,7 +2141,6 @@ class DailySalesReportSerializer(serializers.ModelSerializer):
 
 
 class DailySalesReportGETSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.category_name", read_only=True)
     user_name = serializers.CharField(source="user.name", read_only=True)
     state_name = serializers.CharField(source="state.name", read_only=True)
     district_name = serializers.CharField(source="district.name", read_only=True)
