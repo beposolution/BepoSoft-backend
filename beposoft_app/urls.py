@@ -88,6 +88,7 @@ urlpatterns = [
 
     path('api/order/create/', CreateOrder.as_view(), name='create-order'),
     path('api/orders/', OrderListView.as_view(), name='orders'),
+    path('api/my/orders/', MyOrderListView.as_view(), name='my-orders'),
     path('api/gst/orders/', GSTOrderListView.as_view(), name='gst'),
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
