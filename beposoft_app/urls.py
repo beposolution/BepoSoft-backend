@@ -291,6 +291,8 @@ urlpatterns = [
     path("api/daily/sales/report/add/", DailySalesReportView.as_view()),
     path("api/daily/sales/report/update/<int:pk>/", DailySalesReportUpdateView.as_view()),
     path("api/daily/sales/report/all/", DailySalesReportAllView.as_view()),
+    path("api/daily/sales/report/my/", MyDailySalesReportView.as_view()),
+    path("api/daily/sales/report/all/users/", AllUsersDailySalesReportView.as_view()),
 
 
     path("api/product/sellers/details/add/", ProductSellerDetailsView.as_view()),
