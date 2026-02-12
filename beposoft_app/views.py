@@ -10434,26 +10434,27 @@ class AllUsersDailySalesReportView(BaseTokenView):
             days_in_month = calendar.monthrange(year, month)[1]
             dates = list(range(1, days_in_month + 1))
 
+            month_name = datetime(year, month, 1).strftime("%B %Y")
+
             reports = DailySalesReport.objects.filter(
                 created_at__year=year,
                 created_at__month=month
             )
 
-            month_name = datetime(year, month, 1).strftime("%B %Y")
-
-
             if user_id:
                 reports = reports.filter(user_id=user_id)
-
 
             if state_id:
                 state = State.objects.get(id=state_id)
 
                 reports = reports.filter(state_id=state_id)
-                district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+
+                district_list = Districts.objects.filter(
+                    state_id=state_id
+                ).order_by("name")
 
             else:
-                # if no state_id, take allocated_states of frontend user_id
+                # if no state_id then use allocated_states of the selected user_id
                 if not user_id:
                     return Response({
                         "status": "error",
@@ -10464,10 +10465,12 @@ class AllUsersDailySalesReportView(BaseTokenView):
                 allocated_states = user_obj.allocated_states.all()
 
                 reports = reports.filter(state__in=allocated_states)
-                district_list = Districts.objects.filter(state__in=allocated_states).order_by("state__name", "name")
+
+                district_list = Districts.objects.filter(
+                    state__in=allocated_states
+                ).order_by("state__name", "name")
 
                 state = None
-
 
             users = reports.values_list("user_id", flat=True).distinct()
 
@@ -10476,13 +10479,19 @@ class AllUsersDailySalesReportView(BaseTokenView):
             for uid in users:
                 user_obj = User.objects.get(id=uid)
 
-                user_data = []
                 column_totals = {str(day): 0 for day in dates}
                 grand_total = 0
 
                 user_reports = reports.filter(user_id=uid)
 
+                statewise_data = {}
+
                 for dist in district_list:
+                    state_name = dist.state.name if dist.state else ""
+
+                    if state_name not in statewise_data:
+                        statewise_data[state_name] = []
+
                     daily_counts = {str(day): 0 for day in dates}
                     row_total = 0
 
@@ -10497,10 +10506,18 @@ class AllUsersDailySalesReportView(BaseTokenView):
 
                     grand_total += row_total
 
-                    user_data.append({
+                    statewise_data[state_name].append({
                         "district": dist.name,
                         "daily_counts": daily_counts,
                         "total": row_total
+                    })
+
+                user_data = []
+
+                for sname, dlist in statewise_data.items():
+                    user_data.append({
+                        "state": sname,
+                        "districts": dlist
                     })
 
                 final_users_data.append({
