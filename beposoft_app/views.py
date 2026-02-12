@@ -10408,16 +10408,16 @@ class AllUsersDailySalesReportView(BaseTokenView):
             month = request.GET.get("month")
             year = request.GET.get("year")
             state_id = request.GET.get("state_id")
+            user_id = request.GET.get("user_id")   # NEW
 
-            if not month or not year or not state_id:
+            if not month or not year:
                 return Response({
                     "status": "error",
-                    "message": "month, year and state_id are required"
+                    "message": "month and year are required"
                 }, status=400)
 
             month = int(month)
             year = int(year)
-            state_id = int(state_id)
 
             if month < 1 or month > 12:
                 return Response({
@@ -10425,23 +10425,39 @@ class AllUsersDailySalesReportView(BaseTokenView):
                     "message": "month must be between 1 and 12"
                 }, status=400)
 
-            state = State.objects.get(id=state_id)
+            if state_id:
+                state_id = int(state_id)
+
+            if user_id:
+                user_id = int(user_id)
+
+            if state_id:
+                state = State.objects.get(id=state_id)
+            else:
+                state = None
 
             days_in_month = calendar.monthrange(year, month)[1]
             dates = list(range(1, days_in_month + 1))
 
             reports = DailySalesReport.objects.filter(
-                state_id=state_id,
                 created_at__year=year,
                 created_at__month=month
             )
 
-            district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+            if state_id:
+                reports = reports.filter(state_id=state_id)
+
+            if user_id:
+                reports = reports.filter(user_id=user_id)
+
+            if state_id:
+                district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+            else:
+                district_list = Districts.objects.all().order_by("name")
 
             month_name = datetime(year, month, 1).strftime("%B %Y")
 
             # GROUP REPORTS BY USER
-            
             users = reports.values_list("user_id", flat=True).distinct()
 
             final_users_data = []
@@ -10486,7 +10502,7 @@ class AllUsersDailySalesReportView(BaseTokenView):
 
             return Response({
                 "status": "success",
-                "state": state.name,
+                "state": state.name if state else "",
                 "month": month_name,
                 "dates": dates,
                 "users": final_users_data
