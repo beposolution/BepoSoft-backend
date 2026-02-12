@@ -10554,3 +10554,190 @@ class AllUsersDailySalesReportView(BaseTokenView):
                 "message": "Something went wrong",
                 "error": str(e)
             }, status=500)
+
+
+
+
+class LoggedUserMonthlyCategoryReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            month = request.GET.get("month")
+            year = request.GET.get("year")
+
+            if not month or not year:
+                return JsonResponse({
+                    "status": "error",
+                    "message": "month and year are required"
+                }, status=400)
+
+            month = int(month)
+            year = int(year)
+
+            start_date = datetime(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = datetime(year, month, last_day, 23, 59, 59)
+
+            # Get all categories (for fixed columns)
+            categories = list(
+                ProductCategoryModel.objects.values_list("category_name", flat=True)
+            )
+
+            # Fetch report data
+            report_qs = (
+                OrderItem.objects
+                .filter(
+                    order__daily_sales_reports__user=user,
+                    order__daily_sales_reports__created_at__range=[start_date, end_date]
+                )
+                .values(
+                    "order__daily_sales_reports__state__name",
+                    "order__daily_sales_reports__district__name",
+                    "product__product_category__category_name",
+                )
+                .annotate(total_qty=Sum("quantity"))
+            )
+
+            output = {}
+            category_totals = {cat: 0 for cat in categories}
+            category_totals["Others"] = 0
+            grand_total = 0
+
+            for row in report_qs:
+                state = row["order__daily_sales_reports__state__name"]
+                district = row["order__daily_sales_reports__district__name"]
+                category = row["product__product_category__category_name"] or "Others"
+                qty = row["total_qty"] or 0
+
+                if state not in output:
+                    output[state] = {}
+
+                if district not in output[state]:
+                    output[state][district] = {cat: 0 for cat in categories}
+                    output[state][district]["Others"] = 0
+                    output[state][district]["total"] = 0
+
+                if category not in output[state][district]:
+                    category = "Others"
+
+                output[state][district][category] += qty
+                output[state][district]["total"] += qty
+
+                if category not in category_totals:
+                    category_totals["Others"] += qty
+                else:
+                    category_totals[category] += qty
+
+                grand_total += qty
+
+            category_totals["total"] = grand_total
+
+            return JsonResponse({
+                "status": "success",
+                "user": user.name,
+                "month": month,
+                "year": year,
+                "categories": categories + ["Others"],
+                "data": output,
+                "category_totals": category_totals
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({
+                "status": "error",
+                "message": "Something went wrong",
+                "error": str(e)
+            }, status=500)
+
+
+
+
+class AllUsersMonthlyCategoryReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            month = request.GET.get("month")
+            year = request.GET.get("year")
+
+            if not month or not year:
+                return JsonResponse({
+                    "status": "error",
+                    "message": "month and year are required"
+                }, status=400)
+
+            month = int(month)
+            year = int(year)
+
+            start_date = datetime(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = datetime(year, month, last_day, 23, 59, 59)
+
+            categories = list(
+                ProductCategoryModel.objects.values_list("category_name", flat=True)
+            )
+
+            report_qs = (
+                OrderItem.objects
+                .filter(order__daily_sales_reports__created_at__range=[start_date, end_date])
+                .values(
+                    "order__daily_sales_reports__user__name",
+                    "order__daily_sales_reports__state__name",
+                    "order__daily_sales_reports__district__name",
+                    "product__product_category__category_name",
+                )
+                .annotate(total_qty=Sum("quantity"))
+                .order_by(
+                    "order__daily_sales_reports__user__name",
+                    "order__daily_sales_reports__state__name",
+                    "order__daily_sales_reports__district__name",
+                )
+            )
+
+            final_output = {}
+
+            for row in report_qs:
+                uname = row["order__daily_sales_reports__user__name"]
+                state = row["order__daily_sales_reports__state__name"]
+                district = row["order__daily_sales_reports__district__name"]
+                category = row["product__product_category__category_name"] or "Others"
+                qty = row["total_qty"] or 0
+
+                if uname not in final_output:
+                    final_output[uname] = {}
+
+                if state not in final_output[uname]:
+                    final_output[uname][state] = {}
+
+                if district not in final_output[uname][state]:
+                    final_output[uname][state][district] = {cat: 0 for cat in categories}
+                    final_output[uname][state][district]["Others"] = 0
+                    final_output[uname][state][district]["total"] = 0
+
+                if category not in final_output[uname][state][district]:
+                    category = "Others"
+
+                final_output[uname][state][district][category] += qty
+                final_output[uname][state][district]["total"] += qty
+
+            return JsonResponse({
+                "status": "success",
+                "month": month,
+                "year": year,
+                "categories": categories + ["Others"],
+                "data": final_output
+            }, status=200)
+
+        except Exception as e:
+            return JsonResponse({
+                "status": "error",
+                "message": "Something went wrong",
+                "error": str(e)
+            }, status=500)
