@@ -10408,7 +10408,7 @@ class AllUsersDailySalesReportView(BaseTokenView):
             month = request.GET.get("month")
             year = request.GET.get("year")
             state_id = request.GET.get("state_id")
-            user_id = request.GET.get("user_id")   # NEW
+            user_id = request.GET.get("user_id")
 
             if not month or not year:
                 return Response({
@@ -10431,11 +10431,6 @@ class AllUsersDailySalesReportView(BaseTokenView):
             if user_id:
                 user_id = int(user_id)
 
-            if state_id:
-                state = State.objects.get(id=state_id)
-            else:
-                state = None
-
             days_in_month = calendar.monthrange(year, month)[1]
             dates = list(range(1, days_in_month + 1))
 
@@ -10444,20 +10439,36 @@ class AllUsersDailySalesReportView(BaseTokenView):
                 created_at__month=month
             )
 
-            if state_id:
-                reports = reports.filter(state_id=state_id)
+            month_name = datetime(year, month, 1).strftime("%B %Y")
+
 
             if user_id:
                 reports = reports.filter(user_id=user_id)
 
+
             if state_id:
+                state = State.objects.get(id=state_id)
+
+                reports = reports.filter(state_id=state_id)
                 district_list = Districts.objects.filter(state_id=state_id).order_by("name")
+
             else:
-                district_list = Districts.objects.all().order_by("name")
+                # if no state_id, take allocated_states of frontend user_id
+                if not user_id:
+                    return Response({
+                        "status": "error",
+                        "message": "user_id is required when state_id is not given"
+                    }, status=400)
 
-            month_name = datetime(year, month, 1).strftime("%B %Y")
+                user_obj = User.objects.get(id=user_id)
+                allocated_states = user_obj.allocated_states.all()
 
-            # GROUP REPORTS BY USER
+                reports = reports.filter(state__in=allocated_states)
+                district_list = Districts.objects.filter(state__in=allocated_states).order_by("state__name", "name")
+
+                state = None
+
+
             users = reports.values_list("user_id", flat=True).distinct()
 
             final_users_data = []
@@ -10512,6 +10523,12 @@ class AllUsersDailySalesReportView(BaseTokenView):
             return Response({
                 "status": "error",
                 "message": "State not found"
+            }, status=404)
+
+        except User.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "User not found"
             }, status=404)
 
         except Exception as e:
