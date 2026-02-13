@@ -10550,30 +10550,44 @@ class AllUsersDailySalesReportView(BaseTokenView):
 
 
                 # state summary calculations for each user
-                total_invoices = grand_total
-                average_per_day = round(total_invoices / days_in_month, 2) if days_in_month > 0 else 0
+                state_summaries = []
 
-                highest_day = None
-                highest_day_count = 0
+                for sname, dlist in statewise_data.items():
 
-                lowest_day = None
-                lowest_day_count = None
+                    state_total_invoices = 0
+                    state_column_totals = {str(day): 0 for day in dates}
 
-                if column_totals:
-                    highest_day = max(column_totals, key=lambda k: column_totals[k])
-                    highest_day_count = column_totals[highest_day]
+                    # calculate totals from districts list
+                    for dist_item in dlist:
+                        state_total_invoices += dist_item["total"]
 
-                    lowest_day = min(column_totals, key=lambda k: column_totals[k])
-                    lowest_day_count = column_totals[lowest_day]
+                        for day in dates:
+                            state_column_totals[str(day)] += dist_item["daily_counts"][str(day)]
 
-                state_summary = {
-                    "total_invoices": total_invoices,
-                    "average_per_day": average_per_day,
-                    "highest_day": int(highest_day) if highest_day else None,
-                    "highest_day_count": highest_day_count,
-                    "lowest_day": int(lowest_day) if lowest_day else None,
-                    "lowest_day_count": lowest_day_count
-                }
+                    state_average_per_day = round(state_total_invoices / days_in_month, 2) if days_in_month > 0 else 0
+
+                    state_highest_day = None
+                    state_highest_day_count = 0
+
+                    state_lowest_day = None
+                    state_lowest_day_count = None
+
+                    if state_column_totals:
+                        state_highest_day = max(state_column_totals, key=lambda k: state_column_totals[k])
+                        state_highest_day_count = state_column_totals[state_highest_day]
+
+                        state_lowest_day = min(state_column_totals, key=lambda k: state_column_totals[k])
+                        state_lowest_day_count = state_column_totals[state_lowest_day]
+
+                    state_summaries.append({
+                        "state": sname,
+                        "total_invoices": state_total_invoices,
+                        "average_per_day": state_average_per_day,
+                        "highest_day": int(state_highest_day) if state_highest_day else None,
+                        "highest_day_count": state_highest_day_count,
+                        "lowest_day": int(state_lowest_day) if state_lowest_day else None,
+                        "lowest_day_count": state_lowest_day_count
+                    })
 
                 final_users_data.append({
                     "user_id": user_obj.id,
@@ -10581,7 +10595,7 @@ class AllUsersDailySalesReportView(BaseTokenView):
                     "districts": user_data,
                     "column_totals": column_totals,
                     "grand_total": grand_total,
-                    "state_summary": state_summary
+                    "state_summary": state_summaries
                 })
 
             return Response({
