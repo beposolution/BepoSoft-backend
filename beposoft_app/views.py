@@ -10371,6 +10371,33 @@ class MyDailySalesReportView(BaseTokenView):
 
             month_name = datetime(year, month, 1).strftime("%B %Y")
 
+
+            # state summary calculations
+            total_invoices = grand_total
+            average_per_day = round(total_invoices / days_in_month, 2) if days_in_month > 0 else 0
+
+            highest_day = None
+            highest_day_count = 0
+
+            lowest_day = None
+            lowest_day_count = None
+
+            if column_totals:
+                highest_day = max(column_totals, key=lambda k: column_totals[k])
+                highest_day_count = column_totals[highest_day]
+
+                lowest_day = min(column_totals, key=lambda k: column_totals[k])
+                lowest_day_count = column_totals[lowest_day]
+
+            state_summary = {
+                "total_invoices": total_invoices,
+                "average_per_day": average_per_day,
+                "highest_day": int(highest_day) if highest_day else None,
+                "highest_day_count": highest_day_count,
+                "lowest_day": int(lowest_day) if lowest_day else None,
+                "lowest_day_count": lowest_day_count
+            }
+
             return Response({
                 "status": "success",
                 "user": user.name,
@@ -10379,7 +10406,8 @@ class MyDailySalesReportView(BaseTokenView):
                 "dates": dates,
                 "districts": final_data,
                 "column_totals": column_totals,
-                "grand_total": grand_total
+                "grand_total": grand_total,
+                "state_summary": state_summary
             })
 
         except State.DoesNotExist:
@@ -10520,12 +10548,40 @@ class AllUsersDailySalesReportView(BaseTokenView):
                         "districts": dlist
                     })
 
+
+                # state summary calculations for each user
+                total_invoices = grand_total
+                average_per_day = round(total_invoices / days_in_month, 2) if days_in_month > 0 else 0
+
+                highest_day = None
+                highest_day_count = 0
+
+                lowest_day = None
+                lowest_day_count = None
+
+                if column_totals:
+                    highest_day = max(column_totals, key=lambda k: column_totals[k])
+                    highest_day_count = column_totals[highest_day]
+
+                    lowest_day = min(column_totals, key=lambda k: column_totals[k])
+                    lowest_day_count = column_totals[lowest_day]
+
+                state_summary = {
+                    "total_invoices": total_invoices,
+                    "average_per_day": average_per_day,
+                    "highest_day": int(highest_day) if highest_day else None,
+                    "highest_day_count": highest_day_count,
+                    "lowest_day": int(lowest_day) if lowest_day else None,
+                    "lowest_day_count": lowest_day_count
+                }
+
                 final_users_data.append({
                     "user_id": user_obj.id,
                     "user_name": user_obj.name,
                     "districts": user_data,
                     "column_totals": column_totals,
-                    "grand_total": grand_total
+                    "grand_total": grand_total,
+                    "state_summary": state_summary
                 })
 
             return Response({
