@@ -10706,6 +10706,54 @@ class LoggedUserMonthlyCategoryReportView(BaseTokenView):
 
             category_totals["total"] = grand_total
 
+
+            # state summary calculations
+            days_in_month = calendar.monthrange(year, month)[1]
+            dates = list(range(1, days_in_month + 1))
+
+            daily_totals = {str(day): 0 for day in dates}
+
+            daily_qs = (
+                OrderItem.objects
+                .filter(
+                    order__daily_sales_reports__user=user,
+                    order__daily_sales_reports__created_at__range=[start_date, end_date]
+                )
+                .values("order__daily_sales_reports__created_at__day")
+                .annotate(total_qty=Sum("quantity"))
+            )
+
+            for row in daily_qs:
+                day = row["order__daily_sales_reports__created_at__day"]
+                qty = row["total_qty"] or 0
+                if day:
+                    daily_totals[str(day)] += qty
+
+            total_quantity = grand_total
+            average_per_day = round(total_quantity / days_in_month, 2) if days_in_month > 0 else 0
+
+            highest_day = None
+            highest_day_count = 0
+
+            lowest_day = None
+            lowest_day_count = None
+
+            if daily_totals:
+                highest_day = max(daily_totals, key=lambda k: daily_totals[k])
+                highest_day_count = daily_totals[highest_day]
+
+                lowest_day = min(daily_totals, key=lambda k: daily_totals[k])
+                lowest_day_count = daily_totals[lowest_day]
+
+            state_summary = {
+                "total_quantity": total_quantity,
+                "average_per_day": average_per_day,
+                "highest_day": int(highest_day) if highest_day else None,
+                "highest_day_count": highest_day_count,
+                "lowest_day": int(lowest_day) if lowest_day else None,
+                "lowest_day_count": lowest_day_count
+            }
+
             return JsonResponse({
                 "status": "success",
                 "user": user.name,
@@ -10713,7 +10761,8 @@ class LoggedUserMonthlyCategoryReportView(BaseTokenView):
                 "year": year,
                 "categories": categories + ["Others"],
                 "data": output,
-                "category_totals": category_totals
+                "category_totals": category_totals,
+                "state_summary": state_summary
             }, status=200)
 
         except Exception as e:
@@ -10797,12 +10846,79 @@ class AllUsersMonthlyCategoryReportView(BaseTokenView):
                 final_output[uname][state][district][category] += qty
                 final_output[uname][state][district]["total"] += qty
 
+
+            # state summary calculations
+            days_in_month = calendar.monthrange(year, month)[1]
+            dates = list(range(1, days_in_month + 1))
+
+            summary_qs = (
+                OrderItem.objects
+                .filter(order__daily_sales_reports__created_at__range=[start_date, end_date])
+                .values(
+                    "order__daily_sales_reports__user__name",
+                    "order__daily_sales_reports__state__name",
+                    "order__daily_sales_reports__created_at__day"
+                )
+                .annotate(total_qty=Sum("quantity"))
+            )
+
+            user_state_day_data = {}
+
+            for row in summary_qs:
+                uname = row["order__daily_sales_reports__user__name"]
+                state = row["order__daily_sales_reports__state__name"]
+                day = row["order__daily_sales_reports__created_at__day"]
+                qty = row["total_qty"] or 0
+
+                if uname not in user_state_day_data:
+                    user_state_day_data[uname] = {}
+
+                if state not in user_state_day_data[uname]:
+                    user_state_day_data[uname][state] = {str(d): 0 for d in dates}
+
+                if day:
+                    user_state_day_data[uname][state][str(day)] += qty
+
+            state_summary_output = {}
+
+            for uname, states_data in user_state_day_data.items():
+                state_summary_output[uname] = []
+
+                for sname, day_totals in states_data.items():
+                    total_quantity = sum(day_totals.values())
+                    average_per_day = round(total_quantity / days_in_month, 2) if days_in_month > 0 else 0
+
+                    highest_day = None
+                    highest_day_count = 0
+
+                    lowest_day = None
+                    lowest_day_count = None
+
+                    if day_totals:
+                        highest_day = max(day_totals, key=lambda k: day_totals[k])
+                        highest_day_count = day_totals[highest_day]
+
+                        lowest_day = min(day_totals, key=lambda k: day_totals[k])
+                        lowest_day_count = day_totals[lowest_day]
+
+                    state_summary_output[uname].append({
+                        "state": sname,
+                        "total_quantity": total_quantity,
+                        "average_per_day": average_per_day,
+                        "highest_day": int(highest_day) if highest_day else None,
+                        "highest_day_count": highest_day_count,
+                        "lowest_day": int(lowest_day) if lowest_day else None,
+                        "lowest_day_count": lowest_day_count
+                    })
+
+
             return JsonResponse({
                 "status": "success",
                 "month": month,
                 "year": year,
                 "categories": categories + ["Others"],
-                "data": final_output
+                "data": final_output,
+                "state_summary": state_summary_output
             }, status=200)
 
         except Exception as e:
