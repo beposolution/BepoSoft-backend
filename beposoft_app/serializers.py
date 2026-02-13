@@ -2139,6 +2139,18 @@ class DailySalesReportSerializer(serializers.ModelSerializer):
         model = DailySalesReport
         fields = "__all__"
 
+    def validate(self, data):
+        invoice = data.get("invoice")
+        user = data.get("user")
+
+        # Check if invoice already exists for this user
+        if DailySalesReport.objects.filter(invoice=invoice, user=user).exists():
+            raise serializers.ValidationError({
+                "invoice": "This invoice is already added in Daily Sales Report."
+            })
+
+        return data
+
 
 class DailySalesReportGETSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.name", read_only=True)
