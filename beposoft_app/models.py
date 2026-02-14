@@ -1769,6 +1769,34 @@ class DailySalesReport(models.Model):
         return f"{self.user.name} - {self.invoice.invoice} - {self.category.category_name} - {self.count}"
 
 
+class BDMBDOReport(models.Model):
+    NEW_COACH = [
+        ('yes', 'YES'),
+        ('no', 'NO'),
+    ]
+    MICRO_DEALER = [
+        ('yes', 'YES'),
+        ('no', 'NO'),
+    ]
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="bdm_bdo_report")
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="bdm_bdo_report")
+    bdo = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_bdo_reports")
+    bdm = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_bdo_report")
+    new_coach = models.CharField(max_length=100, choices=NEW_COACH, default='no')
+    micro_dealer = models.CharField(max_length=100, choices=MICRO_DEALER, default='no')
+    note = models.TextField(null=True, blank=True)
+    call_duration = models.CharField(max_length=50, null=True, blank=True)
+    average = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "bdm_bdo_report"
+
+    def __str__(self):
+        return f"BDM: {self.bdm.name} - BDO: {self.bdo.name} - Invoice: {self.invoice.invoice}"
+
+
 
 
 # Seller related models

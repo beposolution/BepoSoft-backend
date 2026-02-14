@@ -9703,6 +9703,254 @@ class DailySalesReportAllView(BaseTokenView):
 
 
 
+class BDMBDODailySalesReportView(BaseTokenView):
+    
+    # return logged-in user's(BDM) created daily sales reports
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            reports = BDMBDOReport.objects.filter(bdm=authUser).order_by("-id")
+            serializer = BDMBDOReportGETSerializer(reports, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily sales reports fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report GET: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # user auto from token
+            data = request.data.copy()
+            data["bdm"] = authUser.pk
+
+            serializer = BDMBDOReportSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Daily sales report created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report POST: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class BDMBDODailySalesReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # GET ALL REPORTS (No Filter)
+            reports = BDMBDOReport.objects.all().order_by("-id")
+            serializer = BDMBDOReportGETSerializer(reports, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "All BDM BDO reports fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report GET: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+class BDMBDOReportDetailView(BaseTokenView):
+
+    def get(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                report = BDMBDOReport.objects.get(id=id)
+            except BDMBDOReport.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Report not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = BDMBDOReportGETSerializer(report)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Report fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report GET by ID: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                report = BDMBDOReport.objects.get(id=id)
+            except BDMBDOReport.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Report not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            data = request.data.copy()
+
+            # IMPORTANT: Do not allow changing bdm from frontend
+            data["bdm"] = report.bdm.id
+
+            serializer = BDMBDOReportSerializer(report, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Report updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report PUT: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            try:
+                report = BDMBDOReport.objects.get(id=id)
+            except BDMBDOReport.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Report not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            report.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Report deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception("Error in Report DELETE: %s", str(e))
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
 # Product Buying from another company/industries - Seller Details
 
 class ProductSellerDetailsView(BaseTokenView):
