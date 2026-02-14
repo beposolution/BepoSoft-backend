@@ -295,7 +295,7 @@ urlpatterns = [
     path("api/daily/sales/report/all/users/", AllUsersDailySalesReportView.as_view()),
     path("api/monthly/category/report/", LoggedUserMonthlyCategoryReportView.as_view()),
     path("api/monthly/category/report/all/", AllUsersMonthlyCategoryReportView.as_view()),
-    path("api/monthly/sales/report/bdm/bdo/", BDMBDODailySalesReportView.as_view()),
+    path("api/monthly/sales/report/bdm/bdo/", BDMBDODailySalesAddReportView.as_view()),
     path("api/monthly/sales/report/bdm/bdo/all/", BDMBDODailySalesReportView.as_view()),
     path("api/monthly/sales/report/bdm/bdo/update/<int:id>/", BDMBDOReportDetailView.as_view()),
 

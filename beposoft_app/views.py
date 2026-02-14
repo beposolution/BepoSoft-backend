@@ -9703,7 +9703,7 @@ class DailySalesReportAllView(BaseTokenView):
 
 
 
-class BDMBDODailySalesReportView(BaseTokenView):
+class BDMBDODailySalesAddReportView(BaseTokenView):
     
     # return logged-in user's(BDM) created daily sales reports
     def get(self, request):
