@@ -1907,7 +1907,9 @@ class InvoiceListView(BaseTokenView):
             if error_response:
                 return error_response
 
-            orders = Order.objects.all().order_by("-id")
+            orders = Order.objects.filter(
+                manage_staff__department_id__name__in=["BDO", "BDM"]
+            ).order_by("-id")
 
             serializer = InvoiceListSerializer(orders, many=True)
 
