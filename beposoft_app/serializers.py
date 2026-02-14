@@ -2162,6 +2162,25 @@ class DailySalesReportGETSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class BDMBDOReportSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = BDMBDOReport
+        fields = "__all__"
+
+
+class BDMBDOReportGETSerializer(serializers.ModelSerializer):
+    bdm_name = serializers.CharField(source="bdm.name", read_only=True)
+    bdo_name = serializers.CharField(source="bdo.name", read_only=True)
+    invoice_no = serializers.CharField(source="invoice.invoice", read_only=True)
+    volume = serializers.CharField(source="invoice.total_amount", read_only=True)
+    state_name = serializers.CharField(source="state.name", read_only=True)
+
+    class Meta:
+        model = BDMBDOReport
+        fields = "__all__"
+
+
 # End of  Reports and Analytics serializers section based on daily sales
 
 
