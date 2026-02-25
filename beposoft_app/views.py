@@ -10625,6 +10625,67 @@ class ProductSellerInvoiceItemDeleteView(BaseTokenView):
             }, status=500)
 
 
+class ProductSellerInvoiceItemAddView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            invoice_id = request.data.get("invoice_id")
+            product_id = request.data.get("product_id")
+            quantity = int(request.data.get("quantity", 1))
+            price = float(request.data.get("price", 0))
+            discount = float(request.data.get("discount", 0))
+            tax = float(request.data.get("tax", 0))
+
+            if not invoice_id or not product_id:
+                return Response({
+                    "status": "error",
+                    "message": "invoice_id and product_id are required"
+                }, status=400)
+
+            invoice = get_object_or_404(ProductSellerInvoice, id=invoice_id)
+            product = get_object_or_404(Products, id=product_id)
+
+            # calculate total
+            total = (quantity * price) - discount
+
+            # create item
+            ProductSellerInvoiceItem.objects.create(
+                invoice=invoice,
+                product=product,
+                quantity=quantity,
+                price=price,
+                discount=discount,
+                tax=tax,
+                total=total
+            )
+
+            # recalc total
+            from django.db.models import Sum
+
+            total_amount = ProductSellerInvoiceItem.objects.filter(
+                invoice=invoice
+            ).aggregate(total=Sum("total"))["total"] or 0
+
+            invoice.total_amount = total_amount
+            invoice.save()
+
+            return Response({
+                "status": "success",
+                "message": "Product added to invoice successfully"
+            }, status=201)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
+
 class MyDailySalesReportView(BaseTokenView):
 
     def get(self, request):
