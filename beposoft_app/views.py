@@ -10583,6 +10583,47 @@ class PrintSellerInvoiceView(BaseTokenView):
             }, status=500)
 
 
+class ProductSellerInvoiceItemDeleteView(BaseTokenView):
+
+    def delete(self, request, item_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # Get item
+            invoice_item = get_object_or_404(
+                ProductSellerInvoiceItem,
+                id=item_id
+            )
+
+            invoice = invoice_item.invoice
+
+            # Delete item
+            invoice_item.delete()
+
+            # Recalculate total
+            from django.db.models import Sum
+
+            total_amount = ProductSellerInvoiceItem.objects.filter(
+                invoice=invoice
+            ).aggregate(total=Sum("total"))["total"] or 0
+
+            invoice.total_amount = total_amount
+            invoice.save()
+
+            return Response({
+                "status": "success",
+                "message": "Item deleted successfully"
+            }, status=200)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Something went wrong",
+                "errors": str(e)
+            }, status=500)
+
 
 class MyDailySalesReportView(BaseTokenView):
 
