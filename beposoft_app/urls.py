@@ -311,6 +311,7 @@ urlpatterns = [
     path("api/product/seller/cart/delete/<int:id>/", ProductSellerCartDeleteView.as_view()),
     path("api/product/seller/invoice/print/<int:invoice_id>/", PrintSellerInvoiceView.as_view()),
     path("api/product/seller/invoice/item/delete/<int:item_id>/", ProductSellerInvoiceItemDeleteView.as_view()),
+    path("api/product/seller/invoice/item/add/", ProductSellerInvoiceItemAddView.as_view()),
 
 ]
 
