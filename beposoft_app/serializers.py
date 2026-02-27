@@ -373,12 +373,7 @@ class ProductSerializerView(serializers.ModelSerializer):
         """
         Fetch variant details for the same groupID, including images.
         """
-        # main_product = Products.objects.filter(groupID=obj.groupID).order_by('id').first()
-        main_product = Products.objects.filter(
-            groupID=obj.groupID,
-            size__isnull=True,
-            color__isnull=True
-        ).first()
+        main_product = Products.objects.filter(groupID=obj.groupID).order_by('id').first()
 
         if main_product:  # Ensure correct check for 'variant'
             variants = Products.objects.filter(groupID=obj.groupID)
