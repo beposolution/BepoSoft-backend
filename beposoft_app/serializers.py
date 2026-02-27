@@ -344,12 +344,7 @@ class ProductSerializerView(serializers.ModelSerializer):
         data = super().to_representation(instance)
 
     # Fetch the main product with the same groupID
-        # main_product = Products.objects.filter(groupID=instance.groupID).order_by('id').first()
-        main_product = Products.objects.filter(
-            groupID=instance.groupID,
-            size__isnull=True,
-            color__isnull=True
-        ).first()
+        main_product = Products.objects.filter(groupID=instance.groupID).order_by('id').first()
 
 
         if instance.type == 'variant' and main_product:
