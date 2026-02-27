@@ -301,6 +301,8 @@ urlpatterns = [
     path("api/monthly/sales/report/bdm/bdo/update/<int:id>/", BDMBDOReportDetailView.as_view()),
 
 
+    path("api/currency/add/", CurrencyListCreateView.as_view()),
+    path("api/currency/edit/<int:currency_id>/", CurrencyDetailView.as_view()),
     path("api/product/sellers/details/add/", ProductSellerDetailsView.as_view()),
     path("api/product/sellers/details/edit/<int:id>/", ProductSellerDetailsByIdView.as_view()),
     path("api/product/seller/invoice/create/", CreateProductSellerInvoice.as_view()),

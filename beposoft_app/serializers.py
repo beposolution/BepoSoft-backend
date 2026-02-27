@@ -2196,6 +2196,23 @@ class BDMBDOReportGETSerializer(serializers.ModelSerializer):
 
 # Seller related serializers
 
+class CurrencySerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source="country.country_code", read_only=True)
+
+    class Meta:
+        model = Currency
+        fields = [
+            "id",
+            "currency",
+            "country",
+            "country_name",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_by", "created_at", "updated_at"]
+
+
 class ProductSellerDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSellerDetails
@@ -2229,6 +2246,7 @@ class ProductSellerInvoiceItemSerializer(serializers.ModelSerializer):
 class ProductSellerInvoiceSerializer(serializers.ModelSerializer):
     items = ProductSellerInvoiceItemSerializer(many=True, read_only=True)
     seller_name = serializers.CharField(source="seller.name", read_only=True)
+    currency_name = serializers.CharField(source="currency.currency", read_only=True)
 
     class Meta:
         model = ProductSellerInvoice
@@ -2237,11 +2255,12 @@ class ProductSellerInvoiceSerializer(serializers.ModelSerializer):
 class ProductSellerInvoiceListSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source="seller.name", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
+    currency_name = serializers.CharField(source="currency.currency", read_only=True)
 
     class Meta:
         model = ProductSellerInvoice
         fields = [
-            'id', 'invoice_no', 'seller_name', 'company_name',
-            'invoice_date', 'total_amount',
+            'id', 'invoice_no', 'seller_name', 'company_name', 'invoice_date', 
+            'total_amount', 'currency', 'currency_name', 'currency_rate',
         ]
 
