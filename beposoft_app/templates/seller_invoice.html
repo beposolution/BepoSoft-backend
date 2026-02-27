@@ -91,9 +91,11 @@
         const intPart = Math.floor(Math.abs(n));
         const decPart = Math.round((Math.abs(n) - intPart) * 100);
 
+        const currencyLabel = document.getElementById("currency-label")?.textContent || "rupees";
+
         let words =
           numberToWordsIndia(intPart) +
-          (intPart === 1 ? " rupee" : " rupees");
+          (intPart === 1 ? ` ${currencyLabel}` : ` ${currencyLabel}`);
 
         if (decPart) {
           words +=
@@ -239,6 +241,17 @@
             <p><strong>Invoice No:</strong> {{ invoice.invoice_no }}</p>
             <p><strong>Invoice Date:</strong> {{ invoice.invoice_date }}</p>
           </div>
+          <div class="d-flex justify-content-between">
+            <p>
+              <strong>Currency:</strong>
+              {{ invoice.currency.currency }}
+            </p>
+
+            <p>
+              <strong>Exchange Rate:</strong>
+              {{ invoice.currency_rate }}
+            </p>
+          </div>
         </div>
 
         <!-- Seller Details -->
@@ -303,10 +316,10 @@
               </td>
               <td style="text-align: left">{{ item.product.name }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ item.price }}</td>
-              <td>{{ item.discount }}</td>
-              <td>{{ item.tax }}</td>
-              <td>{{ item.total }}</td>
+              <td>{{ invoice.currency.currency }} {{ item.price }}</td>
+              <td>{{ invoice.currency.currency }} {{ item.discount }}</td>
+              <td>{{ invoice.currency.currency }} {{ item.tax }}</td>
+              <td>{{ invoice.currency.currency }} {{ item.total }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -318,7 +331,7 @@
             <tr>
               <td><strong>Total Payable Amount</strong></td>
               <td id="grand-total" style="text-align: right">
-                {{ invoice.total_amount }}
+                {{ invoice.currency.currency }} {{ invoice.total_amount }}
               </td>
             </tr>
 
