@@ -1801,6 +1801,21 @@ class BDMBDOReport(models.Model):
 
 # Seller related models
 
+class Currency(models.Model):
+    currency = models.CharField(max_length=20)
+    country = models.ForeignKey(CountryCode, on_delete=models.CASCADE, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_currencies")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "currency"
+
+    def __str__(self):
+        return self.currency
+    
+
+
 class ProductSellerDetails(models.Model):
     name = models.CharField(max_length=100, null=True, blank=True)
     company_name = models.CharField(max_length=100, null=True, blank=True)
@@ -1851,6 +1866,8 @@ class ProductSellerInvoice(models.Model):
     invoice_date = models.DateField()
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     note = models.TextField(null=True, blank=True)
+    currency = models.ForeignKey(Currency, on_delete=models.CASCADE, null=True, blank=True)
+    currency_rate = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

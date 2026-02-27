@@ -9988,6 +9988,130 @@ class BDMBDOReportDetailView(BaseTokenView):
 
 # Product Buying from another company/industries - Seller Details
 
+
+class CurrencyListCreateView(BaseTokenView):
+
+    def get(self, request):
+
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+        
+        try:
+            currencies = Currency.objects.all().order_by("-id")
+            serializer = CurrencySerializer(currencies, many=True)
+
+            return Response({
+                "success": True,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    
+    def post(self, request):
+
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+        
+        try:
+            serializer = CurrencySerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+
+                return Response({
+                    "success": True,
+                    "message": "Currency created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+class CurrencyDetailView(BaseTokenView):
+
+    def get(self, request, currency_id):
+
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+        
+        try:
+            currency = Currency.objects.get(id=currency_id)
+            serializer = CurrencySerializer(currency)
+
+            return Response({
+                "success": True,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Currency.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Currency not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    
+    def put(self, request, currency_id):
+
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+        
+        try:
+            currency = Currency.objects.get(id=currency_id)
+
+            serializer = CurrencySerializer(currency, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response({
+                    "success": True,
+                    "message": "Currency updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Currency.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Currency not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ProductSellerDetailsView(BaseTokenView):
 
     def get(self, request):
@@ -10153,6 +10277,8 @@ class CreateProductSellerInvoice(BaseTokenView):
             note = request.data.get("note")
             invoice_date = request.data.get("invoice_date")
             company_id = request.data.get("company")
+            currency_id = request.data.get("currency")
+            currency_rate = request.data.get("currency_rate")
 
             if not seller_id:
                 return Response({"status": "error", "message": "seller_id is required"}, status=400)
@@ -10162,6 +10288,10 @@ class CreateProductSellerInvoice(BaseTokenView):
 
             if not invoice_date:
                 return Response({"status": "error", "message": "invoice_date is required"}, status=400)
+            
+            currency = None
+            if currency_id:
+                currency = get_object_or_404(Currency, id=currency_id)
 
             parsed_date = parse_date(invoice_date)
 
@@ -10182,7 +10312,9 @@ class CreateProductSellerInvoice(BaseTokenView):
                 seller=seller,
                 note=note,
                 invoice_date=parsed_date,
-                company=company
+                company=company,
+                currency=currency,
+                currency_rate=currency_rate
             )
 
             total_amount = 0
@@ -10374,6 +10506,10 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
                 "email": invoice.seller.email,
                 "address": invoice.seller.address,
 
+                "currency": invoice.currency.id if invoice.currency else None,
+                "currency_name": invoice.currency.currency if invoice.currency else None,
+                "currency_rate": invoice.currency_rate,
+
                 # Items
                 "items": items_data
             }
@@ -10401,6 +10537,8 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             invoice_date = request.data.get("invoice_date", None)
             company_id = request.data.get("company_id", None)
             seller_id = request.data.get("seller_id", None)
+            currency_id = request.data.get("currency", None)
+            currency_rate = request.data.get("currency_rate", None)
 
             # items key should be checked properly
             items = request.data.get("items", None)
@@ -10434,6 +10572,16 @@ class ProductSellerInvoiceDetailView(BaseTokenView):
             if seller_id is not None:
                 seller = get_object_or_404(ProductSellerDetails, id=seller_id)
                 invoice.seller = seller
+                updated = True
+
+            # update currency only if provided
+            if currency_id is not None:
+                currency = get_object_or_404(Currency, id=currency_id)
+                invoice.currency = currency
+                updated = True
+
+            if currency_rate is not None:
+                invoice.currency_rate = currency_rate
                 updated = True
 
             # update items only if items is sent
