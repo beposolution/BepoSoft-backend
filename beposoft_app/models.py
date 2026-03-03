@@ -1766,7 +1766,7 @@ class DailySalesReport(models.Model):
         db_table = "daily_sales_report"
 
     def __str__(self):
-        return f"{self.user.name} - {self.invoice.invoice} - {self.category.category_name} - {self.count}"
+        return f"{self.user.name} - {self.invoice.invoice} - {self.count}"
 
 
 class BDMBDOReport(models.Model):
