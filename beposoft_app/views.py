@@ -40,6 +40,9 @@ import calendar
 logger = logging.getLogger(__name__)
 
 
+class StandardPagination(PageNumberPagination):
+    page_size = 50
+
 class UserRegistrationAPIView(APIView):
     def post(self, request):
         try:
@@ -384,7 +387,14 @@ class StaffOrders(BaseTokenView):
                 return error_response
 
             # Assuming 'created_at' is the date field you want to sort by
-            orders = Order.objects.filter(manage_staff=user.pk).order_by('-id')
+            # orders = Order.objects.filter(manage_staff=user.pk).order_by('-id')
+            orders = (
+                Order.objects
+                .filter(manage_staff=user.pk)
+                .select_related("customer", "warehouse")
+                .prefetch_related("items__product")
+                .order_by("-id")
+            )
 
             serialized_orders = OrderModelSerilizer(orders, many=True)
 
@@ -671,9 +681,19 @@ class CustomerView(BaseTokenView):
             if error_response:
                 return error_response
 
-            customers = Customers.objects.all().order_by('-created_at') 
-            serializer = CustomerModelSerializerLimited(customers, many=True)
-            return Response({"data": serializer.data, "message": "Customers retrieved successfully"}, status=status.HTTP_200_OK)
+            # customers = Customers.objects.all().order_by('-created_at') 
+            # serializer = CustomerModelSerializerLimited(customers, many=True)
+
+            customers = Customers.objects.select_related("manager","state","family").order_by('-created_at')
+
+            paginator = StandardPagination()
+            result_page = paginator.paginate_queryset(customers, request)
+
+            serializer = CustomerModelSerializerLimited(result_page, many=True)
+
+            return paginator.get_paginated_response(serializer.data)
+
+            # return Response({"data": serializer.data, "message": "Customers retrieved successfully"}, status=status.HTTP_200_OK)
 
         except User.DoesNotExist:
             return Response({"status": "error", "message": "User does not exist"}, status=status.HTTP_404_NOT_FOUND)
@@ -890,9 +910,18 @@ class ListAllProducts(BaseTokenView):
             return error_response
 
         try:
+            # products = Products.objects.all()
+
             products = Products.objects.all()
-            serializer = ProductsListViewSerializers(products, many=True)
-            return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+
+            paginator = StandardPagination()
+            result_page = paginator.paginate_queryset(products, request)
+
+            serializer = ProductSingleviewSerializres(result_page, many=True)
+
+            return paginator.get_paginated_response(serializer.data)
+            # serializer = ProductsListViewSerializers(products, many=True)
+            # return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error fetching products: {str(e)}")
             return Response({
