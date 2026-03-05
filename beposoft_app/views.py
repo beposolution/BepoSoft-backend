@@ -379,6 +379,7 @@ class Users(BaseTokenView):
                 "error": str(e)  
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        
 class StaffOrders(BaseTokenView):
     def get(self, request):
         try:
@@ -386,22 +387,20 @@ class StaffOrders(BaseTokenView):
             if error_response:
                 return error_response
 
-            # Assuming 'created_at' is the date field you want to sort by
-            # orders = Order.objects.filter(manage_staff=user.pk).order_by('-id')
-            orders = (
-                Order.objects
-                .filter(manage_staff=user.pk)
-                .select_related("customer", "warehouse")
-                .prefetch_related("items__product")
-                .order_by("-id")
-            )
+            orders = Order.objects.filter(
+                manage_staff=user.pk
+            ).order_by('-id')
 
-            serialized_orders = OrderModelSerilizer(orders, many=True)
+            # Use existing pagination class
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(orders, request)
 
-            return Response({
+            serializer = OrderModelSerilizer(page, many=True)
+
+            return paginator.get_paginated_response({
                 "message": "Orders fetched successfully",
-                "data": serialized_orders.data
-            }, status=status.HTTP_200_OK)
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response({
