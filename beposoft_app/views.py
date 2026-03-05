@@ -379,7 +379,7 @@ class Users(BaseTokenView):
                 "error": str(e)  
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        
+
 class StaffOrders(BaseTokenView):
     def get(self, request):
         try:
@@ -1866,10 +1866,18 @@ class OrderListView(BaseTokenView):
             if error_response:
                 return error_response
 
+            search = request.GET.get("search", "")
+
             # Optimized queryset
             orders = Order.objects.select_related(
                 "manage_staff", "customer", "state", "family"
             ).prefetch_related("warehouse").order_by("-id")
+
+            if search:
+                orders = orders.filter(
+                    Q(invoice__icontains=search) |
+                    Q(customer__name__icontains=search)
+                )
 
             # Count queries (keep this before pagination)
             invoice_counts = orders.aggregate(
