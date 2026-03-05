@@ -684,7 +684,16 @@ class CustomerView(BaseTokenView):
             # customers = Customers.objects.all().order_by('-created_at') 
             # serializer = CustomerModelSerializerLimited(customers, many=True)
 
+            search = request.GET.get("search", "")
+
             customers = Customers.objects.select_related("manager","state","family").order_by('-created_at')
+
+            if search:
+                customers = customers.filter(
+                    Q(name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(email__icontains=search)
+                )
 
             paginator = StandardPagination()
             result_page = paginator.paginate_queryset(customers, request)
