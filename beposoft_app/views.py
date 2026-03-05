@@ -1849,50 +1849,66 @@ class OrderItemCreateView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+
 class OrderListView(BaseTokenView):
+
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            # Optimize Query and Order by order_date descending
+            # Optimized queryset
             orders = Order.objects.select_related(
                 "manage_staff", "customer", "state", "family"
             ).prefetch_related("warehouse").order_by("-id")
 
-            # Optimize Count Queries
+            # Count queries (keep this before pagination)
             invoice_counts = orders.aggregate(
                 invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
                 invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
             )
 
-            serializer = OrderdetailsSerializer(orders, many=True)
+            # Pagination
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(orders, request)
 
-            # Add family_id and family_name to each order in results
+            serializer = OrderdetailsSerializer(paginated_orders, many=True)
+
             results = serializer.data
-            for idx, order in enumerate(orders):
+
+            for idx, order in enumerate(paginated_orders):
                 family = getattr(order, "family", None)
+
                 results[idx]["family_id"] = family.id if family else None
                 results[idx]["family_name"] = family.name if family else None
-                
+
                 results[idx]["locked_by"] = order.locked_by.username if order.locked_by else None
                 results[idx]["locked_at"] = order.locked_at.isoformat() if order.locked_at else None
 
-            response_data = {
+            return paginator.get_paginated_response({
                 "invoice_created_count": invoice_counts["invoice_created_count"],
                 "invoice_approved_count": invoice_counts["invoice_approved_count"],
                 "results": results
-            }
-            return Response(response_data, status=status.HTTP_200_OK)
+            })
 
         except ObjectDoesNotExist:
-            return Response({"status": "error", "message": "Orders not found"}, status=status.HTTP_404_NOT_FOUND)
-        except DatabaseError:
-            return Response({"status": "error", "message": "Database error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"status": "error", "message": "Orders not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
+        except DatabaseError:
+            return Response(
+                {"status": "error", "message": "Database error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MyOrderListView(BaseTokenView):
