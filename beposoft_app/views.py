@@ -11398,3 +11398,104 @@ class AllUsersMonthlyCategoryReportView(BaseTokenView):
                 "message": "Something went wrong",
                 "error": str(e)
             }, status=500)
+
+
+class FamilyStateBDOReport(APIView):
+
+    def get(self, request):
+
+        try:
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            orders = Order.objects.exclude(
+                status="Invoice Rejected"
+            ).exclude(
+                family__name__iexact="bepocart"
+            )
+
+            # Date filter
+            if start_date and end_date:
+                orders = orders.filter(
+                    order_date__range=[start_date, end_date]
+                )
+
+            orders = (
+                orders
+                .values(
+                    "family__name",
+                    "state__name",
+                    "manage_staff__name"
+                )
+                .annotate(
+                    bills=Count("id"),
+                    amount=Sum("total_amount")
+                )
+                .order_by("family__name", "state__name", "manage_staff__name")
+            )
+
+            report = defaultdict(lambda: {
+                "states": defaultdict(lambda: {
+                    "bdo": [],
+                    "state_total": 0
+                }),
+                "family_total": 0,
+                "family_bill_total": 0
+            })
+
+            grand_total = 0
+            total_bills = 0
+
+            for row in orders:
+
+                family = row["family__name"]
+                state = row["state__name"]
+                staff = row["manage_staff__name"]
+                bills = row["bills"]
+                amount = row["amount"] or 0
+
+                report[family]["states"][state]["bdo"].append({
+                    "name": staff,
+                    "bills": bills,
+                    "amount": amount
+                })
+
+                report[family]["states"][state]["state_total"] += amount
+                report[family]["family_total"] += amount
+                report[family]["family_bill_total"] += bills
+
+                grand_total += amount
+                total_bills += bills
+
+            data = []
+
+            for family, fdata in report.items():
+
+                states_list = []
+
+                for state, sdata in fdata["states"].items():
+                    states_list.append({
+                        "state": state,
+                        "bdo_details": sdata["bdo"],
+                        "state_total": sdata["state_total"]
+                    })
+
+                data.append({
+                    "family": family,
+                    "states": states_list,
+                    "family_total": fdata["family_total"],
+                    "family_bill_total": fdata["family_bill_total"]
+                })
+
+            return Response({
+                "status": "success",
+                "data": data,
+                "total_bills": total_bills,
+                "grand_total": grand_total
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
