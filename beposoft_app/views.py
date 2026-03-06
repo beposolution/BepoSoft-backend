@@ -1878,10 +1878,16 @@ class OrderListView(BaseTokenView):
             ).prefetch_related("warehouse").order_by("-id")
 
             if search:
-                orders = orders.filter(
-                    Q(invoice__icontains=search) |
-                    Q(customer__name__icontains=search)
-                )
+                # If user types only digits like 6595,
+                # match invoice ending exactly with 6595
+                if search.isdigit():
+                    orders = orders.filter(invoice__iregex=rf"{re.escape(search)}$")
+                else:
+                    # exact full invoice OR exact customer name
+                    orders = orders.filter(
+                        Q(invoice__iexact=search) |
+                        Q(customer__name__iexact=search)
+                    )
 
             if status_filter:
                 orders = orders.filter(status__iexact=status_filter)
