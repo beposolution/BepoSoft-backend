@@ -1876,7 +1876,10 @@ class OrderListView(BaseTokenView):
             if search:
                 orders = orders.filter(
                     Q(invoice__icontains=search) |
-                    Q(customer__name__icontains=search)
+                    Q(customer__name__icontains=search) |
+                    Q(manage_staff__name__icontains=search) |
+                    Q(company__name__icontains=search) |
+                    Q(order_date__icontains=search)
                 )
 
             # Count queries (keep this before pagination)
