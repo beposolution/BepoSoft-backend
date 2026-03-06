@@ -1890,10 +1890,10 @@ class OrderListView(BaseTokenView):
                 orders = orders.filter(manage_staff__name__icontains=staff_filter)
 
             if start_date:
-                orders = orders.filter(order_date__date__gte=start_date)
+                orders = orders.filter(order_date__gte=start_date)
 
             if end_date:
-                orders = orders.filter(order_date__date__lte=end_date)
+                orders = orders.filter(order_date__lte=end_date)
 
             # Count queries (keep this before pagination)
             invoice_counts = orders.aggregate(
