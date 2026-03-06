@@ -1867,6 +1867,10 @@ class OrderListView(BaseTokenView):
                 return error_response
 
             search = request.GET.get("search", "")
+            status_filter = request.GET.get("status", "")
+            staff_filter = request.GET.get("staff", "")
+            start_date = request.GET.get("start_date", "")
+            end_date = request.GET.get("end_date", "")
 
             # Optimized queryset
             orders = Order.objects.select_related(
@@ -1876,11 +1880,20 @@ class OrderListView(BaseTokenView):
             if search:
                 orders = orders.filter(
                     Q(invoice__icontains=search) |
-                    Q(customer__name__icontains=search) |
-                    Q(manage_staff__name__icontains=search) |
-                    Q(company__name__icontains=search) |
-                    Q(order_date__icontains=search)
+                    Q(customer__name__icontains=search)
                 )
+
+            if status_filter:
+                orders = orders.filter(status__iexact=status_filter)
+
+            if staff_filter:
+                orders = orders.filter(manage_staff__name__icontains=staff_filter)
+
+            if start_date:
+                orders = orders.filter(order_date__date__gte=start_date)
+
+            if end_date:
+                orders = orders.filter(order_date__date__lte=end_date)
 
             # Count queries (keep this before pagination)
             invoice_counts = orders.aggregate(
