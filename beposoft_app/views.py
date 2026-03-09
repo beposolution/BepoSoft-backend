@@ -1885,8 +1885,8 @@ class OrderListView(BaseTokenView):
                 else:
                     # exact full invoice OR exact customer name
                     orders = orders.filter(
-                        Q(invoice__iexact=search) |
-                        Q(customer__name__iexact=search)
+                        Q(invoice__icontains=search) |
+                        Q(customer__name__icontains=search)
                     )
 
             if status_filter:
