@@ -8054,6 +8054,232 @@ class CallReportCreateView(BaseTokenView):
             )
         
 
+
+class StaffCallSummaryView(BaseTokenView):
+    def format_seconds(self, seconds):
+        seconds = int(seconds or 0)
+        return str(timedelta(seconds=seconds))
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = (
+                CallReport.objects
+                .select_related("created_by")
+                .annotate(
+                    duration_clean=Func(
+                        'duration',
+                        Value('[^0-9]'),
+                        Value(''),
+                        Value('g'),
+                        function='regexp_replace'
+                    ),
+                    duration_int=Cast('duration_clean', IntegerField())
+                )
+                .values(
+                    'created_by_id',
+                    'created_by__name'
+                )
+                .annotate(
+                    productive_calls=Count(
+                        Case(
+                            When(status='Productive', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    active_calls=Count(
+                        Case(
+                            When(status='Active', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    total_calls=Count('id'),
+
+                    productive_duration_seconds=Coalesce(
+                        Sum(
+                            Case(
+                                When(status='Productive', then='duration_int'),
+                                output_field=IntegerField()
+                            )
+                        ),
+                        0
+                    ),
+                    active_duration_seconds=Coalesce(
+                        Sum(
+                            Case(
+                                When(status='Active', then='duration_int'),
+                                output_field=IntegerField()
+                            )
+                        ),
+                        0
+                    ),
+                    total_duration_seconds=Coalesce(
+                        Sum('duration_int'),
+                        0
+                    ),
+                    total_amount=Coalesce(
+                        Sum('amount'),
+                        0.0,
+                        output_field=FloatField()
+                    )
+                )
+                .order_by('created_by__name')
+            )
+
+            summary_data = []
+            for item in queryset:
+                summary_data.append({
+                    "staff_id": item["created_by_id"],
+                    "staff_name": item["created_by__name"],
+                    "productive_calls": item["productive_calls"] or 0,
+                    "active_calls": item["active_calls"] or 0,
+                    "total_calls": item["total_calls"] or 0,
+                    "productive_call_duration": self.format_seconds(item["productive_duration_seconds"]),
+                    "active_call_duration": self.format_seconds(item["active_duration_seconds"]),
+                    "total_call_duration": self.format_seconds(item["total_duration_seconds"]),
+                    "total_amount": float(item["total_amount"] or 0),
+                })
+
+            serializer = StaffCallSummarySerializer(summary_data, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "count": len(serializer.data),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to fetch staff call summary",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+
+class StateWiseCallSummaryView(BaseTokenView):
+    def format_seconds(self, seconds):
+        seconds = int(seconds or 0)
+        return str(timedelta(seconds=seconds))
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = (
+                CallReport.objects
+                .filter(Customer__state__isnull=False)
+                .select_related("Customer__state")
+                .annotate(
+                    duration_clean=Func(
+                        'duration',
+                        Value('[^0-9]'),
+                        Value(''),
+                        Value('g'),
+                        function='regexp_replace'
+                    ),
+                    duration_int=Cast('duration_clean', IntegerField())
+                )
+                .values(
+                    'Customer__state_id',
+                    'Customer__state__name'
+                )
+                .annotate(
+                    total_calls=Count('id'),
+
+                    active_calls=Count(
+                        Case(
+                            When(status='Active', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+                    productive_calls=Count(
+                        Case(
+                            When(status='Productive', then=1),
+                            output_field=IntegerField()
+                        )
+                    ),
+
+                    active_duration_seconds=Coalesce(
+                        Sum(
+                            Case(
+                                When(status='Active', then='duration_int'),
+                                output_field=IntegerField()
+                            )
+                        ),
+                        0
+                    ),
+                    productive_duration_seconds=Coalesce(
+                        Sum(
+                            Case(
+                                When(status='Productive', then='duration_int'),
+                                output_field=IntegerField()
+                            )
+                        ),
+                        0
+                    ),
+                    total_duration_seconds=Coalesce(
+                        Sum('duration_int'),
+                        0
+                    ),
+
+                    total_amount=Coalesce(
+                        Sum('amount'),
+                        0.0,
+                        output_field=FloatField()
+                    )
+                )
+                .order_by('Customer__state__name')
+            )
+
+            summary_data = []
+            for item in queryset:
+                summary_data.append({
+                    "state_id": item["Customer__state_id"],
+                    "state_name": item["Customer__state__name"],
+                    "active_calls": item["active_calls"] or 0,
+                    "productive_calls": item["productive_calls"] or 0,
+                    "total_calls": item["total_calls"] or 0,
+                    "active_call_duration": self.format_seconds(item["active_duration_seconds"]),
+                    "productive_call_duration": self.format_seconds(item["productive_duration_seconds"]),
+                    "total_call_duration": self.format_seconds(item["total_duration_seconds"]),
+                    "total_amount": float(item["total_amount"] or 0),
+                })
+
+            serializer = StateCallSummarySerializer(summary_data, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "count": len(serializer.data),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to fetch state-wise call summary",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+            
 class CallReportUpdateView(BaseTokenView):
     """GET a single call report / PUT update by id"""
 
