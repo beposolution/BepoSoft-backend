@@ -2036,6 +2036,30 @@ class CallReportSortingSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class StaffCallSummarySerializer(serializers.Serializer):
+    staff_id = serializers.IntegerField()
+    staff_name = serializers.CharField()
+    productive_calls = serializers.IntegerField()
+    active_calls = serializers.IntegerField()
+    total_calls = serializers.IntegerField()
+    productive_call_duration = serializers.CharField()
+    active_call_duration = serializers.CharField()
+    total_call_duration = serializers.CharField()
+    total_amount = serializers.FloatField()
+
+
+class StateCallSummarySerializer(serializers.Serializer):
+    state_id = serializers.IntegerField()
+    state_name = serializers.CharField()
+    active_calls = serializers.IntegerField()
+    productive_calls = serializers.IntegerField()
+    total_calls = serializers.IntegerField()
+    active_call_duration = serializers.CharField()
+    productive_call_duration = serializers.CharField()
+    total_call_duration = serializers.CharField()
+    total_amount = serializers.FloatField()
+    
+
 class QuestionnaireSerializer(serializers.ModelSerializer):
     family_name = serializers.CharField(source='family.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
