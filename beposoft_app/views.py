@@ -8072,11 +8072,11 @@ class StaffCallSummaryView(BaseTokenView):
             queryset = CallReport.objects.select_related("created_by")
 
             if start_date and end_date:
-                queryset = queryset.filter(date__range=[start_date, end_date])
+                queryset = queryset.filter(created_at__date__range=[start_date, end_date])
             elif start_date:
-                queryset = queryset.filter(date__gte=start_date)
+                queryset = queryset.filter(created_at__date__gte=start_date)
             elif end_date:
-                queryset = queryset.filter(date__lte=end_date)
+                queryset = queryset.filter(created_at__date__lte=end_date)
 
             queryset = (
                 queryset
@@ -8194,14 +8194,16 @@ class StateWiseCallSummaryView(BaseTokenView):
             start_date = request.GET.get("start_date")
             end_date = request.GET.get("end_date")
 
-            queryset = CallReport.objects.filter(Customer__state__isnull=False).select_related("Customer__state")
+            queryset = CallReport.objects.filter(
+                Customer__state__isnull=False
+            ).select_related("Customer__state")
 
             if start_date and end_date:
-                queryset = queryset.filter(date__range=[start_date, end_date])
+                queryset = queryset.filter(created_at__date__range=[start_date, end_date])
             elif start_date:
-                queryset = queryset.filter(date__gte=start_date)
+                queryset = queryset.filter(created_at__date__gte=start_date)
             elif end_date:
-                queryset = queryset.filter(date__lte=end_date)
+                queryset = queryset.filter(created_at__date__lte=end_date)
 
             queryset = (
                 queryset
@@ -8221,7 +8223,6 @@ class StateWiseCallSummaryView(BaseTokenView):
                 )
                 .annotate(
                     total_calls=Count('id'),
-
                     active_calls=Count(
                         Case(
                             When(status='Active', then=1),
@@ -8234,7 +8235,6 @@ class StateWiseCallSummaryView(BaseTokenView):
                             output_field=IntegerField()
                         )
                     ),
-
                     active_duration_seconds=Coalesce(
                         Sum(
                             Case(
@@ -8257,7 +8257,6 @@ class StateWiseCallSummaryView(BaseTokenView):
                         Sum('duration_int'),
                         0
                     ),
-
                     total_amount=Coalesce(
                         Sum('amount'),
                         0.0,
