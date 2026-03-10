@@ -8066,9 +8066,20 @@ class StaffCallSummaryView(BaseTokenView):
             if error_response:
                 return error_response
 
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            queryset = CallReport.objects.select_related("created_by")
+
+            if start_date and end_date:
+                queryset = queryset.filter(date__range=[start_date, end_date])
+            elif start_date:
+                queryset = queryset.filter(date__gte=start_date)
+            elif end_date:
+                queryset = queryset.filter(date__lte=end_date)
+
             queryset = (
-                CallReport.objects
-                .select_related("created_by")
+                queryset
                 .annotate(
                     duration_clean=Func(
                         'duration',
@@ -8148,6 +8159,8 @@ class StaffCallSummaryView(BaseTokenView):
             return Response(
                 {
                     "status": "success",
+                    "start_date": start_date,
+                    "end_date": end_date,
                     "count": len(serializer.data),
                     "data": serializer.data
                 },
@@ -8163,6 +8176,7 @@ class StaffCallSummaryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
         
 
 
@@ -8177,10 +8191,20 @@ class StateWiseCallSummaryView(BaseTokenView):
             if error_response:
                 return error_response
 
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            queryset = CallReport.objects.filter(Customer__state__isnull=False).select_related("Customer__state")
+
+            if start_date and end_date:
+                queryset = queryset.filter(date__range=[start_date, end_date])
+            elif start_date:
+                queryset = queryset.filter(date__gte=start_date)
+            elif end_date:
+                queryset = queryset.filter(date__lte=end_date)
+
             queryset = (
-                CallReport.objects
-                .filter(Customer__state__isnull=False)
-                .select_related("Customer__state")
+                queryset
                 .annotate(
                     duration_clean=Func(
                         'duration',
@@ -8262,6 +8286,8 @@ class StateWiseCallSummaryView(BaseTokenView):
             return Response(
                 {
                     "status": "success",
+                    "start_date": start_date,
+                    "end_date": end_date,
                     "count": len(serializer.data),
                     "data": serializer.data
                 },
@@ -8279,7 +8305,7 @@ class StateWiseCallSummaryView(BaseTokenView):
             )
 
 
-            
+
 class CallReportUpdateView(BaseTokenView):
     """GET a single call report / PUT update by id"""
 
