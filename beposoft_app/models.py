@@ -173,6 +173,28 @@ class User(models.Model):
     ]
     approval_status = models.CharField(max_length=100, choices=APPROVAL_CHOICES, default='disapproved', null=True)
     family = models.ForeignKey(Family, on_delete=models.CASCADE, null=True)
+    staff_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    place = models.CharField(max_length=100, null=True, blank=True)
+    emergency_contact_name = models.CharField(max_length=100, null=True, blank=True)
+    emergency_contact_number = models.CharField(max_length=10, null=True, blank=True)
+    experience = models.PositiveBigIntegerField(null=True, blank=True, help_text="Experience in months")
+    exp_letter = models.FileField(upload_to="experience_letters/", null=True, blank=True)
+    previous_company = models.CharField(max_length=100, null=True, blank=True)
+    BLOOD_GROUP_CHOICES = [
+        ('A+', 'A+'),
+        ('A-', 'A-'),
+        ('B+', 'B+'),
+        ('B-', 'B-'),
+        ('AB+', 'AB+'),
+        ('AB-', 'AB-'),
+        ('O+', 'O+'),
+        ('O-', 'O-'),
+    ]
+    blood_group = models.CharField(max_length=10, choices=BLOOD_GROUP_CHOICES, null=True, blank=True)
+    education = models.CharField(max_length=100, null=True, blank=True)
+    salrary_slip = models.FileField(upload_to="salary_slips/", null=True, blank=True)
+    aadhar_no = models.CharField(max_length=12, unique=True, null=True, blank=True)
+    pan_no = models.CharField(max_length=10, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

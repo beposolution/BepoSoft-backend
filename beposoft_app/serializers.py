@@ -67,7 +67,10 @@ class UserSerializer(serializers.ModelSerializer):
             'termination_date', 'supervisor_id', 'department_id',
             'warehouse_id', 'country_code', 'signatur_up',
             'approval_status', 'family', 'created_at', 'updated_at',
-            'family_id', 'family_name','country_code_name'
+            'family_id', 'family_name','country_code_name',
+            'staff_id', 'place', 'emergency_contact_name', 'emergency_contact_number',
+            'experience', 'exp_letter', 'previous_company', 'blood_group',
+            'education', 'salrary_slip', 'aadhar_no', 'pan_no'
         ]
 
     def validate(self, data):
