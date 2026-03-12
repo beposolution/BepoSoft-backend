@@ -388,6 +388,7 @@ class StaffOrders(BaseTokenView):
                 return error_response
 
             search = request.GET.get("search", "").strip()
+            status_filter = request.GET.get("status", "").strip()
 
             orders = Order.objects.filter(
                 manage_staff=user.pk
@@ -396,9 +397,11 @@ class StaffOrders(BaseTokenView):
             if search:
                 orders = orders.filter(
                     Q(invoice__icontains=search) |
-                    Q(customer__name__icontains=search) |
-                    Q(manage_staff__name__icontains=search)
+                    Q(customer__name__icontains=search) 
                 )
+
+            if status_filter and status_filter.lower() != "all status":
+                orders = orders.filter(status__iexact=status_filter)
 
             orders = orders.order_by('-id')
 
