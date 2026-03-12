@@ -387,11 +387,24 @@ class StaffOrders(BaseTokenView):
             if error_response:
                 return error_response
 
+            search = request.GET.get("search", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+
             orders = Order.objects.filter(
                 manage_staff=user.pk
-            ).order_by('-id')
+            )
 
-            # Use existing pagination class
+            if search:
+                orders = orders.filter(
+                    Q(invoice__icontains=search) |
+                    Q(customer__name__icontains=search) 
+                )
+
+            if status_filter and status_filter.lower() != "all status":
+                orders = orders.filter(status__iexact=status_filter)
+
+            orders = orders.order_by('-id')
+
             paginator = StandardPagination()
             page = paginator.paginate_queryset(orders, request)
 
