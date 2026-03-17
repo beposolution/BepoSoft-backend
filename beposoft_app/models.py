@@ -1820,6 +1820,34 @@ class BDMBDOReport(models.Model):
 
 
 
+class SalesAnalysis(models.Model):
+    STATUS_CHOICES = [
+        ('dsr created', 'DSR Created'),
+        ('dsr approved', 'DSR Approved'),
+        ('dsr confirmed', 'DSR Confirmed'),
+    ]
+    CALL_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('productive', 'Productive'),
+    ]
+    call_duration = models.CharField(max_length=50, null=True, blank=True)
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="sales_analysis")
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    call_status = models.CharField(max_length=50, choices=CALL_STATUS_CHOICES, default='active')
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="sales_analysis")
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='dsr created')
+    note = models.TextField(null=True, blank=True)
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="sales_analysis")
+    district = models.ForeignKey(Districts, on_delete=models.CASCADE, related_name="sales_analysis")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sales_analysis")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "sales_analysis"
+
+    def __str__(self):
+        return f"{self.invoice.invoice} - {self.status} - {self.call_status}"
 
 # Seller related models
 

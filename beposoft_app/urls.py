@@ -302,6 +302,9 @@ urlpatterns = [
     path("api/monthly/sales/report/bdm/bdo/", BDMBDODailySalesAddReportView.as_view()),
     path("api/monthly/sales/report/bdm/bdo/all/", BDMBDODailySalesReportView.as_view()),
     path("api/monthly/sales/report/bdm/bdo/update/<int:id>/", BDMBDOReportDetailView.as_view()),
+    path('api/sales/analysis/add/', SalesAnalysisListCreateView.as_view(), name='sales-analysis-list-create'),
+    path('api/sales/analysis/edit/<int:pk>/', SalesAnalysisDetailView.as_view(), name='sales-analysis-detail'),
+    path('api/sales/analysis/all/', SalesAnalysisListView.as_view(), name='sales-analysis-all'),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
