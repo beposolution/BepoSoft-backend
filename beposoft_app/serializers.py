@@ -1243,10 +1243,12 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
 class MyOrderSerializer(serializers.ModelSerializer):
     manage_staff = serializers.CharField(source="manage_staff.name", read_only=True)
     manage_staff_id = serializers.IntegerField(source="manage_staff.id", read_only=True)
+    customer = serializers.CharField(source="customer.name", read_only=True)
+    customer_id = serializers.IntegerField(source="customer.id", read_only=True)
 
     class Meta:
         model = Order
-        fields = ["id", "invoice", "manage_staff", "manage_staff_id"]
+        fields = ["id", "invoice", "total_amount", "manage_staff", "manage_staff_id", "customer", "customer_id"]
 
 
 class InvoiceListSerializer(serializers.ModelSerializer):
