@@ -1825,6 +1825,7 @@ class SalesAnalysis(models.Model):
         ('dsr created', 'DSR Created'),
         ('dsr approved', 'DSR Approved'),
         ('dsr confirmed', 'DSR Confirmed'),
+        ('dsr rejected', 'DSR Rejected'),
     ]
     CALL_STATUS_CHOICES = [
         ('active', 'Active'),
