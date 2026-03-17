@@ -10411,7 +10411,7 @@ class SalesAnalysisListCreateView(BaseTokenView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-            serializer = SalesAnalysisSerializer(data=data)
+            serializer = AddSalesAnalysisSerializer(data=data)
             if serializer.is_valid():
                 serializer.save(created_by=user)
                 return Response(
@@ -10503,7 +10503,7 @@ class SalesAnalysisDetailView(BaseTokenView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-            serializer = SalesAnalysisSerializer(sales_obj, data=cleaned_data, partial=True)
+            serializer = AddSalesAnalysisSerializer(sales_obj, data=cleaned_data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(
@@ -10562,7 +10562,7 @@ class SalesAnalysisDetailView(BaseTokenView):
             sales_obj.status = new_status
             sales_obj.save()
 
-            serializer = SalesAnalysisSerializer(sales_obj)
+            serializer = AddSalesAnalysisSerializer(sales_obj)
             return Response(
                 {
                     "message": "Status updated successfully",
