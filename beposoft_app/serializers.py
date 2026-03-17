@@ -2220,7 +2220,7 @@ class BDMBDOReportGETSerializer(serializers.ModelSerializer):
 
 
 class SalesAnalysisSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(read_only=True)
+    customer = serializers.CharField(source='customer.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True)
@@ -2229,26 +2229,15 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesAnalysis
         fields = [
-            'id',
-            'call_duration',
-            'customer',
-            'customer_name',
-            'call_status',
-            'invoice',
-            'invoice_number',
-            'status',
-            'note',
-            'state',
-            'state_name',
-            'district',
-            'district_name',
-            'created_by',
-            'created_by_name',
-            'created_at',
-            'updated_at',
+            'id', 'call_duration', 'customer',
+            'customer_name', 'call_status', 'invoice',
+            'invoice_number', 'status', 'note', 'state',
+            'state_name', 'district', 'district_name',
+            'created_by', 'created_by_name', 'customer',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'customer_name', 'created_at', 'updated_at']
-        
+
 
 # End of  Reports and Analytics serializers section based on daily sales
 
