@@ -1834,7 +1834,7 @@ class SalesAnalysis(models.Model):
         ('productive', 'Productive'),
     ]
     call_duration = models.CharField(max_length=50, null=True, blank=True)
-    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="sales_analysis")
+    customer = models.ForeignKey(Customers, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_analysis")
     customer_name = models.CharField(max_length=100, null=True, blank=True)
     call_status = models.CharField(max_length=50, choices=CALL_STATUS_CHOICES, default='active')
     invoice = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="sales_analysis")

@@ -2229,7 +2229,7 @@ class AddSalesAnalysisSerializer(serializers.ModelSerializer):
 
 class SalesAnalysisSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source='customer.name', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
