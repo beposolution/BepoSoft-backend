@@ -1837,7 +1837,7 @@ class SalesAnalysis(models.Model):
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_analysis")
     customer_name = models.CharField(max_length=100, null=True, blank=True)
     call_status = models.CharField(max_length=50, choices=CALL_STATUS_CHOICES, default='active')
-    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="sales_analysis")
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_analysis")
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='dsr created')
     note = models.TextField(null=True, blank=True)
     state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="sales_analysis")
