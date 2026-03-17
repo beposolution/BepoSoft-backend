@@ -10333,6 +10333,279 @@ class BDMBDOReportDetailView(BaseTokenView):
 
 
 
+class SalesAnalysisListCreateView(BaseTokenView):
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {"error": "Invalid or missing token"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            sales_data = SalesAnalysis.objects.filter(created_by=user).order_by('-created_at')
+            serializer = SalesAnalysisSerializer(sales_data, many=True)
+
+            return Response(
+                {
+                    "message": "Sales analysis data fetched successfully",
+                    "count": sales_data.count(),
+                    "results": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong while fetching data: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {"error": "Invalid or missing token"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            data = request.data.copy()
+            data["created_by"] = user.id
+
+            call_status = data.get("call_status")
+            customer_id = data.get("customer")
+            invoice_id = data.get("invoice")
+
+            if call_status == "productive":
+                if not customer_id:
+                    return Response(
+                        {"error": "customer is required when call_status is productive"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if not invoice_id:
+                    return Response(
+                        {"error": "invoice is required when call_status is productive"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # optional: customer_name auto set if customer given
+            if customer_id:
+                try:
+                    customer_obj = Customers.objects.get(id=customer_id)
+                    data["customer_name"] = customer_obj.name
+                except Customers.DoesNotExist:
+                    return Response(
+                        {"error": "Customer not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            # optional: invoice validation if invoice given
+            if invoice_id:
+                try:
+                    Order.objects.get(id=invoice_id)
+                except Order.DoesNotExist:
+                    return Response(
+                        {"error": "Invoice not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            serializer = SalesAnalysisSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+                return Response(
+                    {
+                        "message": "Sales analysis created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class SalesAnalysisDetailView(BaseTokenView):
+
+    def get_object(self, pk, user):
+        return SalesAnalysis.objects.get(id=pk, created_by=user)
+
+    def get(self, request, pk, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {"error": "Invalid or missing token"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            sales_obj = self.get_object(pk, user)
+            serializer = SalesAnalysisSerializer(sales_obj)
+
+            return Response(
+                {
+                    "message": "Sales analysis fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except SalesAnalysis.DoesNotExist:
+            return Response(
+                {"error": "Sales analysis not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong while fetching data: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {"error": "Invalid or missing token"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            sales_obj = self.get_object(pk, user)
+            data = request.data.copy()
+
+            allowed_fields = ['customer', 'call_status', 'invoice']
+            cleaned_data = {key: data.get(key) for key in allowed_fields if key in data}
+
+            if 'customer' in cleaned_data:
+                try:
+                    customer_obj = Customers.objects.get(id=cleaned_data['customer'])
+                    cleaned_data['customer_name'] = customer_obj.name
+                except Customers.DoesNotExist:
+                    return Response(
+                        {"error": "Customer not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            if 'invoice' in cleaned_data:
+                try:
+                    Order.objects.get(id=cleaned_data['invoice'])
+                except Order.DoesNotExist:
+                    return Response(
+                        {"error": "Invoice not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            serializer = SalesAnalysisSerializer(sales_obj, data=cleaned_data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "message": "Sales analysis updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except SalesAnalysis.DoesNotExist:
+            return Response(
+                {"error": "Sales analysis not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong while updating data: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def patch(self, request, pk, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {"error": "Invalid or missing token"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            sales_obj = self.get_object(pk, user)
+
+            new_status = request.data.get('status')
+            if not new_status:
+                return Response(
+                    {"error": "status is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            valid_statuses = [choice[0] for choice in SalesAnalysis.STATUS_CHOICES]
+            if new_status not in valid_statuses:
+                return Response(
+                    {
+                        "error": "Invalid status",
+                        "valid_statuses": valid_statuses
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            sales_obj.status = new_status
+            sales_obj.save()
+
+            serializer = SalesAnalysisSerializer(sales_obj)
+            return Response(
+                {
+                    "message": "Status updated successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except SalesAnalysis.DoesNotExist:
+            return Response(
+                {"error": "Sales analysis not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong while patching status: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class SalesAnalysisListView(BaseTokenView):
+    def get(self, request, *args, **kwargs):
+        try:
+            sales_analysis = SalesAnalysis.objects.all().order_by('-created_at')
+            serializer = SalesAnalysisSerializer(sales_analysis, many=True)
+
+            return Response(
+                {
+                    "message": "Sales analysis fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"Something went wrong: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
 # Product Buying from another company/industries - Seller Details
 
 
