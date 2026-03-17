@@ -10337,12 +10337,9 @@ class SalesAnalysisListCreateView(BaseTokenView):
 
     def get(self, request, *args, **kwargs):
         try:
-            user = self.get_user_from_token(request)
-            if not user:
-                return Response(
-                    {"error": "Invalid or missing token"},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+            user, error = self.get_user_from_token(request)
+            if error:
+                return error
 
             sales_data = SalesAnalysis.objects.filter(created_by=user).order_by('-created_at')
             serializer = SalesAnalysisSerializer(sales_data, many=True)
@@ -10364,12 +10361,9 @@ class SalesAnalysisListCreateView(BaseTokenView):
 
     def post(self, request, *args, **kwargs):
         try:
-            user = self.get_user_from_token(request)
-            if not user:
-                return Response(
-                    {"error": "Invalid or missing token"},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+            user, error = self.get_user_from_token(request)
+            if error:
+                return error
 
             data = request.data.copy()
             data["created_by"] = user.id
@@ -10390,7 +10384,6 @@ class SalesAnalysisListCreateView(BaseTokenView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # optional: customer_name auto set if customer given
             if customer_id:
                 try:
                     customer_obj = Customers.objects.get(id=customer_id)
@@ -10401,7 +10394,6 @@ class SalesAnalysisListCreateView(BaseTokenView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-            # optional: invoice validation if invoice given
             if invoice_id:
                 try:
                     Order.objects.get(id=invoice_id)
@@ -10439,12 +10431,9 @@ class SalesAnalysisDetailView(BaseTokenView):
 
     def get(self, request, pk, *args, **kwargs):
         try:
-            user = self.get_user_from_token(request)
-            if not user:
-                return Response(
-                    {"error": "Invalid or missing token"},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+            user, error = self.get_user_from_token(request)
+            if error:
+                return error
 
             sales_obj = self.get_object(pk, user)
             serializer = SalesAnalysisSerializer(sales_obj)
@@ -10471,12 +10460,9 @@ class SalesAnalysisDetailView(BaseTokenView):
 
     def put(self, request, pk, *args, **kwargs):
         try:
-            user = self.get_user_from_token(request)
-            if not user:
-                return Response(
-                    {"error": "Invalid or missing token"},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+            user, error = self.get_user_from_token(request)
+            if error:
+                return error
 
             sales_obj = self.get_object(pk, user)
             data = request.data.copy()
@@ -10484,7 +10470,23 @@ class SalesAnalysisDetailView(BaseTokenView):
             allowed_fields = ['customer', 'call_status', 'invoice']
             cleaned_data = {key: data.get(key) for key in allowed_fields if key in data}
 
-            if 'customer' in cleaned_data:
+            call_status = cleaned_data.get("call_status", sales_obj.call_status)
+            customer_id = cleaned_data.get("customer", sales_obj.customer.id if sales_obj.customer else None)
+            invoice_id = cleaned_data.get("invoice", sales_obj.invoice.id if sales_obj.invoice else None)
+
+            if call_status == "productive":
+                if not customer_id:
+                    return Response(
+                        {"error": "customer is required when call_status is productive"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if not invoice_id:
+                    return Response(
+                        {"error": "invoice is required when call_status is productive"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if 'customer' in cleaned_data and cleaned_data['customer']:
                 try:
                     customer_obj = Customers.objects.get(id=cleaned_data['customer'])
                     cleaned_data['customer_name'] = customer_obj.name
@@ -10494,7 +10496,7 @@ class SalesAnalysisDetailView(BaseTokenView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
-            if 'invoice' in cleaned_data:
+            if 'invoice' in cleaned_data and cleaned_data['invoice']:
                 try:
                     Order.objects.get(id=cleaned_data['invoice'])
                 except Order.DoesNotExist:
@@ -10514,10 +10516,7 @@ class SalesAnalysisDetailView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except SalesAnalysis.DoesNotExist:
             return Response(
@@ -10533,12 +10532,9 @@ class SalesAnalysisDetailView(BaseTokenView):
 
     def patch(self, request, pk, *args, **kwargs):
         try:
-            user = self.get_user_from_token(request)
-            if not user:
-                return Response(
-                    {"error": "Invalid or missing token"},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
+            user, error = self.get_user_from_token(request)
+            if error:
+                return error
 
             sales_obj = self.get_object(pk, user)
 
@@ -10582,7 +10578,6 @@ class SalesAnalysisDetailView(BaseTokenView):
                 {"error": f"Something went wrong while patching status: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 
 class SalesAnalysisListView(BaseTokenView):
