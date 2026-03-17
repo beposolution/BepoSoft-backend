@@ -1429,6 +1429,7 @@ class WarehouseBoxesDataSerializer(serializers.ModelSerializer):
 
 class GRVSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source="order.customer.name")
+    shipping_customer = serializers.CharField(source="order.billing_address.name")
     staff=serializers.CharField(source='order.manage_staff.name')
     invoice = serializers.CharField(source = "order.invoice")
     order_date = serializers.CharField(source="order.order_date")
@@ -1441,7 +1442,7 @@ class GRVSerializer(serializers.ModelSerializer):
         model=GRVModel
         fields=['order','id','product','family',
                 'returnreason','price','quantity',
-                'remark','note','status','customer',
+                'remark','note','status','customer', 'shipping_customer',
                 'invoice','staff',"order_date",'date',
                 'time','updated_at','product_id','cod_amount',
                 'rack_details','rack_products','selected_racks']
