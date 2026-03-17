@@ -2227,6 +2227,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
     state_name = serializers.CharField(source='state.name', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
+    invoice_amount = serializers.CharField(source='invoice.total_amount', read_only=True)
 
     class Meta:
         model = SalesAnalysis
@@ -2236,7 +2237,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
             'invoice_number', 'status', 'note', 'state',
             'state_name', 'district', 'district_name',
             'created_by', 'created_by_name', 'customer',
-            'created_at', 'updated_at',
+            'invoice_amount', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'customer_name', 'created_at', 'updated_at']
 
