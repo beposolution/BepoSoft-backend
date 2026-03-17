@@ -1847,9 +1847,7 @@ class SalesAnalysis(models.Model):
     class Meta:
         db_table = "sales_analysis"
 
-    def __str__(self):
-        return f"{self.invoice.invoice} - {self.status} - {self.call_status}"
-
+    
 # Seller related models
 
 class Currency(models.Model):
