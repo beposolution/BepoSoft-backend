@@ -2221,6 +2221,12 @@ class BDMBDOReportGETSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class AddSalesAnalysisSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SalesAnalysis
+        fields = "__all__"
+
 class SalesAnalysisSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source='customer.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
