@@ -18,7 +18,7 @@ class State(models.Model):
     province=models.CharField(max_length=30,null=True)
     
     def __str__(self):
-        return self.name
+        return self.name or f"State #{self.pk}"
     
     class Meta :
         db_table = "State"
@@ -72,7 +72,7 @@ class Districts(models.Model):
         db_table = "Districts"
 
     def __str__(self):
-        return self.name
+        return self.name or f"District #{self.pk}"
     
 
 class WareHouse(models.Model):
@@ -199,7 +199,7 @@ class User(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.name
+        return self.name or self.username or f"User #{self.pk}"
 
     def save(self, *args, **kwargs):
         # Hash password if provided
@@ -312,7 +312,7 @@ class Customers(models.Model):
     gst_confirm = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
-        return self.name
+        return self.name or f"Customer #{self.pk}"
 
     class Meta:
         db_table = "Customers"
@@ -834,7 +834,9 @@ class Order(models.Model):
      
 
     def __str__(self):
-        return f"Order {self.invoice} by {self.customer}"
+        invoice = self.invoice or f"Order #{self.pk}"
+        customer = self.customer.name if self.customer_id and self.customer else "Unknown Customer"
+        return f"{invoice} - {customer}"
 
 
 class WarehouseOrder(models.Model):
