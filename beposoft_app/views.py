@@ -10520,7 +10520,10 @@ class SalesAnalysisListCreateView(BaseTokenView):
 
 class SalesAnalysisDetailView(BaseTokenView):
 
-    def get_object(self, pk, user):
+    def get_object(self, pk):
+        return SalesAnalysis.objects.get(id=pk)
+
+    def get_user_object(self, pk, user):
         return SalesAnalysis.objects.get(id=pk, created_by=user)
 
     def get(self, request, pk, *args, **kwargs):
@@ -10558,7 +10561,7 @@ class SalesAnalysisDetailView(BaseTokenView):
             if error:
                 return error
 
-            sales_obj = self.get_object(pk, user)
+            sales_obj = self.get_user_object(pk, user)
             data = request.data.copy()
 
             allowed_fields = ['customer', 'call_status', 'invoice']
@@ -10679,7 +10682,7 @@ class SalesAnalysisDetailView(BaseTokenView):
             if error:
                 return error
 
-            sales_obj = self.get_object(pk, user)
+            sales_obj = self.get_user_object(pk, user)
             sales_obj.delete()
 
             return Response(
