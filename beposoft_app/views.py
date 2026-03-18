@@ -10529,7 +10529,7 @@ class SalesAnalysisDetailView(BaseTokenView):
             if error:
                 return error
 
-            sales_obj = self.get_object(pk, user)
+            sales_obj = self.get_object(pk)
             serializer = SalesAnalysisSerializer(sales_obj)
 
             return Response(
@@ -10630,7 +10630,7 @@ class SalesAnalysisDetailView(BaseTokenView):
             if error:
                 return error
 
-            sales_obj = self.get_object(pk, user)
+            sales_obj = self.get_object(pk)
 
             new_status = request.data.get('status')
             if not new_status:
