@@ -129,6 +129,7 @@ class UserLoginAPIView(APIView):
                     response_data = {
                         "status": "success",
                         "message": "Login successful",
+                        'id': customer.pk,
                         "token": token,
                         'name': customer.name,
                         "active": customer.department_id.name
