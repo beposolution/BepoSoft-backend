@@ -10336,6 +10336,29 @@ class BDMBDOReportDetailView(BaseTokenView):
 
 class SalesAnalysisListCreateView(BaseTokenView):
 
+    def add_call_durations(self, durations):
+        total_hours = 0
+        total_minutes = 0
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                try:
+                    h, m, s = map(int, str(duration).split(":"))
+                    total_hours += h
+                    total_minutes += m
+                    total_seconds += s
+                except:
+                    pass
+
+        total_minutes += total_seconds // 60
+        total_seconds = total_seconds % 60
+
+        total_hours += total_minutes // 60
+        total_minutes = total_minutes % 60
+
+        return f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
+
     def get(self, request, *args, **kwargs):
         try:
             user, error = self.get_user_from_token(request)
@@ -10418,6 +10441,10 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
             )
 
+            total_call_duration = self.add_call_durations(
+                sales_data.values_list("call_duration", flat=True)
+            )
+
             # Pagination
             paginator = StandardPagination()
             paginated_sales_data = paginator.paginate_queryset(sales_data, request)
@@ -10432,6 +10459,7 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 "dsr_approved_count": summary_counts["dsr_approved_count"],
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
+                "total_call_duration": total_call_duration,
                 "results": serializer.data
             })
 
@@ -10703,8 +10731,32 @@ class SalesAnalysisDetailView(BaseTokenView):
             )
 
 
-
 class SalesAnalysisListView(BaseTokenView):
+    def add_call_durations(self, durations):
+        total_hours = 0
+        total_minutes = 0
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                try:
+                    h, m, s = map(int, str(duration).split(":"))
+                    total_hours += h
+                    total_minutes += m
+                    total_seconds += s
+                except:
+                    pass
+
+        # normalize seconds -> minutes
+        total_minutes += total_seconds // 60
+        total_seconds = total_seconds % 60
+
+        # normalize minutes -> hours
+        total_hours += total_minutes // 60
+        total_minutes = total_minutes % 60
+
+        return f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
+
     def get(self, request, *args, **kwargs):
         try:
             search = request.GET.get("search", "").strip()
@@ -10714,6 +10766,7 @@ class SalesAnalysisListView(BaseTokenView):
             state_filter = request.GET.get("state", "").strip()
             district_filter = request.GET.get("district", "").strip()
             created_by_filter = request.GET.get("created_by", "").strip()
+            family_filter = request.GET.get("family", "").strip()
             start_date = request.GET.get("start_date", "").strip()
             end_date = request.GET.get("end_date", "").strip()
 
@@ -10723,6 +10776,7 @@ class SalesAnalysisListView(BaseTokenView):
                 "state",
                 "district",
                 "created_by",
+                "created_by__family",
             ).order_by("-created_at")
 
             # Search
@@ -10733,7 +10787,9 @@ class SalesAnalysisListView(BaseTokenView):
                         Q(invoice__invoice__iregex=rf"{re.escape(search)}$") |
                         Q(customer__name__icontains=search) |
                         Q(customer_name__icontains=search) |
-                        Q(note__icontains=search)
+                        Q(note__icontains=search) |
+                        Q(created_by__name__icontains=search) |
+                        Q(created_by__family__name__icontains=search)
                     )
                 else:
                     sales_analysis = sales_analysis.filter(
@@ -10743,6 +10799,7 @@ class SalesAnalysisListView(BaseTokenView):
                         Q(state__name__icontains=search) |
                         Q(district__name__icontains=search) |
                         Q(created_by__name__icontains=search) |
+                        Q(created_by__family__name__icontains=search) |
                         Q(call_status__icontains=search) |
                         Q(status__icontains=search) |
                         Q(note__icontains=search)
@@ -10770,6 +10827,12 @@ class SalesAnalysisListView(BaseTokenView):
             if created_by_filter:
                 sales_analysis = sales_analysis.filter(created_by__name__icontains=created_by_filter)
 
+            if family_filter:
+                if family_filter.isdigit():
+                    sales_analysis = sales_analysis.filter(created_by__family_id=family_filter)
+                else:
+                    sales_analysis = sales_analysis.filter(created_by__family__name__icontains=family_filter)
+
             if start_date:
                 sales_analysis = sales_analysis.filter(created_at__date__gte=start_date)
 
@@ -10787,6 +10850,11 @@ class SalesAnalysisListView(BaseTokenView):
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
             )
 
+            # total call duration based on applied filters
+            total_call_duration = self.add_call_durations(
+                sales_analysis.values_list("call_duration", flat=True)
+            )
+
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
             serializer = SalesAnalysisSerializer(paginated_sales_analysis, many=True)
@@ -10800,6 +10868,7 @@ class SalesAnalysisListView(BaseTokenView):
                 "dsr_approved_count": summary_counts["dsr_approved_count"],
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
+                "total_call_duration": total_call_duration,
                 "results": serializer.data
             })
 
@@ -10823,8 +10892,30 @@ class SalesAnalysisListView(BaseTokenView):
 
 
 
-
 class SalesAnalysisByFamilyView(BaseTokenView):
+    def add_call_durations(self, durations):
+        total_hours = 0
+        total_minutes = 0
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                try:
+                    h, m, s = map(int, str(duration).split(":"))
+                    total_hours += h
+                    total_minutes += m
+                    total_seconds += s
+                except:
+                    pass
+
+        total_minutes += total_seconds // 60
+        total_seconds = total_seconds % 60
+
+        total_hours += total_minutes // 60
+        total_minutes = total_minutes % 60
+
+        return f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
+
     def get(self, request, family_id, *args, **kwargs):
         try:
             search = request.GET.get("search", "").strip()
@@ -10910,6 +11001,10 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
             )
 
+            total_call_duration = self.add_call_durations(
+                sales_analysis.values_list("call_duration", flat=True)
+            )
+
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
             serializer = SalesAnalysisSerializer(paginated_sales_analysis, many=True)
@@ -10924,6 +11019,7 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 "dsr_approved_count": summary_counts["dsr_approved_count"],
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
+                "total_call_duration": total_call_duration,
                 "results": serializer.data
             })
 
