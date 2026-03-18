@@ -2230,6 +2230,8 @@ class AddSalesAnalysisSerializer(serializers.ModelSerializer):
 class SalesAnalysisSerializer(serializers.ModelSerializer):
     customer = serializers.CharField(source='customer.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    family_id = serializers.IntegerField(source='created_by.family.id', read_only=True)
+    family_name = serializers.CharField(source='created_by.family.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
@@ -2242,7 +2244,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
             'customer_name', 'call_status', 'invoice',
             'invoice_number', 'status', 'note', 'state',
             'state_name', 'district', 'district_name',
-            'created_by', 'created_by_name',
+            'created_by', 'created_by_name','family_id', 'family_name',
             'invoice_amount', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'customer_name', 'created_at', 'updated_at']
