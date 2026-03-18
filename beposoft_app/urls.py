@@ -306,7 +306,6 @@ urlpatterns = [
     path('api/sales/analysis/edit/<int:pk>/', SalesAnalysisDetailView.as_view(), name='sales-analysis-detail'),
     path('api/sales/analysis/all/', SalesAnalysisListView.as_view(), name='sales-analysis-all'),
     path('api/sales/analysis/family/<int:family_id>/', SalesAnalysisByFamilyView.as_view(), name='sales-analysis-by-family'),
-    path('api/sales/analysis/supervisor/<int:supervisor_id>/', SalesAnalysisBySupervisorView.as_view(), name='sales-analysis-by-supervisor'),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
