@@ -2242,7 +2242,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
             'customer_name', 'call_status', 'invoice',
             'invoice_number', 'status', 'note', 'state',
             'state_name', 'district', 'district_name',
-            'created_by', 'created_by_name', 'customer',
+            'created_by', 'created_by_name',
             'invoice_amount', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'customer_name', 'created_at', 'updated_at']
