@@ -379,6 +379,60 @@ class Users(BaseTokenView):
                 "message": "An error occurred while fetching users",
                 "error": str(e)  
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class UsersByFamilyView(BaseTokenView):
+    def get(self, request, family_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            users = User.objects.filter(
+                family_id=family_id
+            ).select_related(
+                'family',
+                'supervisor_id',
+                'department_id',
+                'warehouse_id',
+                'country_code'
+            ).prefetch_related(
+                'allocated_states'
+            ).order_by('-id')
+
+            if not users.exists():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "No users found for this family id"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = UserUpdateSerilizers(users, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Users fetched successfully",
+                    "family_id": family_id,
+                    "count": users.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching users by family id",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
         
 
 class StaffOrders(BaseTokenView):
