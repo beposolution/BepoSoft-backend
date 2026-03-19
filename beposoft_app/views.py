@@ -10983,7 +10983,7 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 sales_analysis = sales_analysis.filter(district__name__icontains=district_filter)
 
             if created_by_filter:
-                sales_analysis = sales_analysis.filter(created_by__name__icontains=created_by_filter)
+                sales_analysis = sales_analysis.filter(created_by_id=created_by_filter)
 
             if start_date:
                 sales_analysis = sales_analysis.filter(created_at__date__gte=start_date)
