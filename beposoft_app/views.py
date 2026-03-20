@@ -4198,7 +4198,7 @@ class WarehouseSummaryView(APIView):
 
     def get(self, request):
         try:
-            order_id = request.GET.get('order', None)
+            order_id = request.GET.get("order", None)
 
             if order_id:
                 base_qs = Warehousedata.objects.filter(order__id=order_id)
@@ -4209,56 +4209,81 @@ class WarehouseSummaryView(APIView):
             first_day_month = today.replace(day=1)
             last_30_days = today - timedelta(days=30)
 
+            # keep upper bound as today, so future dated records do not affect month/30-day summaries
             qs_today = base_qs.filter(shipped_date=today)
-            qs_month = base_qs.filter(shipped_date__gte=first_day_month)
-            qs_30_days = base_qs.filter(shipped_date__gte=last_30_days)
+            qs_month = base_qs.filter(
+                shipped_date__gte=first_day_month,
+                shipped_date__lte=today
+            )
+            qs_30_days = base_qs.filter(
+                shipped_date__gte=last_30_days,
+                shipped_date__lte=today
+            )
 
-            # Safe helpers
             def safe_float(value):
                 try:
                     if value in [None, "", "null"]:
                         return 0.0
                     return float(value)
-                except:
+                except Exception:
                     return 0.0
 
+            # same as tracking report volume-weight logic
             def get_volume(obj):
                 l = safe_float(obj.length)
                 b = safe_float(obj.breadth)
                 h = safe_float(obj.height)
-                if l == 0 or b == 0 or h == 0:
+
+                if l <= 0 or b <= 0 or h <= 0:
                     return 0.0
+
                 return round((l * b * h) / 6000.0, 2)
 
+            # same as tracking report row average logic
+            def get_item_average(obj):
+                parcel_amount = safe_float(obj.parcel_amount)
+                actual_weight = safe_float(obj.actual_weight)
+                volume_weight = get_volume(obj)
+
+                base_weight = actual_weight if actual_weight > 0 else volume_weight
+                if base_weight <= 0:
+                    return 0.0
+
+                return round(parcel_amount / base_weight, 2)
+
             def get_summary(qs):
-                total_weight_g = float(sum(qs.values_list("actual_weight", flat=True)))
-                total_amt = float(sum(qs.values_list("parcel_amount", flat=True)))
+                total_boxes = qs.count()
 
+                # MATCH UI
+                total_actual_weight_g = sum(safe_float(w.weight) for w in qs)
+                total_weight_field = sum(safe_float(w.actual_weight) for w in qs)
+                total_parcel_amount = sum(safe_float(w.parcel_amount) for w in qs)
                 total_volume = sum(get_volume(w) for w in qs)
-                total_weight_field = sum(safe_float(w.weight) for w in qs)
 
-                total_weight_kg = total_weight_g / 1000 if total_weight_g else 0
-                avg = total_amt / total_weight_kg if total_weight_kg > 0 else 0
+                # MATCH UI total average (sum of each row average)
+                average = sum(get_item_average(w) for w in qs)
+
+                total_actual_weight_kg = (
+                    total_actual_weight_g / 1000 if total_actual_weight_g > 0 else 0
+                )
 
                 return {
-                    "total_boxes": qs.count(),
-                    "total_actual_weight_g": total_weight_g,
-                    "total_actual_weight_kg": total_weight_kg,
-                    "total_parcel_amount": total_amt,
-                    "average": avg,
-                    "total_volume": total_volume,
-                    "total_weight_field": total_weight_field
+                    "total_boxes": total_boxes,
+                    "total_actual_weight_g": round(total_actual_weight_g, 2),
+                    "total_actual_weight_kg": round(total_actual_weight_kg, 3),
+                    "total_parcel_amount": round(total_parcel_amount, 2),
+                    "average": round(average, 2),
+                    "total_volume": round(total_volume, 2),
+                    "total_weight_field": round(total_weight_field, 2),
                 }
 
             today_summary = get_summary(qs_today)
             current_month_summary = get_summary(qs_month)
             last_30_days_summary = get_summary(qs_30_days)
 
-            # ================================
-            # UPDATED SERVICE-WISE SUMMARY
-            # ================================
             def get_service_summary(qs):
                 result = {}
+
                 for w in qs:
                     name = w.parcel_service.name if w.parcel_service else "Others"
 
@@ -4269,24 +4294,28 @@ class WarehouseSummaryView(APIView):
                             "total_parcel_amount": 0.0,
                             "total_volume": 0.0,
                             "total_weight_field": 0.0,
+                            "total_actual_weight_kg": 0.0,
+                            "average": 0.0,
                         }
 
+                    # MATCH UI
                     result[name]["total_boxes"] += 1
-                    result[name]["total_actual_weight_g"] += float(w.actual_weight or 0)
-                    result[name]["total_parcel_amount"] += float(w.parcel_amount or 0)
+                    result[name]["total_actual_weight_g"] += safe_float(w.weight)
+                    result[name]["total_parcel_amount"] += safe_float(w.parcel_amount)
                     result[name]["total_volume"] += get_volume(w)
-                    result[name]["total_weight_field"] += safe_float(w.weight)
+                    result[name]["total_weight_field"] += safe_float(w.actual_weight)
+                    result[name]["average"] += get_item_average(w)
 
-                # Add KG & Averages
-                for ps, data in result.items():
+                for service_name, data in result.items():
                     total_g = data["total_actual_weight_g"]
-                    total_amt = data["total_parcel_amount"]
-
-                    total_kg = total_g / 1000 if total_g else 0
-                    average = total_amt / total_kg if total_kg > 0 else 0
-
-                    data["total_actual_weight_kg"] = total_kg
-                    data["average"] = average
+                    data["total_actual_weight_kg"] = round(
+                        total_g / 1000 if total_g > 0 else 0, 3
+                    )
+                    data["total_actual_weight_g"] = round(data["total_actual_weight_g"], 2)
+                    data["total_parcel_amount"] = round(data["total_parcel_amount"], 2)
+                    data["total_volume"] = round(data["total_volume"], 2)
+                    data["total_weight_field"] = round(data["total_weight_field"], 2)
+                    data["average"] = round(data["average"], 2)
 
                 return result
 
@@ -4295,37 +4324,27 @@ class WarehouseSummaryView(APIView):
             days30_services = get_service_summary(qs_30_days)
 
             all_services = {}
-            all_keys = set(today_services.keys()) | set(month_services.keys()) | set(days30_services.keys())
+            all_keys = (
+                set(today_services.keys()) |
+                set(month_services.keys()) |
+                set(days30_services.keys())
+            )
+
+            default_service_data = {
+                "total_boxes": 0,
+                "total_actual_weight_g": 0.0,
+                "total_parcel_amount": 0.0,
+                "total_volume": 0.0,
+                "total_weight_field": 0.0,
+                "total_actual_weight_kg": 0.0,
+                "average": 0.0,
+            }
 
             for key in all_keys:
                 all_services[key] = {
-                    "today": today_services.get(key, {
-                        "total_boxes": 0,
-                        "total_actual_weight_g": 0.0,
-                        "total_parcel_amount": 0.0,
-                        "total_volume": 0.0,
-                        "total_weight_field": 0.0,
-                        "total_actual_weight_kg": 0.0,
-                        "average": 0.0
-                    }),
-                    "current_month": month_services.get(key, {
-                        "total_boxes": 0,
-                        "total_actual_weight_g": 0.0,
-                        "total_parcel_amount": 0.0,
-                        "total_volume": 0.0,
-                        "total_weight_field": 0.0,
-                        "total_actual_weight_kg": 0.0,
-                        "average": 0.0
-                    }),
-                    "last_30_days": days30_services.get(key, {
-                        "total_boxes": 0,
-                        "total_actual_weight_g": 0.0,
-                        "total_parcel_amount": 0.0,
-                        "total_volume": 0.0,
-                        "total_weight_field": 0.0,
-                        "total_actual_weight_kg": 0.0,
-                        "average": 0.0
-                    })
+                    "today": today_services.get(key, default_service_data.copy()),
+                    "current_month": month_services.get(key, default_service_data.copy()),
+                    "last_30_days": days30_services.get(key, default_service_data.copy()),
                 }
 
             return Response(
@@ -4334,14 +4353,16 @@ class WarehouseSummaryView(APIView):
                     "today_summary": today_summary,
                     "current_month_summary": current_month_summary,
                     "last_30_days_summary": last_30_days_summary,
-                    "data": all_services
+                    "data": all_services,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except Exception as e:
-            return Response({"success": False, "error": str(e)}, status=500)
-
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class OrderStatusCount(APIView):
