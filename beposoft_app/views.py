@@ -4228,7 +4228,7 @@ class WarehouseSummaryView(APIView):
                 h = safe_float(obj.height)
                 if l == 0 or b == 0 or h == 0:
                     return 0.0
-                return l * b * h
+                return round((l * b * h) / 6000.0, 2)
 
             def get_summary(qs):
                 total_weight_g = float(sum(qs.values_list("actual_weight", flat=True)))
