@@ -16,7 +16,7 @@ from django.contrib.auth import authenticate
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError, transaction
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db.models import Sum
 from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
@@ -6138,8 +6138,6 @@ class StaffBasedCustomers(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-from decimal import Decimal
 
 def GenerateInvoice(request, pk):
     order = Order.objects.filter(pk=pk).first()
