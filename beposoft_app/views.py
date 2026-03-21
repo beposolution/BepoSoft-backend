@@ -10435,6 +10435,24 @@ class SalesAnalysisListCreateView(BaseTokenView):
 
         return round(average_minutes, 2)
 
+    def get_call_duration_percentage_8hrs(self, durations, total_days):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        if total_days <= 0:
+            return 0
+
+        total_available_seconds = total_days * 8 * 60 * 60  # 8 hours per day
+
+        if total_available_seconds == 0:
+            return 0
+
+        percentage = (total_seconds / total_available_seconds) * 100
+        return round(percentage, 2)
+
     def add_call_durations(self, durations):
         total_hours = 0
         total_minutes = 0
@@ -10543,8 +10561,20 @@ class SalesAnalysisListCreateView(BaseTokenView):
 
             call_durations = list(sales_data.values_list("call_duration", flat=True))
 
+            if start_date and end_date:
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                total_days = (end - start).days + 1
+            else:
+                unique_days = sales_data.values_list("created_at__date", flat=True).distinct()
+                total_days = len(unique_days)
+
             total_call_duration = self.add_call_durations(call_durations)
             average_call_duration = self.get_average_call_duration(call_durations)
+            call_duration_percentage_8hrs = self.get_call_duration_percentage_8hrs(
+                call_durations,
+                total_days
+            )
 
             # Pagination
             paginator = StandardPagination()
@@ -10562,6 +10592,7 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
                 "total_call_duration": total_call_duration,
                 "average_call_duration": average_call_duration,
+                "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
                 "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
                 "results": serializer.data
             })
@@ -10881,6 +10912,26 @@ class SalesAnalysisListView(BaseTokenView):
 
         return f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
 
+
+    def get_call_duration_percentage_8hrs(self, durations, total_days):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        if total_days <= 0:
+            return 0
+
+        total_available_seconds = total_days * 8 * 60 * 60  # 8 hours per day
+
+        if total_available_seconds == 0:
+            return 0
+
+        percentage = (total_seconds / total_available_seconds) * 100
+        return round(percentage, 2)
+    
+
     def get(self, request, *args, **kwargs):
         try:
             search = request.GET.get("search", "").strip()
@@ -10980,9 +11031,21 @@ class SalesAnalysisListView(BaseTokenView):
                 sales_analysis.values_list("call_duration", flat=True)
             )
 
-            call_durations = sales_analysis.values_list("call_duration", flat=True)
+            call_durations = list(sales_analysis.values_list("call_duration", flat=True))
+
+            if start_date and end_date:
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                total_days = (end - start).days + 1
+            else:
+                unique_days = sales_analysis.values_list("created_at__date", flat=True).distinct()
+                total_days = len(unique_days)
 
             call_duration_average_8hrs = self.get_call_duration_average_8hrs(call_durations)
+            call_duration_percentage_8hrs = self.get_call_duration_percentage_8hrs(
+                call_durations,
+                total_days
+            )
 
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
@@ -11001,6 +11064,7 @@ class SalesAnalysisListView(BaseTokenView):
                 "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
                 "total_call_duration": total_call_duration,
                 "call_duration_average_8hrs": call_duration_average_8hrs,
+                "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
                 "results": serializer.data
             })
 
@@ -11080,6 +11144,25 @@ class SalesAnalysisByFamilyView(BaseTokenView):
         total_minutes = total_minutes % 60
 
         return f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
+
+
+    def get_call_duration_percentage_8hrs(self, durations, total_days):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        if total_days <= 0:
+            return 0
+
+        total_available_seconds = total_days * 8 * 60 * 60  # 8 hours per day
+
+        if total_available_seconds == 0:
+            return 0
+
+        percentage = (total_seconds / total_available_seconds) * 100
+        return round(percentage, 2)
 
     def get(self, request, family_id, *args, **kwargs):
         try:
@@ -11169,6 +11252,19 @@ class SalesAnalysisByFamilyView(BaseTokenView):
 
             call_durations = list(sales_analysis.values_list("call_duration", flat=True))
 
+            if start_date and end_date:
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                total_days = (end - start).days + 1
+            else:
+                unique_days = sales_analysis.values_list("created_at__date", flat=True).distinct()
+                total_days = len(unique_days)
+
+            call_duration_percentage_8hrs = self.get_call_duration_percentage_8hrs(
+                call_durations,
+                total_days
+            )
+
             total_call_duration = self.add_call_durations(call_durations)
             average_call_duration = self.get_average_call_duration(call_durations)
 
@@ -11188,6 +11284,7 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
                 "total_call_duration": total_call_duration,
                 "average_call_duration": average_call_duration,
+                "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
                 "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
                 "results": serializer.data
             })
