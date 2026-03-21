@@ -10409,6 +10409,32 @@ class BDMBDOReportDetailView(BaseTokenView):
 
 class SalesAnalysisListCreateView(BaseTokenView):
 
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except:
+            return 0
+
+    def get_average_call_duration(self, durations):
+        total_seconds = 0
+        count = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+                count += 1
+
+        if count == 0:
+            return 0
+
+        average_seconds = total_seconds / count
+        average_minutes = average_seconds / 60
+
+        return round(average_minutes, 2)
+
     def add_call_durations(self, durations):
         total_hours = 0
         total_minutes = 0
@@ -10512,11 +10538,13 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 dsr_approved_count=Count("id", filter=Q(status="dsr approved")),
                 dsr_confirmed_count=Count("id", filter=Q(status="dsr confirmed")),
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
+                total_invoice_amount=Coalesce(Sum("invoice__total_amount"), 0.0),
             )
 
-            total_call_duration = self.add_call_durations(
-                sales_data.values_list("call_duration", flat=True)
-            )
+            call_durations = list(sales_data.values_list("call_duration", flat=True))
+
+            total_call_duration = self.add_call_durations(call_durations)
+            average_call_duration = self.get_average_call_duration(call_durations)
 
             # Pagination
             paginator = StandardPagination()
@@ -10533,6 +10561,8 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
                 "total_call_duration": total_call_duration,
+                "average_call_duration": average_call_duration,
+                "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
                 "results": serializer.data
             })
 
@@ -10805,6 +10835,27 @@ class SalesAnalysisDetailView(BaseTokenView):
 
 
 class SalesAnalysisListView(BaseTokenView):
+
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except:
+            return 0
+    
+    def get_call_duration_average_8hrs(self, durations):
+        total_seconds = 0
+        for duration in durations:
+            total_seconds += self.duration_to_seconds(duration)
+
+        total_minutes = total_seconds / 60
+        average_ratio = total_minutes / (8 * 60)  # 480 minutes = 8 hours
+        average_percentage = average_ratio * 100
+
+        return round(average_percentage, 2)
+
     def add_call_durations(self, durations):
         total_hours = 0
         total_minutes = 0
@@ -10921,12 +10972,17 @@ class SalesAnalysisListView(BaseTokenView):
                 dsr_approved_count=Count("id", filter=Q(status="dsr approved")),
                 dsr_confirmed_count=Count("id", filter=Q(status="dsr confirmed")),
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
+                total_invoice_amount=Coalesce(Sum("invoice__total_amount"), 0.0),
             )
 
             # total call duration based on applied filters
             total_call_duration = self.add_call_durations(
                 sales_analysis.values_list("call_duration", flat=True)
             )
+
+            call_durations = sales_analysis.values_list("call_duration", flat=True)
+
+            call_duration_average_8hrs = self.get_call_duration_average_8hrs(call_durations)
 
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
@@ -10942,6 +10998,9 @@ class SalesAnalysisListView(BaseTokenView):
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
                 "total_call_duration": total_call_duration,
+                "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
+                "total_call_duration": total_call_duration,
+                "call_duration_average_8hrs": call_duration_average_8hrs,
                 "results": serializer.data
             })
 
@@ -10966,6 +11025,39 @@ class SalesAnalysisListView(BaseTokenView):
 
 
 class SalesAnalysisByFamilyView(BaseTokenView):
+
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except:
+            return 0
+
+    def seconds_to_hms(self, total_seconds):
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    def get_average_call_duration(self, durations):
+        total_seconds = 0
+        count = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+                count += 1
+
+        if count == 0:
+            return 0
+
+        average_seconds = total_seconds / count
+        average_minutes = average_seconds / 60
+
+        return round(average_minutes, 2)
+
     def add_call_durations(self, durations):
         total_hours = 0
         total_minutes = 0
@@ -11072,11 +11164,13 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 dsr_approved_count=Count("id", filter=Q(status="dsr approved")),
                 dsr_confirmed_count=Count("id", filter=Q(status="dsr confirmed")),
                 dsr_rejected_count=Count("id", filter=Q(status="dsr rejected")),
+                total_invoice_amount=Coalesce(Sum("invoice__total_amount"), 0.0),
             )
 
-            total_call_duration = self.add_call_durations(
-                sales_analysis.values_list("call_duration", flat=True)
-            )
+            call_durations = list(sales_analysis.values_list("call_duration", flat=True))
+
+            total_call_duration = self.add_call_durations(call_durations)
+            average_call_duration = self.get_average_call_duration(call_durations)
 
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
@@ -11093,6 +11187,8 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 "dsr_confirmed_count": summary_counts["dsr_confirmed_count"],
                 "dsr_rejected_count": summary_counts["dsr_rejected_count"],
                 "total_call_duration": total_call_duration,
+                "average_call_duration": average_call_duration,
+                "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
                 "results": serializer.data
             })
 
