@@ -11271,10 +11271,6 @@ class SalesAnalysisByFamilyView(BaseTokenView):
             average_call_duration = self.get_average_call_duration(call_durations)
 
 
-            # Get all invoice ids from filtered sales analysis records
-            invoice_ids = sales_analysis.exclude(invoice__isnull=True).values_list("invoice_id", flat=True)
-
-
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
             serializer = SalesAnalysisSerializer(paginated_sales_analysis, many=True)
