@@ -2221,6 +2221,33 @@ class BDMBDOReportGETSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class SalesAnalysisProductSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'product_id',
+            'name',
+            'image',
+            'quantity',
+            'rate',
+            'discount',
+            'tax',
+            'description',
+        ]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if obj.product and obj.product.image:
+            if request:
+                return request.build_absolute_uri(obj.product.image.url)
+            return obj.product.image.url
+        return None
+    
+
 class AddSalesAnalysisSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -2236,6 +2263,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source='district.name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
     invoice_amount = serializers.CharField(source='invoice.total_amount', read_only=True)
+    product_details = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesAnalysis
@@ -2243,11 +2271,22 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
             'id', 'call_duration', 'customer',
             'customer_name', 'call_status', 'invoice',
             'invoice_number', 'status', 'note', 'state',
-            'state_name', 'district', 'district_name',
+            'state_name', 'district', 'district_name', 'product_details',
             'created_by', 'created_by_name','family_id', 'family_name',
             'invoice_amount', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'customer_name', 'created_at', 'updated_at']
+
+    def get_product_details(self, obj):
+        if not obj.invoice:
+            return []
+
+        items = obj.invoice.items.all()
+        return SalesAnalysisProductSerializer(
+            items,
+            many=True,
+            context=self.context
+        ).data
 
 
 # End of  Reports and Analytics serializers section based on daily sales
