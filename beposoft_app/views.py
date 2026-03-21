@@ -10576,6 +10576,33 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 total_days
             )
 
+            # product details start
+            invoice_ids = sales_data.exclude(invoice__isnull=True).values_list("invoice_id", flat=True)
+
+            product_details_qs = (
+                OrderItem.objects.filter(order_id__in=invoice_ids)
+                .values("product_id", "product__name", "product__image")
+                .annotate(count=Coalesce(Sum("quantity"), 0))
+                .order_by("product__name")
+            )
+
+            product_details = []
+            for item in product_details_qs:
+                image_url = None
+                if item["product__image"]:
+                    try:
+                        image_url = request.build_absolute_uri(item["product__image"].url)
+                    except Exception:
+                        image_url = request.build_absolute_uri(f"/media/{item['product__image']}")
+
+                product_details.append({
+                    "id": item["product_id"],
+                    "name": item["product__name"],
+                    "image": image_url,
+                    "count": item["count"],
+                })
+            # product details end
+
             # Pagination
             paginator = StandardPagination()
             paginated_sales_data = paginator.paginate_queryset(sales_data, request)
@@ -10594,6 +10621,7 @@ class SalesAnalysisListCreateView(BaseTokenView):
                 "average_call_duration": average_call_duration,
                 "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
                 "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
+                "product_details": product_details,
                 "results": serializer.data
             })
 
@@ -11047,6 +11075,37 @@ class SalesAnalysisListView(BaseTokenView):
                 total_days
             )
 
+            # Get invoice ids from the filtered sales analysis records
+            invoice_ids = sales_analysis.exclude(invoice__isnull=True).values_list("invoice_id", flat=True)
+
+            # Build product-wise details from OrderItem
+            # We return product name, image and total quantity count
+            product_details_qs = (
+                OrderItem.objects.filter(order_id__in=invoice_ids)
+                .values("product_id", "product__name", "product__image")
+                .annotate(count=Coalesce(Sum("quantity"), 0))
+                .order_by("product__name")
+            )
+
+            # Convert to response-friendly list
+            product_details = []
+            for item in product_details_qs:
+                image_url = None
+
+                # Build full image URL if image exists
+                if item["product__image"]:
+                    try:
+                        image_url = request.build_absolute_uri(item["product__image"].url)
+                    except Exception:
+                        image_url = request.build_absolute_uri(f"/media/{item['product__image']}")
+
+                product_details.append({
+                    "product_id": item["product_id"],
+                    "name": item["product__name"],
+                    "image": image_url,
+                    "count": item["count"],
+                })
+
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
             serializer = SalesAnalysisSerializer(paginated_sales_analysis, many=True)
@@ -11065,6 +11124,7 @@ class SalesAnalysisListView(BaseTokenView):
                 "total_call_duration": total_call_duration,
                 "call_duration_average_8hrs": call_duration_average_8hrs,
                 "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
+                "product_details": product_details,
                 "results": serializer.data
             })
 
@@ -11268,6 +11328,34 @@ class SalesAnalysisByFamilyView(BaseTokenView):
             total_call_duration = self.add_call_durations(call_durations)
             average_call_duration = self.get_average_call_duration(call_durations)
 
+
+            # Get all invoice ids from filtered sales analysis records
+            invoice_ids = sales_analysis.exclude(invoice__isnull=True).values_list("invoice_id", flat=True)
+
+            # Product-wise summary from OrderItem using invoice -> order relation
+            product_summary = (
+                OrderItem.objects.filter(order_id__in=invoice_ids)
+                .values("product__name", "product__image") 
+                .annotate(count=Coalesce(Sum("quantity"), 0))
+                .order_by("product__name")
+            )
+
+            # Convert queryset to clean response format
+            product_summary_list = []
+            for item in product_summary:
+                image_url = None
+
+                # full image url if image exists
+                if item["product__image"]:
+                    image_url = request.build_absolute_uri(f"/media/{item['product__image']}")
+
+                product_summary_list.append({
+                    "product_name": item["product__name"],
+                    "product_image": image_url,
+                    "count": item["count"]
+                })
+
+
             paginator = StandardPagination()
             paginated_sales_analysis = paginator.paginate_queryset(sales_analysis, request)
             serializer = SalesAnalysisSerializer(paginated_sales_analysis, many=True)
@@ -11286,6 +11374,7 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 "average_call_duration": average_call_duration,
                 "call_duration_percentage_8hrs": call_duration_percentage_8hrs,
                 "total_invoice_amount": float(summary_counts["total_invoice_amount"]),
+                "product_summary": product_summary_list,
                 "results": serializer.data
             })
 
