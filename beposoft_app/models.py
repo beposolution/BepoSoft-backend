@@ -1849,6 +1849,49 @@ class SalesAnalysis(models.Model):
     class Meta:
         db_table = "sales_analysis"
 
+
+class BDMOrderAnalysis(models.Model):
+    active_bdo = models.PositiveBigIntegerField(default=0)
+    non_active_bdo = models.PositiveBigIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_order_analysis")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bdm_order_analysis"
+
+
+class BdmOrderSelection(models.Model):
+    bdm = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bdm_order_selections')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_order_analysis_selection")
+    note = models.TextField(blank=True, null=True)
+
+    class Meta:
+        db_table = "bdm_order_selection"
+
+    def __str__(self):
+        return f"{self.bdm} - {self.id}"
+
+
+class BdmOrderSelectionItem(models.Model):
+    selection = models.ForeignKey(BdmOrderSelection, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='bdm_selection_items')
+    invoice_number = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bdm_order_selection_item"
+
+    def save(self, *args, **kwargs):
+        if self.order and not self.invoice_number:
+            self.invoice_number = self.order.invoice
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.order.id} - {self.invoice_number}"
     
 # Seller related models
 
