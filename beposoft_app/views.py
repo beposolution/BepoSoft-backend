@@ -11710,11 +11710,12 @@ def format_seconds_to_hhmmss(total_seconds):
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
+
 class BdmDailyOverCreatedReportView(BaseTokenView):
     """
     Date-wise BDM overall report
-    Only filtered by logged-in user through created_by fields
-    No today/date filter
+    Filtered by logged-in user through created_by
+    Shows all attendance dates of logged-in user
     """
 
     def get(self, request):
@@ -11723,11 +11724,13 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
             if error_response:
                 return error_response
 
-            selections = BdmOrderSelection.objects.filter(
+            analysis_dates = BDMOrderAnalysisData.objects.filter(
                 created_by=authUser
-            ).select_related('bdm').order_by('-created_at')
+            ).values_list(
+                'attendance_date', flat=True
+            ).distinct().order_by('-attendance_date')
 
-            if not selections.exists():
+            if not analysis_dates:
                 return Response(
                     {
                         "status": "success",
@@ -11738,45 +11741,45 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            grouped_by_date = {}
+            response_data = []
 
-            for selection in selections:
-                created_date = selection.created_at.date()
-                bdm_id = selection.bdm.id
+            for created_date in analysis_dates:
+                attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                    analysis__created_by=authUser,
+                    analysis__attendance_date=created_date
+                )
 
-                if created_date not in grouped_by_date:
-                    attendance_qs = BDMOrderAnalysisStaff.objects.filter(
-                        analysis__created_by=authUser,
-                        analysis__attendance_date=created_date
-                    )
+                bdo_present_count = attendance_qs.filter(status='present').count()
+                bdo_absent_count = attendance_qs.filter(status='absent').count()
+                bdo_half_day_count = attendance_qs.filter(status='half_day').count()
 
-                    bdo_present_count = attendance_qs.filter(status='present').count()
-                    bdo_absent_count = attendance_qs.filter(status='absent').count()
-                    bdo_half_day_count = attendance_qs.filter(status='half_day').count()
+                selections = BdmOrderSelection.objects.filter(
+                    created_by=authUser,
+                    created_at__date=created_date
+                ).select_related('bdm', 'bdm__family').order_by('-created_at')
 
-                    grouped_by_date[created_date] = {
-                        "created_date": created_date,
-                        "bdo_present_count": bdo_present_count,
-                        "bdo_absent_count": bdo_absent_count,
-                        "bdo_half_day_count": bdo_half_day_count,
-                        "bdm_map": {}
-                    }
+                bdm_map = {}
 
-                if bdm_id not in grouped_by_date[created_date]["bdm_map"]:
-                    grouped_by_date[created_date]["bdm_map"][bdm_id] = {
-                        "bdm_id": selection.bdm.id,
-                        "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
-                        "selection_ids": [],
-                        "total_order_count": 0,
-                        "total_volume": 0.0,
-                        "total_call_duration_seconds": 0,
-                    }
+                for selection in selections:
+                    bdm = selection.bdm
+                    bdm_id = bdm.id
+                    family = getattr(bdm, 'family', None)
 
-                grouped_by_date[created_date]["bdm_map"][bdm_id]["selection_ids"].append(selection.id)
+                    if bdm_id not in bdm_map:
+                        bdm_map[bdm_id] = {
+                            "bdm_id": bdm.id,
+                            "bdm_name": getattr(bdm, "name", str(bdm)),
+                            "family_id": family.id if family else None,
+                            "family_name": family.name if family else "No Family",
+                            "selection_ids": [],
+                            "total_order_count": 0,
+                            "total_volume": 0.0,
+                            "total_call_duration_seconds": 0,
+                        }
 
-            # order count and total volume
-            for created_date, date_row in grouped_by_date.items():
-                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                    bdm_map[bdm_id]["selection_ids"].append(selection.id)
+
+                for bdm_id, bdm_row in bdm_map.items():
                     selection_ids = bdm_row["selection_ids"]
 
                     items = BdmOrderSelectionItem.objects.filter(
@@ -11792,44 +11795,109 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-            # call duration date-wise for logged-in user
-            for created_date, date_row in grouped_by_date.items():
-                sales_entries = SalesAnalysis.objects.filter(
-                    created_by=authUser,
-                    created_at__date=created_date
-                )
+                for bdm_id, bdm_row in bdm_map.items():
+                    sales_entries = SalesAnalysis.objects.filter(
+                        created_by_id=bdm_id,
+                        created_at__date=created_date
+                    )
 
-                total_seconds = 0
-                for sale in sales_entries:
-                    total_seconds += parse_duration_to_seconds(sale.call_duration)
+                    total_seconds = 0
+                    for sale in sales_entries:
+                        total_seconds += parse_duration_to_seconds(sale.call_duration)
 
-                total_call_duration = format_seconds_to_hhmmss(total_seconds)
+                    bdm_row["total_call_duration_seconds"] = total_seconds
 
-                # same logged-in user's call duration applied to each BDM row of that date
-                for bdm_id, bdm_row in date_row["bdm_map"].items():
-                    bdm_row["total_call_duration"] = total_call_duration
+                family_map = {}
 
-            response_data = []
-            for created_date, date_row in grouped_by_date.items():
-                bdm_data = []
+                for _, bdm_row in bdm_map.items():
+                    family_id = bdm_row["family_id"]
+                    family_name = bdm_row["family_name"]
 
-                for _, bdm_row in date_row["bdm_map"].items():
-                    bdm_data.append({
+                    if family_id not in family_map:
+                        family_map[family_id] = {
+                            "family_id": family_id,
+                            "family_name": family_name,
+                            "bdm_count": 0,
+                            "total_order_count": 0,
+                            "total_volume": 0.0,
+                            "total_call_duration_seconds": 0,
+                            "bdm_data": []
+                        }
+
+                    bdm_call_duration_minutes = bdm_row["total_call_duration_seconds"] / 60
+                    bdm_call_duration_average = round(
+                        (bdm_call_duration_minutes / (8 * 60)) * 100, 2
+                    ) if bdm_call_duration_minutes > 0 else 0.0
+
+                    family_map[family_id]["bdm_count"] += 1
+                    family_map[family_id]["total_order_count"] += bdm_row["total_order_count"]
+                    family_map[family_id]["total_volume"] += bdm_row["total_volume"]
+                    family_map[family_id]["total_call_duration_seconds"] += bdm_row["total_call_duration_seconds"]
+
+                    family_map[family_id]["bdm_data"].append({
                         "bdm_id": bdm_row["bdm_id"],
                         "bdm_name": bdm_row["bdm_name"],
                         "total_order_count": bdm_row["total_order_count"],
                         "total_volume": bdm_row["total_volume"],
-                        "total_call_duration": bdm_row["total_call_duration"],
+                        "total_call_duration": format_seconds_to_hhmmss(
+                            bdm_row["total_call_duration_seconds"]
+                        ),
+                        "call_duration_average": bdm_call_duration_average,
                     })
 
-                bdm_data = sorted(bdm_data, key=lambda x: x["bdm_id"], reverse=True)
+                family_data = []
+                overall_total_volume = 0.0
+                overall_total_call_duration_seconds = 0
+
+                for _, family_row in family_map.items():
+                    family_row["bdm_data"] = sorted(
+                        family_row["bdm_data"],
+                        key=lambda x: x["bdm_id"],
+                        reverse=True
+                    )
+
+                    family_call_duration_minutes = family_row["total_call_duration_seconds"] / 60
+                    family_call_duration_average = round(
+                        (family_call_duration_minutes / (8 * 60)) * 100, 2
+                    ) if family_call_duration_minutes > 0 else 0.0
+
+                    family_data.append({
+                        "family_id": family_row["family_id"],
+                        "family_name": family_row["family_name"],
+                        "bdm_count": family_row["bdm_count"],
+                        "total_order_count": family_row["total_order_count"],
+                        "total_volume": round(family_row["total_volume"], 2),
+                        "total_call_duration": format_seconds_to_hhmmss(
+                            family_row["total_call_duration_seconds"]
+                        ),
+                        "call_duration_average": family_call_duration_average,
+                        "bdm_data": family_row["bdm_data"]
+                    })
+
+                    overall_total_volume += family_row["total_volume"]
+                    overall_total_call_duration_seconds += family_row["total_call_duration_seconds"]
+
+                family_data = sorted(
+                    family_data,
+                    key=lambda x: (x["family_name"] or "").lower()
+                )
+
+                total_call_duration_minutes = overall_total_call_duration_seconds / 60
+                overall_call_duration_average = round(
+                    (total_call_duration_minutes / (8 * 60)) * 100, 2
+                ) if total_call_duration_minutes > 0 else 0.0
 
                 response_data.append({
-                    "created_date": date_row["created_date"],
-                    "bdo_present_count": date_row["bdo_present_count"],
-                    "bdo_absent_count": date_row["bdo_absent_count"],
-                    "bdo_half_day_count": date_row["bdo_half_day_count"],
-                    "bdm_data": bdm_data
+                    "created_date": created_date,
+                    "bdo_present_count": bdo_present_count,
+                    "bdo_absent_count": bdo_absent_count,
+                    "bdo_half_day_count": bdo_half_day_count,
+                    "total_volume": round(overall_total_volume, 2),
+                    "total_call_duration": format_seconds_to_hhmmss(
+                        overall_total_call_duration_seconds
+                    ),
+                    "call_duration_average": overall_call_duration_average,
+                    "family_data": family_data
                 })
 
             response_data = sorted(
@@ -11861,15 +11929,14 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
 
 
 class BdmDailyOverallReportView(BaseTokenView):
-    """
-    Date-wise BDM overall report
-    """
 
     def get(self, request):
         try:
-            selections = BdmOrderSelection.objects.select_related('bdm').all().order_by('-created_at')
+            analysis_dates = BDMOrderAnalysisData.objects.values_list(
+                'attendance_date', flat=True
+            ).distinct().order_by('-attendance_date')
 
-            if not selections.exists():
+            if not analysis_dates:
                 return Response(
                     {
                         "status": "success",
@@ -11880,44 +11947,43 @@ class BdmDailyOverallReportView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            grouped_by_date = {}
+            response_data = []
 
-            for selection in selections:
-                created_date = selection.created_at.date()
+            for created_date in analysis_dates:
+                attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                    analysis__attendance_date=created_date
+                )
 
-                if created_date not in grouped_by_date:
-                    attendance_qs = BDMOrderAnalysisStaff.objects.filter(
-                        analysis__attendance_date=created_date
-                    )
+                bdo_present_count = attendance_qs.filter(status='present').count()
+                bdo_absent_count = attendance_qs.filter(status='absent').count()
+                bdo_half_day_count = attendance_qs.filter(status='half_day').count()
 
-                    bdo_present_count = attendance_qs.filter(status='present').count()
-                    bdo_absent_count = attendance_qs.filter(status='absent').count()
-                    bdo_half_day_count = attendance_qs.filter(status='half_day').count()
+                selections = BdmOrderSelection.objects.filter(
+                    created_at__date=created_date
+                ).select_related('bdm', 'bdm__family').order_by('-created_at')
 
-                    grouped_by_date[created_date] = {
-                        "created_date": created_date,
-                        "bdo_present_count": bdo_present_count,
-                        "bdo_absent_count": bdo_absent_count,
-                        "bdo_half_day_count": bdo_half_day_count,
-                        "bdm_map": {}
-                    }
+                bdm_map = {}
 
-                bdm_id = selection.bdm.id
+                for selection in selections:
+                    bdm = selection.bdm
+                    bdm_id = bdm.id
+                    family = getattr(bdm, 'family', None)
 
-                if bdm_id not in grouped_by_date[created_date]["bdm_map"]:
-                    grouped_by_date[created_date]["bdm_map"][bdm_id] = {
-                        "bdm_id": selection.bdm.id,
-                        "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
-                        "selection_ids": [],
-                        "total_order_count": 0,
-                        "total_volume": 0.0,
-                        "total_call_duration_seconds": 0,
-                    }
+                    if bdm_id not in bdm_map:
+                        bdm_map[bdm_id] = {
+                            "bdm_id": bdm.id,
+                            "bdm_name": getattr(bdm, "name", str(bdm)),
+                            "family_id": family.id if family else None,
+                            "family_name": family.name if family else "No Family",
+                            "selection_ids": [],
+                            "total_order_count": 0,
+                            "total_volume": 0.0,
+                            "total_call_duration_seconds": 0,
+                        }
 
-                grouped_by_date[created_date]["bdm_map"][bdm_id]["selection_ids"].append(selection.id)
+                    bdm_map[bdm_id]["selection_ids"].append(selection.id)
 
-            for created_date, date_row in grouped_by_date.items():
-                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                for bdm_id, bdm_row in bdm_map.items():
                     selection_ids = bdm_row["selection_ids"]
 
                     items = BdmOrderSelectionItem.objects.filter(
@@ -11933,8 +11999,7 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-            for created_date, date_row in grouped_by_date.items():
-                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                for bdm_id, bdm_row in bdm_map.items():
                     sales_entries = SalesAnalysis.objects.filter(
                         created_by_id=bdm_id,
                         created_at__date=created_date
@@ -11946,12 +12011,34 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_call_duration_seconds"] = total_seconds
 
-            response_data = []
-            for created_date, date_row in grouped_by_date.items():
-                bdm_data = []
+                family_map = {}
 
-                for _, bdm_row in date_row["bdm_map"].items():
-                    bdm_data.append({
+                for _, bdm_row in bdm_map.items():
+                    family_id = bdm_row["family_id"]
+                    family_name = bdm_row["family_name"]
+
+                    if family_id not in family_map:
+                        family_map[family_id] = {
+                            "family_id": family_id,
+                            "family_name": family_name,
+                            "bdm_count": 0,
+                            "total_order_count": 0,
+                            "total_volume": 0.0,
+                            "total_call_duration_seconds": 0,
+                            "bdm_data": []
+                        }
+
+                    bdm_call_duration_minutes = bdm_row["total_call_duration_seconds"] / 60
+                    bdm_call_duration_average = round(
+                        (bdm_call_duration_minutes / (8 * 60)) * 100, 2
+                    ) if bdm_call_duration_minutes > 0 else 0.0
+
+                    family_map[family_id]["bdm_count"] += 1
+                    family_map[family_id]["total_order_count"] += bdm_row["total_order_count"]
+                    family_map[family_id]["total_volume"] += bdm_row["total_volume"]
+                    family_map[family_id]["total_call_duration_seconds"] += bdm_row["total_call_duration_seconds"]
+
+                    family_map[family_id]["bdm_data"].append({
                         "bdm_id": bdm_row["bdm_id"],
                         "bdm_name": bdm_row["bdm_name"],
                         "total_order_count": bdm_row["total_order_count"],
@@ -11959,16 +12046,62 @@ class BdmDailyOverallReportView(BaseTokenView):
                         "total_call_duration": format_seconds_to_hhmmss(
                             bdm_row["total_call_duration_seconds"]
                         ),
+                        "call_duration_average": bdm_call_duration_average,
                     })
 
-                bdm_data = sorted(bdm_data, key=lambda x: x["bdm_id"], reverse=True)
+                family_data = []
+                overall_total_volume = 0.0
+                overall_total_call_duration_seconds = 0
+
+                for _, family_row in family_map.items():
+                    family_row["bdm_data"] = sorted(
+                        family_row["bdm_data"],
+                        key=lambda x: x["bdm_id"],
+                        reverse=True
+                    )
+
+                    family_call_duration_minutes = family_row["total_call_duration_seconds"] / 60
+                    family_call_duration_average = round(
+                        (family_call_duration_minutes / (8 * 60)) * 100, 2
+                    ) if family_call_duration_minutes > 0 else 0.0
+
+                    family_data.append({
+                        "family_id": family_row["family_id"],
+                        "family_name": family_row["family_name"],
+                        "bdm_count": family_row["bdm_count"],
+                        "total_order_count": family_row["total_order_count"],
+                        "total_volume": family_row["total_volume"],
+                        "total_call_duration": format_seconds_to_hhmmss(
+                            family_row["total_call_duration_seconds"]
+                        ),
+                        "call_duration_average": family_call_duration_average,
+                        "bdm_data": family_row["bdm_data"]
+                    })
+
+                    overall_total_volume += family_row["total_volume"]
+                    overall_total_call_duration_seconds += family_row["total_call_duration_seconds"]
+
+                family_data = sorted(
+                    family_data,
+                    key=lambda x: (x["family_name"] or "").lower()
+                )
+
+                total_call_duration_minutes = overall_total_call_duration_seconds / 60
+                overall_call_duration_average = round(
+                    (total_call_duration_minutes / (8 * 60)) * 100, 2
+                ) if total_call_duration_minutes > 0 else 0.0
 
                 response_data.append({
                     "created_date": created_date,
-                    "bdo_present_count": date_row["bdo_present_count"],
-                    "bdo_absent_count": date_row["bdo_absent_count"],
-                    "bdo_half_day_count": date_row["bdo_half_day_count"],
-                    "bdm_data": bdm_data
+                    "bdo_present_count": bdo_present_count,
+                    "bdo_absent_count": bdo_absent_count,
+                    "bdo_half_day_count": bdo_half_day_count,
+                    "total_volume": round(overall_total_volume, 2),
+                    "total_call_duration": format_seconds_to_hhmmss(
+                        overall_total_call_duration_seconds
+                    ),
+                    "call_duration_average": overall_call_duration_average,
+                    "family_data": family_data
                 })
 
             response_data = sorted(
@@ -11983,7 +12116,7 @@ class BdmDailyOverallReportView(BaseTokenView):
 
             return paginator.get_paginated_response({
                 "status": "success",
-                "message": "BDM overall report fetched successfully",
+                "message": "BDM overall family-wise report fetched successfully",
                 "count": len(response_data),
                 "data": serializer.data
             })
@@ -11992,11 +12125,12 @@ class BdmDailyOverallReportView(BaseTokenView):
             return Response(
                 {
                     "status": "error",
-                    "message": "An error occurred while fetching BDM overall report",
+                    "message": "An error occurred while fetching BDM overall family-wise report",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
 
 # Product Buying from another company/industries - Seller Details
 

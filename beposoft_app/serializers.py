@@ -2500,6 +2500,18 @@ class BdmDateWiseItemSerializer(serializers.Serializer):
     total_order_count = serializers.IntegerField()
     total_volume = serializers.FloatField()
     total_call_duration = serializers.CharField()
+    call_duration_average = serializers.FloatField()
+
+
+class FamilyWiseBdmSerializer(serializers.Serializer):
+    family_id = serializers.IntegerField(allow_null=True)
+    family_name = serializers.CharField()
+    bdm_count = serializers.IntegerField()
+    total_order_count = serializers.IntegerField()
+    total_volume = serializers.FloatField()
+    total_call_duration = serializers.CharField()
+    call_duration_average = serializers.FloatField()
+    bdm_data = BdmDateWiseItemSerializer(many=True)
 
 
 class BdmDateWiseOverallSerializer(serializers.Serializer):
@@ -2507,8 +2519,10 @@ class BdmDateWiseOverallSerializer(serializers.Serializer):
     bdo_present_count = serializers.IntegerField()
     bdo_absent_count = serializers.IntegerField()
     bdo_half_day_count = serializers.IntegerField()
-    bdm_data = BdmDateWiseItemSerializer(many=True)
-
+    total_volume = serializers.FloatField()
+    total_call_duration = serializers.CharField()
+    call_duration_average = serializers.FloatField()
+    family_data = FamilyWiseBdmSerializer(many=True)
 
 # End of  Reports and Analytics serializers section based on daily sales
 
