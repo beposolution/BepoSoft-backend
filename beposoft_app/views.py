@@ -11745,15 +11745,20 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                 bdm_id = selection.bdm.id
 
                 if created_date not in grouped_by_date:
-                    analysis_obj = BDMOrderAnalysisData.objects.filter(
-                        created_by=authUser,
-                        created_at__date=created_date
-                    ).order_by('-created_at').first()
+                    attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                        analysis__created_by=authUser,
+                        analysis__attendance_date=created_date
+                    )
+
+                    bdo_present_count = attendance_qs.filter(status='present').count()
+                    bdo_absent_count = attendance_qs.filter(status='absent').count()
+                    bdo_half_day_count = attendance_qs.filter(status='half_day').count()
 
                     grouped_by_date[created_date] = {
                         "created_date": created_date,
-                        "active_bdo": analysis_obj.active_bdo if analysis_obj else 0,
-                        "non_active_bdo": analysis_obj.non_active_bdo if analysis_obj else 0,
+                        "bdo_present_count": bdo_present_count,
+                        "bdo_absent_count": bdo_absent_count,
+                        "bdo_half_day_count": bdo_half_day_count,
                         "bdm_map": {}
                     }
 
@@ -11821,8 +11826,9 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
 
                 response_data.append({
                     "created_date": date_row["created_date"],
-                    "active_bdo": date_row["active_bdo"],
-                    "non_active_bdo": date_row["non_active_bdo"],
+                    "bdo_present_count": date_row["bdo_present_count"],
+                    "bdo_absent_count": date_row["bdo_absent_count"],
+                    "bdo_half_day_count": date_row["bdo_half_day_count"],
                     "bdm_data": bdm_data
                 })
 
@@ -11874,22 +11880,25 @@ class BdmDailyOverallReportView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            # date-wise grouped structure
             grouped_by_date = {}
 
             for selection in selections:
                 created_date = selection.created_at.date()
 
                 if created_date not in grouped_by_date:
-                    # get active / non active BDO for that same date
-                    analysis_obj = BDMOrderAnalysisData.objects.filter(
-                        created_at__date=created_date
-                    ).order_by('-created_at').first()
+                    attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                        analysis__attendance_date=created_date
+                    )
+
+                    bdo_present_count = attendance_qs.filter(status='present').count()
+                    bdo_absent_count = attendance_qs.filter(status='absent').count()
+                    bdo_half_day_count = attendance_qs.filter(status='half_day').count()
 
                     grouped_by_date[created_date] = {
                         "created_date": created_date,
-                        "active_bdo": analysis_obj.active_bdo if analysis_obj else 0,
-                        "non_active_bdo": analysis_obj.non_active_bdo if analysis_obj else 0,
+                        "bdo_present_count": bdo_present_count,
+                        "bdo_absent_count": bdo_absent_count,
+                        "bdo_half_day_count": bdo_half_day_count,
                         "bdm_map": {}
                     }
 
@@ -11907,7 +11916,6 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 grouped_by_date[created_date]["bdm_map"][bdm_id]["selection_ids"].append(selection.id)
 
-            # Calculate order count and total volume
             for created_date, date_row in grouped_by_date.items():
                 for bdm_id, bdm_row in date_row["bdm_map"].items():
                     selection_ids = bdm_row["selection_ids"]
@@ -11925,7 +11933,6 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-            # Calculate total call duration date-wise and BDM-wise
             for created_date, date_row in grouped_by_date.items():
                 for bdm_id, bdm_row in date_row["bdm_map"].items():
                     sales_entries = SalesAnalysis.objects.filter(
@@ -11939,7 +11946,6 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_call_duration_seconds"] = total_seconds
 
-            # final response formatting
             response_data = []
             for created_date, date_row in grouped_by_date.items():
                 bdm_data = []
@@ -11959,8 +11965,9 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 response_data.append({
                     "created_date": created_date,
-                    "active_bdo": date_row["active_bdo"],
-                    "non_active_bdo": date_row["non_active_bdo"],
+                    "bdo_present_count": date_row["bdo_present_count"],
+                    "bdo_absent_count": date_row["bdo_absent_count"],
+                    "bdo_half_day_count": date_row["bdo_half_day_count"],
                     "bdm_data": bdm_data
                 })
 
