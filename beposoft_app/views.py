@@ -11772,6 +11772,7 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                             "family_id": family.id if family else None,
                             "family_name": family.name if family else "No Family",
                             "selection_ids": [],
+                            "total_bill": 0,
                             "total_order_count": 0,
                             "total_volume": 0.0,
                             "total_call_duration_seconds": 0,
@@ -11786,6 +11787,7 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                         selection_id__in=selection_ids
                     ).select_related('order')
 
+                    bdm_row["total_bill"] = items.count()
                     bdm_row["total_order_count"] = items.count()
 
                     total_volume = Decimal("0.0")
@@ -11818,6 +11820,7 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                             "family_id": family_id,
                             "family_name": family_name,
                             "bdm_count": 0,
+                            "total_bill": 0,
                             "total_order_count": 0,
                             "total_volume": 0.0,
                             "total_call_duration_seconds": 0,
@@ -11829,7 +11832,12 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                         (bdm_call_duration_minutes / (8 * 60)) * 100, 2
                     ) if bdm_call_duration_minutes > 0 else 0.0
 
+                    bdm_average_call_duration_minutes = round(
+                        bdm_call_duration_minutes / bdm_row["total_bill"], 2
+                    ) if bdm_row["total_bill"] > 0 else 0.0
+
                     family_map[family_id]["bdm_count"] += 1
+                    family_map[family_id]["total_bill"] += bdm_row["total_bill"]
                     family_map[family_id]["total_order_count"] += bdm_row["total_order_count"]
                     family_map[family_id]["total_volume"] += bdm_row["total_volume"]
                     family_map[family_id]["total_call_duration_seconds"] += bdm_row["total_call_duration_seconds"]
@@ -11837,15 +11845,18 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     family_map[family_id]["bdm_data"].append({
                         "bdm_id": bdm_row["bdm_id"],
                         "bdm_name": bdm_row["bdm_name"],
+                        "total_bill": bdm_row["total_bill"],
                         "total_order_count": bdm_row["total_order_count"],
-                        "total_volume": bdm_row["total_volume"],
+                        "total_volume": round(bdm_row["total_volume"], 2),
                         "total_call_duration": format_seconds_to_hhmmss(
                             bdm_row["total_call_duration_seconds"]
                         ),
                         "call_duration_average": bdm_call_duration_average,
+                        "average_call_duration_minutes": bdm_average_call_duration_minutes,
                     })
 
                 family_data = []
+                overall_total_bill = 0
                 overall_total_volume = 0.0
                 overall_total_call_duration_seconds = 0
 
@@ -11861,19 +11872,26 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                         (family_call_duration_minutes / (8 * 60)) * 100, 2
                     ) if family_call_duration_minutes > 0 else 0.0
 
+                    family_average_call_duration_minutes = round(
+                        family_call_duration_minutes / family_row["total_bill"], 2
+                    ) if family_row["total_bill"] > 0 else 0.0
+
                     family_data.append({
                         "family_id": family_row["family_id"],
                         "family_name": family_row["family_name"],
                         "bdm_count": family_row["bdm_count"],
+                        "total_bill": family_row["total_bill"],
                         "total_order_count": family_row["total_order_count"],
                         "total_volume": round(family_row["total_volume"], 2),
                         "total_call_duration": format_seconds_to_hhmmss(
                             family_row["total_call_duration_seconds"]
                         ),
                         "call_duration_average": family_call_duration_average,
+                        "average_call_duration_minutes": family_average_call_duration_minutes,
                         "bdm_data": family_row["bdm_data"]
                     })
 
+                    overall_total_bill += family_row["total_bill"]
                     overall_total_volume += family_row["total_volume"]
                     overall_total_call_duration_seconds += family_row["total_call_duration_seconds"]
 
@@ -11887,16 +11905,22 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     (total_call_duration_minutes / (8 * 60)) * 100, 2
                 ) if total_call_duration_minutes > 0 else 0.0
 
+                overall_average_call_duration_minutes = round(
+                    total_call_duration_minutes / overall_total_bill, 2
+                ) if overall_total_bill > 0 else 0.0
+
                 response_data.append({
                     "created_date": created_date,
                     "bdo_present_count": bdo_present_count,
                     "bdo_absent_count": bdo_absent_count,
                     "bdo_half_day_count": bdo_half_day_count,
+                    "total_bill": overall_total_bill,
                     "total_volume": round(overall_total_volume, 2),
                     "total_call_duration": format_seconds_to_hhmmss(
                         overall_total_call_duration_seconds
                     ),
                     "call_duration_average": overall_call_duration_average,
+                    "average_call_duration_minutes": overall_average_call_duration_minutes,
                     "family_data": family_data
                 })
 
@@ -11976,6 +12000,7 @@ class BdmDailyOverallReportView(BaseTokenView):
                             "family_id": family.id if family else None,
                             "family_name": family.name if family else "No Family",
                             "selection_ids": [],
+                            "total_bill": 0,
                             "total_order_count": 0,
                             "total_volume": 0.0,
                             "total_call_duration_seconds": 0,
@@ -11990,6 +12015,10 @@ class BdmDailyOverallReportView(BaseTokenView):
                         selection_id__in=selection_ids
                     ).select_related('order')
 
+                    # total bill
+                    bdm_row["total_bill"] = items.count()
+
+                    # keeping same field also, since your API already uses it
                     bdm_row["total_order_count"] = items.count()
 
                     total_volume = Decimal("0.0")
@@ -12022,6 +12051,7 @@ class BdmDailyOverallReportView(BaseTokenView):
                             "family_id": family_id,
                             "family_name": family_name,
                             "bdm_count": 0,
+                            "total_bill": 0,
                             "total_order_count": 0,
                             "total_volume": 0.0,
                             "total_call_duration_seconds": 0,
@@ -12033,7 +12063,12 @@ class BdmDailyOverallReportView(BaseTokenView):
                         (bdm_call_duration_minutes / (8 * 60)) * 100, 2
                     ) if bdm_call_duration_minutes > 0 else 0.0
 
+                    bdm_average_call_duration_minutes = round(
+                        bdm_call_duration_minutes / bdm_row["total_bill"], 2
+                    ) if bdm_row["total_bill"] > 0 else 0.0
+
                     family_map[family_id]["bdm_count"] += 1
+                    family_map[family_id]["total_bill"] += bdm_row["total_bill"]
                     family_map[family_id]["total_order_count"] += bdm_row["total_order_count"]
                     family_map[family_id]["total_volume"] += bdm_row["total_volume"]
                     family_map[family_id]["total_call_duration_seconds"] += bdm_row["total_call_duration_seconds"]
@@ -12041,15 +12076,18 @@ class BdmDailyOverallReportView(BaseTokenView):
                     family_map[family_id]["bdm_data"].append({
                         "bdm_id": bdm_row["bdm_id"],
                         "bdm_name": bdm_row["bdm_name"],
+                        "total_bill": bdm_row["total_bill"],
                         "total_order_count": bdm_row["total_order_count"],
-                        "total_volume": bdm_row["total_volume"],
+                        "total_volume": round(bdm_row["total_volume"], 2),
                         "total_call_duration": format_seconds_to_hhmmss(
                             bdm_row["total_call_duration_seconds"]
                         ),
                         "call_duration_average": bdm_call_duration_average,
+                        "average_call_duration_minutes": bdm_average_call_duration_minutes,
                     })
 
                 family_data = []
+                overall_total_bill = 0
                 overall_total_volume = 0.0
                 overall_total_call_duration_seconds = 0
 
@@ -12065,19 +12103,26 @@ class BdmDailyOverallReportView(BaseTokenView):
                         (family_call_duration_minutes / (8 * 60)) * 100, 2
                     ) if family_call_duration_minutes > 0 else 0.0
 
+                    family_average_call_duration_minutes = round(
+                        family_call_duration_minutes / family_row["total_bill"], 2
+                    ) if family_row["total_bill"] > 0 else 0.0
+
                     family_data.append({
                         "family_id": family_row["family_id"],
                         "family_name": family_row["family_name"],
                         "bdm_count": family_row["bdm_count"],
+                        "total_bill": family_row["total_bill"],
                         "total_order_count": family_row["total_order_count"],
-                        "total_volume": family_row["total_volume"],
+                        "total_volume": round(family_row["total_volume"], 2),
                         "total_call_duration": format_seconds_to_hhmmss(
                             family_row["total_call_duration_seconds"]
                         ),
                         "call_duration_average": family_call_duration_average,
+                        "average_call_duration_minutes": family_average_call_duration_minutes,
                         "bdm_data": family_row["bdm_data"]
                     })
 
+                    overall_total_bill += family_row["total_bill"]
                     overall_total_volume += family_row["total_volume"]
                     overall_total_call_duration_seconds += family_row["total_call_duration_seconds"]
 
@@ -12091,16 +12136,22 @@ class BdmDailyOverallReportView(BaseTokenView):
                     (total_call_duration_minutes / (8 * 60)) * 100, 2
                 ) if total_call_duration_minutes > 0 else 0.0
 
+                overall_average_call_duration_minutes = round(
+                    total_call_duration_minutes / overall_total_bill, 2
+                ) if overall_total_bill > 0 else 0.0
+
                 response_data.append({
                     "created_date": created_date,
                     "bdo_present_count": bdo_present_count,
                     "bdo_absent_count": bdo_absent_count,
                     "bdo_half_day_count": bdo_half_day_count,
+                    "total_bill": overall_total_bill,
                     "total_volume": round(overall_total_volume, 2),
                     "total_call_duration": format_seconds_to_hhmmss(
                         overall_total_call_duration_seconds
                     ),
                     "call_duration_average": overall_call_duration_average,
+                    "average_call_duration_minutes": overall_average_call_duration_minutes,
                     "family_data": family_data
                 })
 
