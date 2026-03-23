@@ -1884,11 +1884,6 @@ class BdmOrderSelectionItem(models.Model):
     class Meta:
         db_table = "bdm_order_selection_item"
 
-    def save(self, *args, **kwargs):
-        if self.order and not self.invoice_number:
-            self.invoice_number = self.order.invoice
-        super().save(*args, **kwargs)
-
     def __str__(self):
         return f"{self.order.id} - {self.invoice_number}"
     
