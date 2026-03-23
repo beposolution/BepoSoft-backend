@@ -1858,7 +1858,6 @@ class BDMOrderAnalysisData(models.Model):
 
     class Meta:
         db_table = "bdm_order_analysis_data"
-        unique_together = ('created_by', 'attendance_date')
 
     def __str__(self):
         return f"{self.created_by.name}"

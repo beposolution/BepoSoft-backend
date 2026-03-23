@@ -2307,6 +2307,7 @@ class BDMOrderAnalysisStaffSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'staff_name', 'created_at', 'updated_at']
 
 
+
 class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     staff_entries = BDMOrderAnalysisStaffSerializer(many=True)
@@ -2370,24 +2371,28 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "staff_entries": "Each staff entry must contain staff."
                 })
+
             if staff_id in staff_ids:
                 raise serializers.ValidationError({
-                    "staff_entries": "Same staff cannot be added more than once."
+                    "staff_entries": f"Staff {staff_id} is added more than once in the same request."
                 })
+
             staff_ids.append(staff_id)
 
-        qs = BDMOrderAnalysisData.objects.filter(
-            created_by=created_by,
-            attendance_date=attendance_date
-        )
+        for staff_id in staff_ids:
+            existing_qs = BDMOrderAnalysisStaff.objects.filter(
+                staff_id=staff_id,
+                analysis__created_by=created_by,
+                analysis__attendance_date=attendance_date
+            )
 
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
+            if self.instance:
+                existing_qs = existing_qs.exclude(analysis=self.instance)
 
-        if qs.exists():
-            raise serializers.ValidationError({
-                "attendance_date": "Attendance already exists for this date."
-            })
+            if existing_qs.exists():
+                raise serializers.ValidationError({
+                    "staff_entries": f"Staff id {staff_id} already has attendance for {attendance_date}."
+                })
 
         return attrs
 
@@ -2497,20 +2502,24 @@ class BdmOrderSelectionSerializer(serializers.ModelSerializer):
 class BdmDateWiseItemSerializer(serializers.Serializer):
     bdm_id = serializers.IntegerField()
     bdm_name = serializers.CharField()
+    total_bill = serializers.IntegerField()
     total_order_count = serializers.IntegerField()
     total_volume = serializers.FloatField()
     total_call_duration = serializers.CharField()
     call_duration_average = serializers.FloatField()
+    average_call_duration_minutes = serializers.FloatField()
 
 
 class FamilyWiseBdmSerializer(serializers.Serializer):
     family_id = serializers.IntegerField(allow_null=True)
     family_name = serializers.CharField()
     bdm_count = serializers.IntegerField()
+    total_bill = serializers.IntegerField()
     total_order_count = serializers.IntegerField()
     total_volume = serializers.FloatField()
     total_call_duration = serializers.CharField()
     call_duration_average = serializers.FloatField()
+    average_call_duration_minutes = serializers.FloatField()
     bdm_data = BdmDateWiseItemSerializer(many=True)
 
 
@@ -2519,9 +2528,11 @@ class BdmDateWiseOverallSerializer(serializers.Serializer):
     bdo_present_count = serializers.IntegerField()
     bdo_absent_count = serializers.IntegerField()
     bdo_half_day_count = serializers.IntegerField()
+    total_bill = serializers.IntegerField()
     total_volume = serializers.FloatField()
     total_call_duration = serializers.CharField()
     call_duration_average = serializers.FloatField()
+    average_call_duration_minutes = serializers.FloatField()
     family_data = FamilyWiseBdmSerializer(many=True)
 
 # End of  Reports and Analytics serializers section based on daily sales
