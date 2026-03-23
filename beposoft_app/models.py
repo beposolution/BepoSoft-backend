@@ -1885,7 +1885,7 @@ class BdmOrderSelectionItem(models.Model):
         db_table = "bdm_order_selection_item"
 
     def __str__(self):
-        return f"{self.order.id} - {self.invoice_number}"
+        return f"{self.order.id}"
     
 # Seller related models
 

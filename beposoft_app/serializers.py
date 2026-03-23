@@ -2318,11 +2318,10 @@ class BdmOrderSelectionItemSerializer(serializers.ModelSerializer):
             'order',
             'order_id',
             'order_invoice',
-            'invoice_number',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'selection', 'created_at', 'updated_at']
 
 
 class BdmOrderSelectionSerializer(serializers.ModelSerializer):
