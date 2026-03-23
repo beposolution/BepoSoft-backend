@@ -2369,15 +2369,19 @@ class BdmOrderSelectionSerializer(serializers.ModelSerializer):
 
 
 
-class BdmDailyOverallSerializer(serializers.Serializer):
+class BdmDateWiseItemSerializer(serializers.Serializer):
     bdm_id = serializers.IntegerField()
     bdm_name = serializers.CharField()
-    active_bdo = serializers.IntegerField()
-    non_active_bdo = serializers.IntegerField()
     total_order_count = serializers.IntegerField()
     total_volume = serializers.FloatField()
     total_call_duration = serializers.CharField()
-    selection_ids = serializers.ListField(child=serializers.IntegerField())
+
+
+class BdmDateWiseOverallSerializer(serializers.Serializer):
+    created_date = serializers.DateField()
+    active_bdo = serializers.IntegerField()
+    non_active_bdo = serializers.IntegerField()
+    bdm_data = BdmDateWiseItemSerializer(many=True)
 
 
 # End of  Reports and Analytics serializers section based on daily sales
