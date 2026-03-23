@@ -2290,20 +2290,145 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
 
 
 
-class BDMOrderAnalysisSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+
+class BDMOrderAnalysisStaffSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source='staff.name', read_only=True)
 
     class Meta:
-        model = BDMOrderAnalysis
+        model = BDMOrderAnalysisStaff
         fields = [
-            'id', 'active_bdo',
-            'non_active_bdo', 'created_by',
-            'created_by_name', 'created_at',
+            'id',
+            'staff',
+            'staff_name',
+            'status',
+            'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'staff_name', 'created_at', 'updated_at']
 
 
+class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    staff_entries = BDMOrderAnalysisStaffSerializer(many=True)
+    present_count = serializers.SerializerMethodField()
+    absent_count = serializers.SerializerMethodField()
+    half_day_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BDMOrderAnalysisData
+        fields = [
+            'id',
+            'created_by',
+            'created_by_name',
+            'attendance_date',
+            'present_count',
+            'absent_count',
+            'half_day_count',
+            'staff_entries',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'created_by',
+            'created_by_name',
+            'present_count',
+            'absent_count',
+            'half_day_count',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_present_count(self, obj):
+        return obj.staff_entries.filter(status='present').count()
+
+    def get_absent_count(self, obj):
+        return obj.staff_entries.filter(status='absent').count()
+
+    def get_half_day_count(self, obj):
+        return obj.staff_entries.filter(status='half_day').count()
+
+    def validate(self, attrs):
+        attendance_date = attrs.get('attendance_date')
+        created_by = self.context.get('created_by')
+        staff_entries = self.initial_data.get('staff_entries', [])
+
+        if not attendance_date:
+            raise serializers.ValidationError({
+                "attendance_date": "attendance_date is required."
+            })
+
+        if not staff_entries or not isinstance(staff_entries, list):
+            raise serializers.ValidationError({
+                "staff_entries": "At least one staff entry is required."
+            })
+
+        staff_ids = []
+        for item in staff_entries:
+            staff_id = item.get('staff')
+            if not staff_id:
+                raise serializers.ValidationError({
+                    "staff_entries": "Each staff entry must contain staff."
+                })
+            if staff_id in staff_ids:
+                raise serializers.ValidationError({
+                    "staff_entries": "Same staff cannot be added more than once."
+                })
+            staff_ids.append(staff_id)
+
+        qs = BDMOrderAnalysisData.objects.filter(
+            created_by=created_by,
+            attendance_date=attendance_date
+        )
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError({
+                "attendance_date": "Attendance already exists for this date."
+            })
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        staff_entries_data = validated_data.pop('staff_entries', [])
+        created_by = self.context.get('created_by')
+
+        analysis = BDMOrderAnalysisData.objects.create(
+            created_by=created_by,
+            **validated_data
+        )
+
+        for item in staff_entries_data:
+            BDMOrderAnalysisStaff.objects.create(
+                analysis=analysis,
+                staff=item['staff'],
+                status=item['status']
+            )
+
+        return analysis
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        staff_entries_data = validated_data.pop('staff_entries', None)
+
+        instance.attendance_date = validated_data.get('attendance_date', instance.attendance_date)
+        instance.save()
+
+        if staff_entries_data is not None:
+            instance.staff_entries.all().delete()
+
+            for item in staff_entries_data:
+                BDMOrderAnalysisStaff.objects.create(
+                    analysis=instance,
+                    staff=item['staff'],
+                    status=item['status']
+                )
+
+        return instance
+    
 
 
 class BdmOrderSelectionItemSerializer(serializers.ModelSerializer):

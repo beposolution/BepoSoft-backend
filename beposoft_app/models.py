@@ -1850,15 +1850,39 @@ class SalesAnalysis(models.Model):
         db_table = "sales_analysis"
 
 
-class BDMOrderAnalysis(models.Model):
-    active_bdo = models.PositiveBigIntegerField(default=0)
-    non_active_bdo = models.PositiveBigIntegerField(default=0)
+class BDMOrderAnalysisData(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_order_analysis")
+    attendance_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "bdm_order_analysis"
+        db_table = "bdm_order_analysis_data"
+        unique_together = ('created_by', 'attendance_date')
+
+    def __str__(self):
+        return f"{self.created_by.name}"
+    
+
+class BDMOrderAnalysisStaff(models.Model):
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('half_day', 'Half Day'),
+    ]
+
+    analysis = models.ForeignKey(BDMOrderAnalysisData, on_delete=models.CASCADE, related_name='staff_entries')
+    staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bdm_order_analysis_staff')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bdm_order_analysis_staff"
+        unique_together = ('analysis', 'staff')
+
+    def __str__(self):
+        return f"{self.staff.name} - {self.status}"
 
 
 class BdmOrderSelection(models.Model):
