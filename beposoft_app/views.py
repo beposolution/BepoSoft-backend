@@ -11672,6 +11672,8 @@ class BdmOrderSelectionDetailView(BaseTokenView):
 
 
 
+# BdmDailyOverallReportView ....
+
 def parse_duration_to_seconds(duration_str):
     """
     Converts duration string like:
@@ -11707,16 +11709,11 @@ def format_seconds_to_hhmmss(total_seconds):
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
-class BdmDailyOverallReportView(BaseTokenView):
+class BdmDailyOverCreatedReportView(BaseTokenView):
     """
-    Daily BDM-wise overall report
-
-    Data source:
-    - BdmOrderSelection -> base grouping BDM-wise
-    - BDMOrderAnalysis -> active_bdo / non_active_bdo
-    - BdmOrderSelectionItem -> order count
-    - Order.total_amount -> total volume
-    - SalesAnalysis.call_duration -> total call duration
+    BDM-wise overall report
+    Only filtered by logged-in user through created_by fields
+    No today/date filter
     """
 
     def get(self, request):
@@ -11725,27 +11722,22 @@ class BdmDailyOverallReportView(BaseTokenView):
             if error_response:
                 return error_response
 
-            today = timezone.localdate()
-
-            # today's selections created by logged-in user
+            # only created_by = logged-in user
             selections = BdmOrderSelection.objects.filter(
-                created_by=authUser,
-                created_at__date=today
+                created_by=authUser
             ).select_related('bdm')
 
             if not selections.exists():
                 return Response(
                     {
                         "status": "success",
-                        "message": "No daily BDM data found",
-                        "date": str(today),
+                        "message": "No BDM data found",
                         "count": 0,
                         "data": []
                     },
                     status=status.HTTP_200_OK
                 )
 
-            # group selections by bdm
             grouped_data = {}
 
             for selection in selections:
@@ -11765,22 +11757,19 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 grouped_data[bdm_id]["selection_ids"].append(selection.id)
 
-            # fetch today's BDM analysis record for logged-in user
-            # assuming one record per day per created_by
+            # only created_by = logged-in user
             analysis_obj = BDMOrderAnalysis.objects.filter(
-                created_by=authUser,
-                created_at__date=today
+                created_by=authUser
             ).order_by('-created_at').first()
 
             active_bdo_value = analysis_obj.active_bdo if analysis_obj else 0
             non_active_bdo_value = analysis_obj.non_active_bdo if analysis_obj else 0
 
-            # apply same daily analysis values to each BDM row
             for bdm_id in grouped_data:
                 grouped_data[bdm_id]["active_bdo"] = active_bdo_value
                 grouped_data[bdm_id]["non_active_bdo"] = non_active_bdo_value
 
-            # calculate order count + volume from selected items
+            # order count + total volume from selected orders
             for bdm_id, row in grouped_data.items():
                 selection_ids = row["selection_ids"]
 
@@ -11797,13 +11786,126 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 row["total_volume"] = float(total_volume)
 
-            # calculate call duration from SalesAnalysis for each BDM
-            # mapping rule:
-            # SalesAnalysis.created_by == BdmOrderSelection.bdm
+            # only created_by = logged-in user
+            # NO date filter
+            sales_entries = SalesAnalysis.objects.filter(
+                created_by=authUser
+            )
+
+            total_seconds = 0
+            for sale in sales_entries:
+                total_seconds += parse_duration_to_seconds(sale.call_duration)
+
+            total_call_duration = format_seconds_to_hhmmss(total_seconds)
+
+            # same logged-in user's call duration applied to each row
+            response_data = []
+            for _, row in grouped_data.items():
+                response_data.append({
+                    "bdm_id": row["bdm_id"],
+                    "bdm_name": row["bdm_name"],
+                    "active_bdo": row["active_bdo"],
+                    "non_active_bdo": row["non_active_bdo"],
+                    "total_order_count": row["total_order_count"],
+                    "total_volume": row["total_volume"],
+                    "total_call_duration": total_call_duration,
+                    "selection_ids": row["selection_ids"],
+                })
+
+            response_data = sorted(response_data, key=lambda x: x["bdm_id"], reverse=True)
+
+            paginator = StandardPagination()
+            paginated_data = paginator.paginate_queryset(response_data, request)
+            serializer = BdmDailyOverallSerializer(paginated_data, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "BDM overall report fetched successfully",
+                "count": len(response_data),
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching BDM overall report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class BdmDailyOverallReportView(BaseTokenView):
+    """
+    BDM-wise overall report
+    No filter
+    Get all data
+    """
+
+    def get(self, request):
+        try:
+            selections = BdmOrderSelection.objects.all().select_related('bdm')
+
+            if not selections.exists():
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "No BDM data found",
+                        "count": 0,
+                        "data": []
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            grouped_data = {}
+
+            for selection in selections:
+                bdm_id = selection.bdm.id
+
+                if bdm_id not in grouped_data:
+                    grouped_data[bdm_id] = {
+                        "bdm_id": selection.bdm.id,
+                        "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
+                        "selection_ids": [],
+                        "total_order_count": 0,
+                        "total_volume": 0.0,
+                        "total_call_duration_seconds": 0,
+                        "active_bdo": 0,
+                        "non_active_bdo": 0,
+                    }
+
+                grouped_data[bdm_id]["selection_ids"].append(selection.id)
+
+            analysis_obj = BDMOrderAnalysis.objects.all().order_by('-created_at').first()
+
+            active_bdo_value = analysis_obj.active_bdo if analysis_obj else 0
+            non_active_bdo_value = analysis_obj.non_active_bdo if analysis_obj else 0
+
+            for bdm_id in grouped_data:
+                grouped_data[bdm_id]["active_bdo"] = active_bdo_value
+                grouped_data[bdm_id]["non_active_bdo"] = non_active_bdo_value
+
+            for bdm_id, row in grouped_data.items():
+                selection_ids = row["selection_ids"]
+
+                items = BdmOrderSelectionItem.objects.filter(
+                    selection_id__in=selection_ids
+                ).select_related('order')
+
+                row["total_order_count"] = items.count()
+
+                total_volume = Decimal("0.0")
+                for item in items:
+                    if item.order and item.order.total_amount:
+                        total_volume += Decimal(str(item.order.total_amount))
+
+                row["total_volume"] = float(total_volume)
+
             for bdm_id, row in grouped_data.items():
                 sales_entries = SalesAnalysis.objects.filter(
-                    created_by_id=bdm_id,
-                    created_at__date=today
+                    created_by_id=bdm_id
                 )
 
                 total_seconds = 0
@@ -11812,7 +11914,6 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 row["total_call_duration_seconds"] = total_seconds
 
-            # final response list
             response_data = []
             for _, row in grouped_data.items():
                 response_data.append({
@@ -11828,24 +11929,24 @@ class BdmDailyOverallReportView(BaseTokenView):
                     "selection_ids": row["selection_ids"],
                 })
 
-            serializer = BdmDailyOverallSerializer(response_data, many=True)
+            response_data = sorted(response_data, key=lambda x: x["bdm_id"], reverse=True)
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Daily BDM overall report fetched successfully",
-                    "date": str(today),
-                    "count": len(serializer.data),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            paginator = StandardPagination()
+            paginated_data = paginator.paginate_queryset(response_data, request)
+            serializer = BdmDailyOverallSerializer(paginated_data, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "BDM overall report fetched successfully",
+                "count": len(response_data),
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
                 {
                     "status": "error",
-                    "message": "An error occurred while fetching daily BDM overall report",
+                    "message": "An error occurred while fetching BDM overall report",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
