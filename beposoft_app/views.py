@@ -11670,6 +11670,187 @@ class BdmOrderSelectionDetailView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+
+def parse_duration_to_seconds(duration_str):
+    """
+    Converts duration string like:
+    'HH:MM:SS'
+    'MM:SS'
+    'SS'
+    to total seconds
+    """
+    if not duration_str:
+        return 0
+
+    try:
+        parts = duration_str.split(":")
+        parts = [int(p) for p in parts]
+
+        if len(parts) == 3:
+            hours, minutes, seconds = parts
+            return hours * 3600 + minutes * 60 + seconds
+        elif len(parts) == 2:
+            minutes, seconds = parts
+            return minutes * 60 + seconds
+        elif len(parts) == 1:
+            return parts[0]
+        return 0
+    except:
+        return 0
+
+
+def format_seconds_to_hhmmss(total_seconds):
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+class BdmDailyOverallReportView(BaseTokenView):
+    """
+    Daily BDM-wise overall report
+
+    Data source:
+    - BdmOrderSelection -> base grouping BDM-wise
+    - BDMOrderAnalysis -> active_bdo / non_active_bdo
+    - BdmOrderSelectionItem -> order count
+    - Order.total_amount -> total volume
+    - SalesAnalysis.call_duration -> total call duration
+    """
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            today = timezone.localdate()
+
+            # today's selections created by logged-in user
+            selections = BdmOrderSelection.objects.filter(
+                created_by=authUser,
+                created_at__date=today
+            ).select_related('bdm')
+
+            if not selections.exists():
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "No daily BDM data found",
+                        "date": str(today),
+                        "count": 0,
+                        "data": []
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            # group selections by bdm
+            grouped_data = {}
+
+            for selection in selections:
+                bdm_id = selection.bdm.id
+
+                if bdm_id not in grouped_data:
+                    grouped_data[bdm_id] = {
+                        "bdm_id": selection.bdm.id,
+                        "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
+                        "selection_ids": [],
+                        "total_order_count": 0,
+                        "total_volume": 0.0,
+                        "total_call_duration_seconds": 0,
+                        "active_bdo": 0,
+                        "non_active_bdo": 0,
+                    }
+
+                grouped_data[bdm_id]["selection_ids"].append(selection.id)
+
+            # fetch today's BDM analysis record for logged-in user
+            # assuming one record per day per created_by
+            analysis_obj = BDMOrderAnalysis.objects.filter(
+                created_by=authUser,
+                created_at__date=today
+            ).order_by('-created_at').first()
+
+            active_bdo_value = analysis_obj.active_bdo if analysis_obj else 0
+            non_active_bdo_value = analysis_obj.non_active_bdo if analysis_obj else 0
+
+            # apply same daily analysis values to each BDM row
+            for bdm_id in grouped_data:
+                grouped_data[bdm_id]["active_bdo"] = active_bdo_value
+                grouped_data[bdm_id]["non_active_bdo"] = non_active_bdo_value
+
+            # calculate order count + volume from selected items
+            for bdm_id, row in grouped_data.items():
+                selection_ids = row["selection_ids"]
+
+                items = BdmOrderSelectionItem.objects.filter(
+                    selection_id__in=selection_ids
+                ).select_related('order')
+
+                row["total_order_count"] = items.count()
+
+                total_volume = Decimal("0.0")
+                for item in items:
+                    if item.order and item.order.total_amount:
+                        total_volume += Decimal(str(item.order.total_amount))
+
+                row["total_volume"] = float(total_volume)
+
+            # calculate call duration from SalesAnalysis for each BDM
+            # mapping rule:
+            # SalesAnalysis.created_by == BdmOrderSelection.bdm
+            for bdm_id, row in grouped_data.items():
+                sales_entries = SalesAnalysis.objects.filter(
+                    created_by_id=bdm_id,
+                    created_at__date=today
+                )
+
+                total_seconds = 0
+                for sale in sales_entries:
+                    total_seconds += parse_duration_to_seconds(sale.call_duration)
+
+                row["total_call_duration_seconds"] = total_seconds
+
+            # final response list
+            response_data = []
+            for _, row in grouped_data.items():
+                response_data.append({
+                    "bdm_id": row["bdm_id"],
+                    "bdm_name": row["bdm_name"],
+                    "active_bdo": row["active_bdo"],
+                    "non_active_bdo": row["non_active_bdo"],
+                    "total_order_count": row["total_order_count"],
+                    "total_volume": row["total_volume"],
+                    "total_call_duration": format_seconds_to_hhmmss(
+                        row["total_call_duration_seconds"]
+                    ),
+                    "selection_ids": row["selection_ids"],
+                })
+
+            serializer = BdmDailyOverallSerializer(response_data, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily BDM overall report fetched successfully",
+                    "date": str(today),
+                    "count": len(serializer.data),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching daily BDM overall report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 # Product Buying from another company/industries - Seller Details
 
 
