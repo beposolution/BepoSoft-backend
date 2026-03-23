@@ -11711,7 +11711,7 @@ def format_seconds_to_hhmmss(total_seconds):
 
 class BdmDailyOverCreatedReportView(BaseTokenView):
     """
-    BDM-wise overall report
+    Date-wise BDM overall report
     Only filtered by logged-in user through created_by fields
     No today/date filter
     """
@@ -11722,10 +11722,9 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
             if error_response:
                 return error_response
 
-            # only created_by = logged-in user
             selections = BdmOrderSelection.objects.filter(
                 created_by=authUser
-            ).select_related('bdm')
+            ).select_related('bdm').order_by('-created_at')
 
             if not selections.exists():
                 return Response(
@@ -11738,85 +11737,103 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            grouped_data = {}
+            grouped_by_date = {}
 
             for selection in selections:
+                created_date = selection.created_at.date()
                 bdm_id = selection.bdm.id
 
-                if bdm_id not in grouped_data:
-                    grouped_data[bdm_id] = {
+                if created_date not in grouped_by_date:
+                    analysis_obj = BDMOrderAnalysis.objects.filter(
+                        created_by=authUser,
+                        created_at__date=created_date
+                    ).order_by('-created_at').first()
+
+                    grouped_by_date[created_date] = {
+                        "created_date": created_date,
+                        "active_bdo": analysis_obj.active_bdo if analysis_obj else 0,
+                        "non_active_bdo": analysis_obj.non_active_bdo if analysis_obj else 0,
+                        "bdm_map": {}
+                    }
+
+                if bdm_id not in grouped_by_date[created_date]["bdm_map"]:
+                    grouped_by_date[created_date]["bdm_map"][bdm_id] = {
                         "bdm_id": selection.bdm.id,
                         "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
                         "selection_ids": [],
                         "total_order_count": 0,
                         "total_volume": 0.0,
                         "total_call_duration_seconds": 0,
-                        "active_bdo": 0,
-                        "non_active_bdo": 0,
                     }
 
-                grouped_data[bdm_id]["selection_ids"].append(selection.id)
+                grouped_by_date[created_date]["bdm_map"][bdm_id]["selection_ids"].append(selection.id)
 
-            # only created_by = logged-in user
-            analysis_obj = BDMOrderAnalysis.objects.filter(
-                created_by=authUser
-            ).order_by('-created_at').first()
+            # order count and total volume
+            for created_date, date_row in grouped_by_date.items():
+                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                    selection_ids = bdm_row["selection_ids"]
 
-            active_bdo_value = analysis_obj.active_bdo if analysis_obj else 0
-            non_active_bdo_value = analysis_obj.non_active_bdo if analysis_obj else 0
+                    items = BdmOrderSelectionItem.objects.filter(
+                        selection_id__in=selection_ids
+                    ).select_related('order')
 
-            for bdm_id in grouped_data:
-                grouped_data[bdm_id]["active_bdo"] = active_bdo_value
-                grouped_data[bdm_id]["non_active_bdo"] = non_active_bdo_value
+                    bdm_row["total_order_count"] = items.count()
 
-            # order count + total volume from selected orders
-            for bdm_id, row in grouped_data.items():
-                selection_ids = row["selection_ids"]
+                    total_volume = Decimal("0.0")
+                    for item in items:
+                        if item.order and item.order.total_amount:
+                            total_volume += Decimal(str(item.order.total_amount))
 
-                items = BdmOrderSelectionItem.objects.filter(
-                    selection_id__in=selection_ids
-                ).select_related('order')
+                    bdm_row["total_volume"] = float(total_volume)
 
-                row["total_order_count"] = items.count()
+            # call duration date-wise for logged-in user
+            for created_date, date_row in grouped_by_date.items():
+                sales_entries = SalesAnalysis.objects.filter(
+                    created_by=authUser,
+                    created_at__date=created_date
+                )
 
-                total_volume = Decimal("0.0")
-                for item in items:
-                    if item.order and item.order.total_amount:
-                        total_volume += Decimal(str(item.order.total_amount))
+                total_seconds = 0
+                for sale in sales_entries:
+                    total_seconds += parse_duration_to_seconds(sale.call_duration)
 
-                row["total_volume"] = float(total_volume)
+                total_call_duration = format_seconds_to_hhmmss(total_seconds)
 
-            # only created_by = logged-in user
-            # NO date filter
-            sales_entries = SalesAnalysis.objects.filter(
-                created_by=authUser
-            )
+                # same logged-in user's call duration applied to each BDM row of that date
+                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                    bdm_row["total_call_duration"] = total_call_duration
 
-            total_seconds = 0
-            for sale in sales_entries:
-                total_seconds += parse_duration_to_seconds(sale.call_duration)
-
-            total_call_duration = format_seconds_to_hhmmss(total_seconds)
-
-            # same logged-in user's call duration applied to each row
             response_data = []
-            for _, row in grouped_data.items():
+            for created_date, date_row in grouped_by_date.items():
+                bdm_data = []
+
+                for _, bdm_row in date_row["bdm_map"].items():
+                    bdm_data.append({
+                        "bdm_id": bdm_row["bdm_id"],
+                        "bdm_name": bdm_row["bdm_name"],
+                        "total_order_count": bdm_row["total_order_count"],
+                        "total_volume": bdm_row["total_volume"],
+                        "total_call_duration": bdm_row["total_call_duration"],
+                    })
+
+                bdm_data = sorted(bdm_data, key=lambda x: x["bdm_id"], reverse=True)
+
                 response_data.append({
-                    "bdm_id": row["bdm_id"],
-                    "bdm_name": row["bdm_name"],
-                    "active_bdo": row["active_bdo"],
-                    "non_active_bdo": row["non_active_bdo"],
-                    "total_order_count": row["total_order_count"],
-                    "total_volume": row["total_volume"],
-                    "total_call_duration": total_call_duration,
-                    "selection_ids": row["selection_ids"],
+                    "created_date": date_row["created_date"],
+                    "active_bdo": date_row["active_bdo"],
+                    "non_active_bdo": date_row["non_active_bdo"],
+                    "bdm_data": bdm_data
                 })
 
-            response_data = sorted(response_data, key=lambda x: x["bdm_id"], reverse=True)
+            response_data = sorted(
+                response_data,
+                key=lambda x: x["created_date"],
+                reverse=True
+            )
 
             paginator = StandardPagination()
             paginated_data = paginator.paginate_queryset(response_data, request)
-            serializer = BdmDailyOverallSerializer(paginated_data, many=True)
+            serializer = BdmDateWiseOverallSerializer(paginated_data, many=True)
 
             return paginator.get_paginated_response({
                 "status": "success",
@@ -11836,17 +11853,14 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
             )
 
 
-
 class BdmDailyOverallReportView(BaseTokenView):
     """
-    BDM-wise overall report
-    No filter
-    Get all data
+    Date-wise BDM overall report
     """
 
     def get(self, request):
         try:
-            selections = BdmOrderSelection.objects.all().select_related('bdm')
+            selections = BdmOrderSelection.objects.select_related('bdm').all().order_by('-created_at')
 
             if not selections.exists():
                 return Response(
@@ -11859,81 +11873,105 @@ class BdmDailyOverallReportView(BaseTokenView):
                     status=status.HTTP_200_OK
                 )
 
-            grouped_data = {}
+            # date-wise grouped structure
+            grouped_by_date = {}
 
             for selection in selections:
+                created_date = selection.created_at.date()
+
+                if created_date not in grouped_by_date:
+                    # get active / non active BDO for that same date
+                    analysis_obj = BDMOrderAnalysis.objects.filter(
+                        created_at__date=created_date
+                    ).order_by('-created_at').first()
+
+                    grouped_by_date[created_date] = {
+                        "created_date": created_date,
+                        "active_bdo": analysis_obj.active_bdo if analysis_obj else 0,
+                        "non_active_bdo": analysis_obj.non_active_bdo if analysis_obj else 0,
+                        "bdm_map": {}
+                    }
+
                 bdm_id = selection.bdm.id
 
-                if bdm_id not in grouped_data:
-                    grouped_data[bdm_id] = {
+                if bdm_id not in grouped_by_date[created_date]["bdm_map"]:
+                    grouped_by_date[created_date]["bdm_map"][bdm_id] = {
                         "bdm_id": selection.bdm.id,
                         "bdm_name": getattr(selection.bdm, "name", str(selection.bdm)),
                         "selection_ids": [],
                         "total_order_count": 0,
                         "total_volume": 0.0,
                         "total_call_duration_seconds": 0,
-                        "active_bdo": 0,
-                        "non_active_bdo": 0,
                     }
 
-                grouped_data[bdm_id]["selection_ids"].append(selection.id)
+                grouped_by_date[created_date]["bdm_map"][bdm_id]["selection_ids"].append(selection.id)
 
-            analysis_obj = BDMOrderAnalysis.objects.all().order_by('-created_at').first()
+            # Calculate order count and total volume
+            for created_date, date_row in grouped_by_date.items():
+                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                    selection_ids = bdm_row["selection_ids"]
 
-            active_bdo_value = analysis_obj.active_bdo if analysis_obj else 0
-            non_active_bdo_value = analysis_obj.non_active_bdo if analysis_obj else 0
+                    items = BdmOrderSelectionItem.objects.filter(
+                        selection_id__in=selection_ids
+                    ).select_related('order')
 
-            for bdm_id in grouped_data:
-                grouped_data[bdm_id]["active_bdo"] = active_bdo_value
-                grouped_data[bdm_id]["non_active_bdo"] = non_active_bdo_value
+                    bdm_row["total_order_count"] = items.count()
 
-            for bdm_id, row in grouped_data.items():
-                selection_ids = row["selection_ids"]
+                    total_volume = Decimal("0.0")
+                    for item in items:
+                        if item.order and item.order.total_amount:
+                            total_volume += Decimal(str(item.order.total_amount))
 
-                items = BdmOrderSelectionItem.objects.filter(
-                    selection_id__in=selection_ids
-                ).select_related('order')
+                    bdm_row["total_volume"] = float(total_volume)
 
-                row["total_order_count"] = items.count()
+            # Calculate total call duration date-wise and BDM-wise
+            for created_date, date_row in grouped_by_date.items():
+                for bdm_id, bdm_row in date_row["bdm_map"].items():
+                    sales_entries = SalesAnalysis.objects.filter(
+                        created_by_id=bdm_id,
+                        created_at__date=created_date
+                    )
 
-                total_volume = Decimal("0.0")
-                for item in items:
-                    if item.order and item.order.total_amount:
-                        total_volume += Decimal(str(item.order.total_amount))
+                    total_seconds = 0
+                    for sale in sales_entries:
+                        total_seconds += parse_duration_to_seconds(sale.call_duration)
 
-                row["total_volume"] = float(total_volume)
+                    bdm_row["total_call_duration_seconds"] = total_seconds
 
-            for bdm_id, row in grouped_data.items():
-                sales_entries = SalesAnalysis.objects.filter(
-                    created_by_id=bdm_id
-                )
-
-                total_seconds = 0
-                for sale in sales_entries:
-                    total_seconds += parse_duration_to_seconds(sale.call_duration)
-
-                row["total_call_duration_seconds"] = total_seconds
-
+            # final response formatting
             response_data = []
-            for _, row in grouped_data.items():
+            for created_date, date_row in grouped_by_date.items():
+                bdm_data = []
+
+                for _, bdm_row in date_row["bdm_map"].items():
+                    bdm_data.append({
+                        "bdm_id": bdm_row["bdm_id"],
+                        "bdm_name": bdm_row["bdm_name"],
+                        "total_order_count": bdm_row["total_order_count"],
+                        "total_volume": bdm_row["total_volume"],
+                        "total_call_duration": format_seconds_to_hhmmss(
+                            bdm_row["total_call_duration_seconds"]
+                        ),
+                    })
+
+                bdm_data = sorted(bdm_data, key=lambda x: x["bdm_id"], reverse=True)
+
                 response_data.append({
-                    "bdm_id": row["bdm_id"],
-                    "bdm_name": row["bdm_name"],
-                    "active_bdo": row["active_bdo"],
-                    "non_active_bdo": row["non_active_bdo"],
-                    "total_order_count": row["total_order_count"],
-                    "total_volume": row["total_volume"],
-                    "total_call_duration": format_seconds_to_hhmmss(
-                        row["total_call_duration_seconds"]
-                    ),
-                    "selection_ids": row["selection_ids"],
+                    "created_date": created_date,
+                    "active_bdo": date_row["active_bdo"],
+                    "non_active_bdo": date_row["non_active_bdo"],
+                    "bdm_data": bdm_data
                 })
 
-            response_data = sorted(response_data, key=lambda x: x["bdm_id"], reverse=True)
+            response_data = sorted(
+                response_data,
+                key=lambda x: x["created_date"],
+                reverse=True
+            )
 
             paginator = StandardPagination()
             paginated_data = paginator.paginate_queryset(response_data, request)
-            serializer = BdmDailyOverallSerializer(paginated_data, many=True)
+            serializer = BdmDateWiseOverallSerializer(paginated_data, many=True)
 
             return paginator.get_paginated_response({
                 "status": "success",
