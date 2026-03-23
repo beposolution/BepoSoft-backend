@@ -307,6 +307,10 @@ urlpatterns = [
     path('api/sales/analysis/edit/<int:pk>/', SalesAnalysisDetailView.as_view(), name='sales-analysis-detail'),
     path('api/sales/analysis/all/', SalesAnalysisListView.as_view(), name='sales-analysis-all'),
     path('api/sales/analysis/family/<int:family_id>/', SalesAnalysisByFamilyView.as_view(), name='sales-analysis-by-family'),
+    path('api/bdm/order/analysis/add/', BDMOrderAnalysisView.as_view(), name='bdm-order-analysis'),
+    path('api/bdm/order/analysis/edit/<int:pk>/', BDMOrderAnalysisDetailView.as_view(), name='bdm-order-analysis-detail'),
+    path('api/bdm/order/selection/add/', BdmOrderSelectionView.as_view(), name='bdm-order-selection'),
+    path('api/bdm/order/selection/edit/<int:pk>/', BdmOrderSelectionDetailView.as_view(), name='bdm-order-selection-detail'),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),

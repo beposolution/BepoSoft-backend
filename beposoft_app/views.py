@@ -11309,7 +11309,366 @@ class SalesAnalysisByFamilyView(BaseTokenView):
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class BDMOrderAnalysisView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            records = BDMOrderAnalysis.objects.filter(
+                created_by=authUser
+            ).order_by('-created_at')
+
+            serializer = BDMOrderAnalysisSerializer(records, many=True)
+            return Response(
+                {
+                    "status": "success",
+                    "message": "BDM order analysis fetched successfully",
+                    "count": records.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching BDM order analysis",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            today = timezone.localdate()
+
+            already_exists = BDMOrderAnalysis.objects.filter(
+                created_by=authUser,
+                created_at__date=today
+            ).exists()
+
+            if already_exists:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "You can only create one BDM order analysis per day"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = BDMOrderAnalysisSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=authUser)
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "BDM order analysis created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating BDM order analysis",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class BDMOrderAnalysisDetailView(BaseTokenView):
+
+    def get_object(self, pk, user):
+        return get_object_or_404(BDMOrderAnalysis, pk=pk, created_by=user)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            record = self.get_object(pk, authUser)
+            serializer = BDMOrderAnalysisSerializer(record)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "BDM order analysis fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching BDM order analysis",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            record = self.get_object(pk, authUser)
+
+            serializer = BDMOrderAnalysisSerializer(record, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "BDM order analysis updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating BDM order analysis",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            record = self.get_object(pk, authUser)
+            record.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "BDM order analysis deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while deleting BDM order analysis",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
+
+
+class BdmOrderSelectionView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            queryset = BdmOrderSelection.objects.filter(
+                created_by=authUser
+            ).order_by('-created_at')
+
+            serializer = BdmOrderSelectionSerializer(queryset, many=True)
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Bdm order selections fetched successfully",
+                    "count": queryset.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching Bdm order selections",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = BdmOrderSelectionSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=authUser)
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Bdm order selection created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating Bdm order selection",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class BdmOrderSelectionDetailView(BaseTokenView):
+
+    def get_object(self, pk, user):
+        return get_object_or_404(BdmOrderSelection, pk=pk, created_by=user)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk, authUser)
+            serializer = BdmOrderSelectionSerializer(obj)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Bdm order selection fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching Bdm order selection",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk, authUser)
+            serializer = BdmOrderSelectionSerializer(obj, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Bdm order selection updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating Bdm order selection",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            obj = self.get_object(pk, authUser)
+            obj.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Bdm order selection deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while deleting Bdm order selection",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Product Buying from another company/industries - Seller Details
 
