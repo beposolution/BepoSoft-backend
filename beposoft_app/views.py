@@ -11312,24 +11312,30 @@ class SalesAnalysisByFamilyView(BaseTokenView):
 
 
 
-class BDMOrderAnalysisView(BaseTokenView):
 
+class BDMOrderAnalysisView(BaseTokenView):
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            records = BDMOrderAnalysis.objects.filter(
-                created_by=authUser
-            ).order_by('-created_at')
+            attendance_date = request.GET.get('attendance_date')
 
-            serializer = BDMOrderAnalysisSerializer(records, many=True)
+            queryset = BDMOrderAnalysisData.objects.filter(
+                created_by=authUser
+            ).prefetch_related('staff_entries__staff').order_by('-attendance_date', '-id')
+
+            if attendance_date:
+                queryset = queryset.filter(attendance_date=attendance_date)
+
+            serializer = BDMOrderAnalysisDataSerializer(queryset, many=True)
+
             return Response(
                 {
                     "status": "success",
                     "message": "BDM order analysis fetched successfully",
-                    "count": records.count(),
+                    "count": queryset.count(),
                     "data": serializer.data
                 },
                 status=status.HTTP_200_OK
@@ -11351,25 +11357,13 @@ class BDMOrderAnalysisView(BaseTokenView):
             if error_response:
                 return error_response
 
-            today = timezone.localdate()
+            serializer = BDMOrderAnalysisDataSerializer(
+                data=request.data,
+                context={'created_by': authUser}
+            )
 
-            already_exists = BDMOrderAnalysis.objects.filter(
-                created_by=authUser,
-                created_at__date=today
-            ).exists()
-
-            if already_exists:
-                return Response(
-                    {
-                        "status": "error",
-                        "message": "You can only create one BDM order analysis per day"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            serializer = BDMOrderAnalysisSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save(created_by=authUser)
+                serializer.save()
                 return Response(
                     {
                         "status": "success",
@@ -11400,9 +11394,12 @@ class BDMOrderAnalysisView(BaseTokenView):
 
 
 class BDMOrderAnalysisDetailView(BaseTokenView):
-
-    def get_object(self, pk, user):
-        return get_object_or_404(BDMOrderAnalysis, pk=pk, created_by=user)
+    def get_object(self, authUser, pk):
+        return get_object_or_404(
+            BDMOrderAnalysisData.objects.prefetch_related('staff_entries__staff'),
+            pk=pk,
+            created_by=authUser
+        )
 
     def get(self, request, pk):
         try:
@@ -11410,8 +11407,8 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            record = self.get_object(pk, authUser)
-            serializer = BDMOrderAnalysisSerializer(record)
+            obj = self.get_object(authUser, pk)
+            serializer = BDMOrderAnalysisDataSerializer(obj)
 
             return Response(
                 {
@@ -11426,7 +11423,7 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             return Response(
                 {
                     "status": "error",
-                    "message": "An error occurred while fetching BDM order analysis",
+                    "message": "An error occurred while fetching BDM order analysis detail",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -11438,9 +11435,14 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            record = self.get_object(pk, authUser)
+            obj = self.get_object(authUser, pk)
 
-            serializer = BDMOrderAnalysisSerializer(record, data=request.data, partial=True)
+            serializer = BDMOrderAnalysisDataSerializer(
+                obj,
+                data=request.data,
+                context={'created_by': authUser}
+            )
+
             if serializer.is_valid():
                 serializer.save()
                 return Response(
@@ -11477,8 +11479,8 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            record = self.get_object(pk, authUser)
-            record.delete()
+            obj = self.get_object(authUser, pk)
+            obj.delete()
 
             return Response(
                 {
@@ -11497,7 +11499,6 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
 
 
 class BdmOrderSelectionView(BaseTokenView):
@@ -11744,7 +11745,7 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                 bdm_id = selection.bdm.id
 
                 if created_date not in grouped_by_date:
-                    analysis_obj = BDMOrderAnalysis.objects.filter(
+                    analysis_obj = BDMOrderAnalysisData.objects.filter(
                         created_by=authUser,
                         created_at__date=created_date
                     ).order_by('-created_at').first()
@@ -11881,7 +11882,7 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                 if created_date not in grouped_by_date:
                     # get active / non active BDO for that same date
-                    analysis_obj = BDMOrderAnalysis.objects.filter(
+                    analysis_obj = BDMOrderAnalysisData.objects.filter(
                         created_at__date=created_date
                     ).order_by('-created_at').first()
 
