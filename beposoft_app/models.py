@@ -1878,7 +1878,6 @@ class BdmOrderSelection(models.Model):
 class BdmOrderSelectionItem(models.Model):
     selection = models.ForeignKey(BdmOrderSelection, on_delete=models.CASCADE, related_name='items')
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='bdm_selection_items')
-    invoice_number = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

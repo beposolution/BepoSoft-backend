@@ -2289,6 +2289,86 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
         ).data
 
 
+
+class BDMOrderAnalysisSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+
+    class Meta:
+        model = BDMOrderAnalysis
+        fields = [
+            'id', 'active_bdo',
+            'non_active_bdo', 'created_by',
+            'created_by_name', 'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+
+
+
+class BdmOrderSelectionItemSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    order_invoice = serializers.CharField(source='order.invoice', read_only=True)
+
+    class Meta:
+        model = BdmOrderSelectionItem
+        fields = [
+            'id',
+            'selection',
+            'order',
+            'order_id',
+            'order_invoice',
+            'invoice_number',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class BdmOrderSelectionSerializer(serializers.ModelSerializer):
+    items = BdmOrderSelectionItemSerializer(many=True, required=False)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    bdm_name = serializers.CharField(source='bdm.name', read_only=True)
+
+    class Meta:
+        model = BdmOrderSelection
+        fields = [
+            'id',
+            'bdm',
+            'bdm_name',
+            'created_by',
+            'created_by_name',
+            'note',
+            'items',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        selection = BdmOrderSelection.objects.create(**validated_data)
+
+        for item_data in items_data:
+            BdmOrderSelectionItem.objects.create(selection=selection, **item_data)
+
+        return selection
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+
+        instance.bdm = validated_data.get('bdm', instance.bdm)
+        instance.note = validated_data.get('note', instance.note)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                BdmOrderSelectionItem.objects.create(selection=instance, **item_data)
+
+        return instance
+
+
 # End of  Reports and Analytics serializers section based on daily sales
 
 
