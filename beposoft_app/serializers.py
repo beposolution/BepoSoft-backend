@@ -2504,8 +2504,9 @@ class BdmDateWiseItemSerializer(serializers.Serializer):
 
 class BdmDateWiseOverallSerializer(serializers.Serializer):
     created_date = serializers.DateField()
-    active_bdo = serializers.IntegerField()
-    non_active_bdo = serializers.IntegerField()
+    bdo_present_count = serializers.IntegerField()
+    bdo_absent_count = serializers.IntegerField()
+    bdo_half_day_count = serializers.IntegerField()
     bdm_data = BdmDateWiseItemSerializer(many=True)
 
 
