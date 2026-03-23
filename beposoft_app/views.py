@@ -11724,9 +11724,53 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
             if error_response:
                 return error_response
 
-            analysis_dates = BDMOrderAnalysisData.objects.filter(
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            bdm_id = request.GET.get("bdm")
+
+            analysis_queryset = BDMOrderAnalysisData.objects.filter(
                 created_by=authUser
-            ).values_list(
+            )
+
+            if start_date:
+                try:
+                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                    analysis_queryset = analysis_queryset.filter(attendance_date__gte=start_date_obj)
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if end_date:
+                try:
+                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+                    analysis_queryset = analysis_queryset.filter(attendance_date__lte=end_date_obj)
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if bdm_id:
+                try:
+                    bdm_id = int(bdm_id)
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "bdm must be a valid integer id"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            analysis_dates = analysis_queryset.values_list(
                 'attendance_date', flat=True
             ).distinct().order_by('-attendance_date')
 
@@ -11749,6 +11793,9 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     analysis__attendance_date=created_date
                 )
 
+                if bdm_id:
+                    attendance_qs = attendance_qs.filter(staff_id=bdm_id)
+
                 bdo_present_count = attendance_qs.filter(status='present').count()
                 bdo_absent_count = attendance_qs.filter(status='absent').count()
                 bdo_half_day_count = attendance_qs.filter(status='half_day').count()
@@ -11758,15 +11805,18 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     created_at__date=created_date
                 ).select_related('bdm', 'bdm__family').order_by('-created_at')
 
+                if bdm_id:
+                    selections = selections.filter(bdm_id=bdm_id)
+
                 bdm_map = {}
 
                 for selection in selections:
                     bdm = selection.bdm
-                    bdm_id = bdm.id
+                    current_bdm_id = bdm.id
                     family = getattr(bdm, 'family', None)
 
-                    if bdm_id not in bdm_map:
-                        bdm_map[bdm_id] = {
+                    if current_bdm_id not in bdm_map:
+                        bdm_map[current_bdm_id] = {
                             "bdm_id": bdm.id,
                             "bdm_name": getattr(bdm, "name", str(bdm)),
                             "family_id": family.id if family else None,
@@ -11778,9 +11828,9 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                             "total_call_duration_seconds": 0,
                         }
 
-                    bdm_map[bdm_id]["selection_ids"].append(selection.id)
+                    bdm_map[current_bdm_id]["selection_ids"].append(selection.id)
 
-                for bdm_id, bdm_row in bdm_map.items():
+                for current_bdm_id, bdm_row in bdm_map.items():
                     selection_ids = bdm_row["selection_ids"]
 
                     items = BdmOrderSelectionItem.objects.filter(
@@ -11797,9 +11847,9 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-                for bdm_id, bdm_row in bdm_map.items():
+                for current_bdm_id, bdm_row in bdm_map.items():
                     sales_entries = SalesAnalysis.objects.filter(
-                        created_by_id=bdm_id,
+                        created_by_id=current_bdm_id,
                         created_at__date=created_date
                     )
 
@@ -11956,9 +12006,64 @@ class BdmDailyOverallReportView(BaseTokenView):
 
     def get(self, request):
         try:
-            analysis_dates = BDMOrderAnalysisData.objects.values_list(
-                'attendance_date', flat=True
-            ).distinct().order_by('-attendance_date')
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            bdm_id = request.GET.get("bdm")
+
+            analysis_queryset = BDMOrderAnalysisData.objects.all()
+
+            if start_date:
+                try:
+                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                    analysis_queryset = analysis_queryset.filter(attendance_date__gte=start_date_obj)
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if end_date:
+                try:
+                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+                    analysis_queryset = analysis_queryset.filter(attendance_date__lte=end_date_obj)
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # optional BDM validation
+            bdm_user = None
+            if bdm_id:
+                try:
+                    bdm_id = int(bdm_id)
+                    bdm_user = User.objects.filter(id=bdm_id).first()
+                    if not bdm_user:
+                        return Response(
+                            {
+                                "status": "error",
+                                "message": "Invalid bdm id"
+                            },
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "bdm must be a valid integer id"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            analysis_dates = analysis_queryset.values_list(
+                "attendance_date", flat=True
+            ).distinct().order_by("-attendance_date")
 
             if not analysis_dates:
                 return Response(
@@ -11978,6 +12083,10 @@ class BdmDailyOverallReportView(BaseTokenView):
                     analysis__attendance_date=created_date
                 )
 
+                # if you want attendance also filtered by selected BDM
+                if bdm_id:
+                    attendance_qs = attendance_qs.filter(staff_id=bdm_id)
+
                 bdo_present_count = attendance_qs.filter(status='present').count()
                 bdo_absent_count = attendance_qs.filter(status='absent').count()
                 bdo_half_day_count = attendance_qs.filter(status='half_day').count()
@@ -11986,15 +12095,18 @@ class BdmDailyOverallReportView(BaseTokenView):
                     created_at__date=created_date
                 ).select_related('bdm', 'bdm__family').order_by('-created_at')
 
+                if bdm_id:
+                    selections = selections.filter(bdm_id=bdm_id)
+
                 bdm_map = {}
 
                 for selection in selections:
                     bdm = selection.bdm
-                    bdm_id = bdm.id
+                    current_bdm_id = bdm.id
                     family = getattr(bdm, 'family', None)
 
-                    if bdm_id not in bdm_map:
-                        bdm_map[bdm_id] = {
+                    if current_bdm_id not in bdm_map:
+                        bdm_map[current_bdm_id] = {
                             "bdm_id": bdm.id,
                             "bdm_name": getattr(bdm, "name", str(bdm)),
                             "family_id": family.id if family else None,
@@ -12006,19 +12118,16 @@ class BdmDailyOverallReportView(BaseTokenView):
                             "total_call_duration_seconds": 0,
                         }
 
-                    bdm_map[bdm_id]["selection_ids"].append(selection.id)
+                    bdm_map[current_bdm_id]["selection_ids"].append(selection.id)
 
-                for bdm_id, bdm_row in bdm_map.items():
+                for current_bdm_id, bdm_row in bdm_map.items():
                     selection_ids = bdm_row["selection_ids"]
 
                     items = BdmOrderSelectionItem.objects.filter(
                         selection_id__in=selection_ids
                     ).select_related('order')
 
-                    # total bill
                     bdm_row["total_bill"] = items.count()
-
-                    # keeping same field also, since your API already uses it
                     bdm_row["total_order_count"] = items.count()
 
                     total_volume = Decimal("0.0")
@@ -12028,9 +12137,9 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-                for bdm_id, bdm_row in bdm_map.items():
+                for current_bdm_id, bdm_row in bdm_map.items():
                     sales_entries = SalesAnalysis.objects.filter(
-                        created_by_id=bdm_id,
+                        created_by_id=current_bdm_id,
                         created_at__date=created_date
                     )
 
