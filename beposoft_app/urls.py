@@ -311,6 +311,7 @@ urlpatterns = [
     path('api/sales/analysis/family/<int:family_id>/', SalesAnalysisByFamilyView.as_view(), name='sales-analysis-by-family'),
     path('api/bdm/order/analysis/add/', BDMOrderAnalysisView.as_view(), name='bdm-order-analysis'),
     path('api/bdm/order/analysis/edit/<int:pk>/', BDMOrderAnalysisDetailView.as_view(), name='bdm-order-analysis-detail'),
+    path('api/bdm/order/analysis/staff/filter/', BDMOrderAnalysisStaffFilterView.as_view(), name='bdm-order-analysis-staff-filter'),
     path('api/bdm/order/selection/add/', BdmOrderSelectionView.as_view(), name='bdm-order-selection'),
     path('api/bdm/order/selection/edit/<int:pk>/', BdmOrderSelectionDetailView.as_view(), name='bdm-order-selection-detail'),
     path('api/bdm/daily/created/report/', BdmDailyOverCreatedReportView.as_view(), name='bdm-daily-overall-report'),
