@@ -212,6 +212,8 @@ urlpatterns = [
 
     path('api/deliverylist/report/<str:date>/',DeliveryListView.as_view()),
     path('api/sold/products/',ProductSalesReportView.as_view()),
+    path("api/category/wise/product/count/", CategoryWiseProductCountView.as_view(), name="category-wise-product-count"),
+    path('api/counts/product/category/wise/', ProductCountByCategoryView.as_view()),
     
     path('api/product/stock/report/',ProductStockReportView.as_view()),
     path('api/finance-report/',FinancereportAPIView.as_view()),

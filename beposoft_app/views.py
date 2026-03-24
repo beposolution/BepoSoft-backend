@@ -5438,6 +5438,148 @@ class ProductSalesReportView(APIView):
         
 
 
+class CategoryWiseProductCountView(APIView):
+    def get(self, request):
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+
+        if not start_date or not end_date:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "start_date and end_date are required"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # validate incoming format only
+            datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        queryset = (
+            OrderItem.objects.filter(
+                order__order_date__gte=start_date,
+                order__order_date__lte=end_date
+            )
+            .values(
+                "product__product_category__id",
+                "product__product_category__category_name"
+            )
+            .annotate(count=Sum("quantity"))
+            .order_by("product__product_category__category_name")
+        )
+
+        data = [
+            {
+                "category_id": item["product__product_category__id"],
+                "category_name": item["product__product_category__category_name"] or "Uncategorized",
+                "count": item["count"] or 0,
+            }
+            for item in queryset
+        ]
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Category-wise product count fetched successfully",
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+
+
+class ProductCountByCategoryView(APIView):
+    def get(self, request):
+        category_id = request.GET.get("category_id")
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+
+        if not category_id:
+            return Response(
+                {"status": "error", "message": "category_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not start_date or not end_date:
+            return Response(
+                {"status": "error", "message": "start_date and end_date are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # NOTE:
+        # Since order_date is CharField in your model,
+        # this works correctly only if order_date is stored as YYYY-MM-DD format.
+        queryset = OrderItem.objects.filter(
+            product__product_category_id=category_id,
+            order__order_date__range=[start_date, end_date]
+        ).select_related("product", "order")
+
+        if not queryset.exists():
+            return Response({
+                "status": "success",
+                "message": "No data found",
+                "count": 0,
+                "data": []
+            }, status=status.HTTP_200_OK)
+
+        grouped_data = queryset.values(
+            "product__id",
+            "product__name",
+            "product__product_category__id",
+            "product__product_category__category_name",
+        ).annotate(
+            total_quantity=Sum("quantity"),
+            order_item_count=Count("id")
+        ).order_by("product__name")
+
+        result = []
+
+        for item in grouped_data:
+            product_id = item["product__id"]
+
+            invoice_list = list(
+                queryset.filter(product_id=product_id)
+                .values_list("order__invoice", flat=True)
+                .distinct()
+            )
+
+            result.append({
+                "product_id": item["product__id"],
+                "product_name": item["product__name"],
+                "category_id": item["product__product_category__id"],
+                "category_name": item["product__product_category__category_name"],
+                "total_quantity": item["total_quantity"] or 0,
+                "order_item_count": item["order_item_count"] or 0,
+                "invoices": invoice_list,
+            })
+
+        return Response({
+            "status": "success",
+            "message": "Product count with invoices fetched successfully",
+            "count": len(result),
+            "filters": {
+                "category_id": category_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            "data": result
+        }, status=status.HTTP_200_OK)
+
+
+
 class StatewiseSalesReport(APIView):
     def get(self, request):
         try:
