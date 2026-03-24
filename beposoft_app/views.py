@@ -5552,7 +5552,7 @@ class ProductCountByCategoryView(APIView):
 
             invoice_list = list(
                 queryset.filter(product_id=product_id)
-                .values_list("order__invoice", flat=True)
+                .values("order__id", "order__invoice")
                 .distinct()
             )
 
