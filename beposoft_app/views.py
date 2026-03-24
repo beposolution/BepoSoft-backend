@@ -11615,11 +11615,31 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
     def delete(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
+
+            staff_id = request.data.get("staff_id")
+
+            if staff_id:
+                staff_entry = get_object_or_404(
+                    BDMOrderAnalysisStaff.objects.select_related('analysis'),
+                    pk=staff_id,
+                    analysis__pk=pk,
+                    analysis__created_by=authUser
+                )
+                staff_entry.delete()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "BDM order analysis staff entry deleted successfully"
+                    },
+                    status=status.HTTP_200_OK
+                )
 
             obj = self.get_object(authUser, pk)
             obj.delete()
@@ -11636,7 +11656,7 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             return Response(
                 {
                     "status": "error",
-                    "message": "An error occurred while deleting BDM order analysis",
+                    "message": "An error occurred while deleting",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
