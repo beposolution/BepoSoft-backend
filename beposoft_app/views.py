@@ -11643,6 +11643,62 @@ class BDMOrderAnalysisDetailView(BaseTokenView):
             )
 
 
+
+
+
+class BDMOrderAnalysisStaffFilterView(APIView):
+    def get(self, request, *args, **kwargs):
+        family_id = request.GET.get('family_id')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        status_param = request.GET.get('status')
+
+        queryset = BDMOrderAnalysisStaff.objects.select_related(
+            'staff',
+            'staff__family',
+            'analysis'
+        ).all()
+
+        if family_id:
+            queryset = queryset.filter(staff__family_id=family_id)
+
+        try:
+            if start_date:
+                start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                queryset = queryset.filter(
+                    analysis__attendance_date__gte=start_date_obj
+                )
+
+            if end_date:
+                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+                queryset = queryset.filter(
+                    analysis__attendance_date__lte=end_date_obj
+                )
+        except ValueError:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        serializer = BDMOrderAnalysisStaffFilterSerializer(queryset, many=True)
+
+        return Response(
+            {
+                "status": "success",
+                "family_id": family_id,
+                "count": queryset.count(),
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+    
+
 class BdmOrderSelectionView(BaseTokenView):
 
     def get(self, request):

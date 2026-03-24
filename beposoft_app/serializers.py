@@ -2433,8 +2433,26 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
                 )
 
         return instance
-    
 
+
+
+class BDMOrderAnalysisStaffFilterSerializer(serializers.ModelSerializer):
+    staff_id = serializers.IntegerField(source='staff.id', read_only=True)
+    staff_name = serializers.CharField(source='staff.name', read_only=True)
+    family_id = serializers.IntegerField(source='staff.family.id', read_only=True)
+    family_name = serializers.CharField(source='staff.family.name', read_only=True)
+    attendance_date = serializers.DateField(source='analysis.attendance_date', read_only=True)
+
+    class Meta:
+        model = BDMOrderAnalysisStaff
+        fields = [
+            'staff_id',
+            'staff_name',
+            'family_id',
+            'family_name',
+            'status',
+            'attendance_date',
+        ]
 
 class BdmOrderSelectionItemSerializer(serializers.ModelSerializer):
     order_id = serializers.IntegerField(source='order.id', read_only=True)
