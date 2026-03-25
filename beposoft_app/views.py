@@ -4499,7 +4499,7 @@ class WarehouseListViewbyDate(BaseTokenView):
 
 
 
-class CategoryWiseProductCountView(BaseTokenView):
+class CategoryWiseProductCountDateView(BaseTokenView):
 
     def get(self, request, date):
         try:
