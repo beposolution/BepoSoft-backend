@@ -12257,7 +12257,6 @@ class BdmDailyOverallReportView(BaseTokenView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # optional BDM validation
             bdm_user = None
             if bdm_id:
                 try:
@@ -12302,7 +12301,6 @@ class BdmDailyOverallReportView(BaseTokenView):
                     analysis__attendance_date=created_date
                 )
 
-                # if you want attendance also filtered by selected BDM
                 if bdm_id:
                     attendance_qs = attendance_qs.filter(staff_id=bdm_id)
 
@@ -12310,6 +12308,11 @@ class BdmDailyOverallReportView(BaseTokenView):
                 bdo_absent_count = attendance_qs.filter(status='absent').count()
                 bdo_half_day_count = attendance_qs.filter(status='half_day').count()
 
+                bdm_map = {}
+
+                # --------------------------------------------------
+                # 1) BUILD BDM MAP FROM ORDER SELECTIONS
+                # --------------------------------------------------
                 selections = BdmOrderSelection.objects.filter(
                     created_at__date=created_date
                 ).select_related('bdm', 'bdm__family').order_by('-created_at')
@@ -12317,10 +12320,11 @@ class BdmDailyOverallReportView(BaseTokenView):
                 if bdm_id:
                     selections = selections.filter(bdm_id=bdm_id)
 
-                bdm_map = {}
-
                 for selection in selections:
                     bdm = selection.bdm
+                    if not bdm:
+                        continue
+
                     current_bdm_id = bdm.id
                     family = getattr(bdm, 'family', None)
 
@@ -12356,18 +12360,44 @@ class BdmDailyOverallReportView(BaseTokenView):
 
                     bdm_row["total_volume"] = float(total_volume)
 
-                for current_bdm_id, bdm_row in bdm_map.items():
-                    sales_entries = SalesAnalysis.objects.filter(
-                        created_by_id=current_bdm_id,
-                        created_at__date=created_date
-                    ).exclude(status='dsr rejected')
+                # --------------------------------------------------
+                # 2) ALSO INCLUDE ALL BDMs FROM SALES ANALYSIS
+                # --------------------------------------------------
+                sales_entries = SalesAnalysis.objects.filter(
+                    created_at__date=created_date
+                ).exclude(status='dsr rejected').select_related(
+                    'created_by',
+                    'created_by__family'
+                )
 
-                    total_seconds = 0
-                    for sale in sales_entries:
-                        if sale.call_duration:
-                            total_seconds += parse_duration_to_seconds(sale.call_duration)
+                if bdm_id:
+                    sales_entries = sales_entries.filter(created_by_id=bdm_id)
 
-                    bdm_row["total_call_duration_seconds"] = total_seconds
+                for sale in sales_entries:
+                    if not sale.created_by:
+                        continue
+
+                    current_bdm_id = sale.created_by.id
+                    bdm = sale.created_by
+                    family = getattr(bdm, 'family', None)
+
+                    if current_bdm_id not in bdm_map:
+                        bdm_map[current_bdm_id] = {
+                            "bdm_id": bdm.id,
+                            "bdm_name": getattr(bdm, "name", str(bdm)),
+                            "family_id": family.id if family else None,
+                            "family_name": family.name if family else "No Family",
+                            "selection_ids": [],
+                            "total_bill": 0,
+                            "total_order_count": 0,
+                            "total_volume": 0.0,
+                            "total_call_duration_seconds": 0,
+                        }
+
+                    if sale.call_duration:
+                        bdm_map[current_bdm_id]["total_call_duration_seconds"] += parse_duration_to_seconds(
+                            sale.call_duration
+                        )
 
                 family_map = {}
 
@@ -12510,7 +12540,6 @@ class BdmDailyOverallReportView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
 
 # Product Buying from another company/industries - Seller Details
 
