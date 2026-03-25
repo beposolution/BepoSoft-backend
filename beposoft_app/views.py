@@ -11731,6 +11731,8 @@ class BdmOrderSelectionView(BaseTokenView):
 
             search = request.GET.get('search', '').strip()
             bdm_id = request.GET.get('bdm', '').strip()
+            start_date = request.GET.get('start_date', '').strip()
+            end_date = request.GET.get('end_date', '').strip()
 
             queryset = BdmOrderSelection.objects.filter(
                 created_by=authUser
@@ -11748,6 +11750,30 @@ class BdmOrderSelectionView(BaseTokenView):
                 queryset = queryset.filter(
                     Q(items__order__invoice__icontains=search)
                 )
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                queryset = queryset.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                queryset = queryset.filter(created_at__date__lte=parsed_end_date)
 
             queryset = queryset.distinct()
 
@@ -11771,6 +11797,7 @@ class BdmOrderSelectionView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
 
     def post(self, request):
         try:
