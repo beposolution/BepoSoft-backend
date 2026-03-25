@@ -11721,26 +11721,46 @@ class BDMOrderAnalysisStaffFilterView(APIView):
 
 class BdmOrderSelectionView(BaseTokenView):
 
+    pagination_class = StandardPagination
+
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
+            search = request.GET.get('search', '').strip()
+            bdm_id = request.GET.get('bdm', '').strip()
+
             queryset = BdmOrderSelection.objects.filter(
                 created_by=authUser
+            ).select_related(
+                'bdm',
+                'created_by'
+            ).prefetch_related(
+                'items__order'
             ).order_by('-created_at')
 
-            serializer = BdmOrderSelectionSerializer(queryset, many=True)
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Bdm order selections fetched successfully",
-                    "count": queryset.count(),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            if bdm_id:
+                queryset = queryset.filter(bdm_id=bdm_id)
+
+            if search:
+                queryset = queryset.filter(
+                    Q(items__order__invoice__icontains=search)
+                )
+
+            queryset = queryset.distinct()
+
+            paginator = self.pagination_class()
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
+            serializer = BdmOrderSelectionSerializer(paginated_queryset, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Bdm order selections fetched successfully",
+                "count": queryset.count(),
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
