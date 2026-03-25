@@ -12069,11 +12069,12 @@ class BdmDailyOverCreatedReportView(BaseTokenView):
                     sales_entries = SalesAnalysis.objects.filter(
                         created_by_id=current_bdm_id,
                         created_at__date=created_date
-                    )
+                    ).exclude(status='dsr rejected')
 
                     total_seconds = 0
                     for sale in sales_entries:
-                        total_seconds += parse_duration_to_seconds(sale.call_duration)
+                        if sale.call_duration:
+                            total_seconds += parse_duration_to_seconds(sale.call_duration)
 
                     bdm_row["total_call_duration_seconds"] = total_seconds
 
@@ -12359,11 +12360,12 @@ class BdmDailyOverallReportView(BaseTokenView):
                     sales_entries = SalesAnalysis.objects.filter(
                         created_by_id=current_bdm_id,
                         created_at__date=created_date
-                    )
+                    ).exclude(status='dsr rejected')
 
                     total_seconds = 0
                     for sale in sales_entries:
-                        total_seconds += parse_duration_to_seconds(sale.call_duration)
+                        if sale.call_duration:
+                            total_seconds += parse_duration_to_seconds(sale.call_duration)
 
                     bdm_row["total_call_duration_seconds"] = total_seconds
 
