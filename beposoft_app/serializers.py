@@ -2270,7 +2270,7 @@ class SalesAnalysisSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'call_duration', 'customer',
             'customer_name', 'call_status', 'invoice',
-            'invoice_number', 'status', 'note', 'state',
+            'invoice_number', 'status', 'note', 'state', 'phone',
             'state_name', 'district', 'district_name', 'product_details',
             'created_by', 'created_by_name','family_id', 'family_name',
             'invoice_amount', 'created_at', 'updated_at',
