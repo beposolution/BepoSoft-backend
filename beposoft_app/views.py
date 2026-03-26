@@ -10869,12 +10869,13 @@ class SalesAnalysisDetailView(BaseTokenView):
             sales_obj = self.get_user_object(pk, user)
             data = request.data.copy()
 
-            allowed_fields = ['customer', 'call_status', 'invoice']
+            allowed_fields = ['customer', 'call_status', 'invoice', 'phone']
             cleaned_data = {key: data.get(key) for key in allowed_fields if key in data}
 
             call_status = cleaned_data.get("call_status", sales_obj.call_status)
             customer_id = cleaned_data.get("customer", sales_obj.customer.id if sales_obj.customer else None)
             invoice_id = cleaned_data.get("invoice", sales_obj.invoice.id if sales_obj.invoice else None)
+            phone = cleaned_data.get("phone", sales_obj.phone)
 
             if call_status == "productive":
                 if not customer_id:
