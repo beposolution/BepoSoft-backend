@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/familys/',FamilyAllView.as_view(),name="familys"),  # completed
     path('api/family/orders/',FamilyBasedOrderGetView.as_view(),name="familys"),
     path('api/family/department/orders/',FamilyBasedBDOBDMOrderGetView.as_view()),
+    path('api/family/bdm/bdo/orders/',BDOBDMFamilyBasedOrderGetView.as_view()),
     path('api/family/update/<int:pk>/',FamilyUpdateView.as_view(),name="family-update"),  # completed
     path('api/country/codes/', CountryCodeView.as_view(), name='country-code'),
     path('api/country/codes/<int:pk>/', CountryCodeDetailView.as_view(), name='country-code-detail'),

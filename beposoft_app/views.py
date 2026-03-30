@@ -6527,6 +6527,103 @@ class FamilyBasedBDOBDMOrderGetView(BaseTokenView):
                 status=500
             )
 
+
+class BDOBDMFamilyBasedOrderGetView(BaseTokenView):
+    def get(self, request):
+        try:
+            # Authenticate user
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "")
+            status_filter = request.GET.get("status", "")
+            staff_filter = request.GET.get("staff", "")
+            start_date = request.GET.get("start_date", "")
+            end_date = request.GET.get("end_date", "")
+
+            # Base queryset
+            orders = Order.objects.select_related(
+                "manage_staff", "customer", "state", "family", "company", "billing_address"
+            ).prefetch_related("warehouse").filter(
+                family=authUser.family.pk,
+                manage_staff__department_id__name__in=["BDO", "BDM"]
+            ).order_by("-id")
+
+            # Search filter
+            if search:
+                if search.isdigit():
+                    orders = orders.filter(invoice__iregex=rf"{search}$")
+                else:
+                    orders = orders.filter(
+                        Q(invoice__icontains=search) |
+                        Q(customer__name__icontains=search)
+                    )
+
+            # Status filter
+            if status_filter:
+                orders = orders.filter(status__iexact=status_filter)
+
+            # Staff filter
+            if staff_filter:
+                orders = orders.filter(manage_staff__name__icontains=staff_filter)
+
+            # Date filters
+            if start_date:
+                orders = orders.filter(order_date__gte=start_date)
+
+            if end_date:
+                orders = orders.filter(order_date__lte=end_date)
+
+            # Counts before pagination
+            invoice_counts = orders.aggregate(
+                invoice_created_count=Count("id", filter=Q(status="Invoice Created")),
+                invoice_approved_count=Count("id", filter=Q(status="Waiting For Confirmation"))
+            )
+
+            # Pagination
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(orders, request)
+
+            serializer = FamilyOrderModelSerilizer(paginated_orders, many=True)
+            results = serializer.data
+
+            # Extra fields
+            for idx, order in enumerate(paginated_orders):
+                family = getattr(order, "family", None)
+
+                results[idx]["family_id"] = family.id if family else None
+                results[idx]["family_name"] = family.name if family else None
+
+                results[idx]["locked_by"] = order.locked_by.username if order.locked_by else None
+                results[idx]["locked_at"] = order.locked_at.isoformat() if order.locked_at else None
+
+            return paginator.get_paginated_response({
+                "invoice_created_count": invoice_counts["invoice_created_count"],
+                "invoice_approved_count": invoice_counts["invoice_approved_count"],
+                "results": results
+            })
+
+        except ObjectDoesNotExist:
+            return Response(
+                {"status": "error", "message": "Orders not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except DatabaseError:
+            return Response(
+                {"status": "error", "message": "Database error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 
 class WarehouseAddView(BaseTokenView):
