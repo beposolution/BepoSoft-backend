@@ -1385,6 +1385,7 @@ class FamilyOrderModelSerilizer(serializers.ModelSerializer):
     family = serializers.CharField(source="family.name")
     billing_address = ShippingAddressView(read_only=True)
     customer = serializers.CharField(source="customer.name", read_only=True)
+    customer = CustomerOrderSerializer(read_only=True)
     customerID = serializers.IntegerField(source="customer.pk", read_only=True)
     warehouse=FamilyOrderWarehouseModelSerilizer(many=True,read_only=True)
     state = serializers.CharField(source="state.name")
