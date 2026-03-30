@@ -6512,7 +6512,7 @@ class FamilyBasedBDOBDMOrderGetView(BaseTokenView):
 
             orders = Order.objects.filter(
                 family=authUser.family.pk,
-                manage_staff__department_id__name__in=["BDO", "BDM"]
+                manage_staff__department_id__name__in=["BDO", "BDM", "SD"]
             ).order_by("-id")
 
             serializer = FamilyOrderModelSerilizer(orders, many=True)
@@ -6547,7 +6547,7 @@ class BDOBDMFamilyBasedOrderGetView(BaseTokenView):
                 "manage_staff", "customer", "state", "family", "company", "billing_address"
             ).prefetch_related("warehouse").filter(
                 family=authUser.family.pk,
-                manage_staff__department_id__name__in=["BDO", "BDM"]
+                manage_staff__department_id__name__in=["BDO", "BDM", "SD"]
             ).order_by("-id")
 
             # Search filter
