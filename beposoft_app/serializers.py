@@ -2633,6 +2633,16 @@ class EmplyeeExitAddSerializer(serializers.ModelSerializer):
         model = EmployeeExit
         fields = "__all__"
 
+    def validate(self, attrs):
+        employee = attrs.get("employee")
+
+        if employee and EmployeeExit.objects.filter(employee=employee).exists():
+            raise serializers.ValidationError({
+                "employee": "Employee exit already exists for this employee. Duplicate entry is not allowed."
+            })
+
+        return attrs
+
 
 class EmplyeeExitViewSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.name", read_only=True)
@@ -2650,7 +2660,7 @@ class EmplyeeExitViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeExit
         fields = [
-            'employee', 'employee_name', 'employee_id', 'employee_department',
+            'id', 'employee', 'employee_name', 'employee_id', 'employee_department',
             'employee_designation', 'employee_date_of_joining', 'exit_date',
             'reason_type', 'exit_reason_note', 'asset_responsibility', 'handover_to',
             'handover_to_name', 'handover_date', 'logistics_clearance', 'logistics_clearance_date',
