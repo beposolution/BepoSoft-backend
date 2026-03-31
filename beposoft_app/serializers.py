@@ -2627,3 +2627,41 @@ class ProductSellerInvoiceListSerializer(serializers.ModelSerializer):
             'total_amount', 'currency', 'currency_name', 'currency_rate',
         ]
 
+
+class EmplyeeExitAddSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeExit
+        fields = "__all__"
+
+
+class EmplyeeExitViewSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.name", read_only=True)
+    employee_id = serializers.CharField(source="employee.staff_id", read_only=True)
+    employee_department = serializers.CharField(source="employee.department_id.name", read_only=True)
+    employee_designation = serializers.CharField(source="employee.designation", read_only=True)
+    employee_date_of_joining = serializers.CharField(source="employee.join_date", read_only=True)
+    handover_to_name = serializers.CharField(source="handover_to.name", read_only=True)
+    logistics_clearance_by_name = serializers.CharField(source="logistics_clearance_by.name", read_only=True)
+    finance_clearance_by_name = serializers.CharField(source="finance_clearance_by.name", read_only=True)
+    hr_clearance_by_name = serializers.CharField(source="hr_clearance_by.name", read_only=True)
+    sales_clearance_by_name = serializers.CharField(source="sales_clearance_by.name", read_only=True)
+    it_clearance_by_name = serializers.CharField(source="it_clearance_by.name", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+    class Meta:
+        model = EmployeeExit
+        fields = [
+            'employee', 'employee_name', 'employee_id', 'employee_department',
+            'employee_designation', 'employee_date_of_joining', 'exit_date',
+            'reason_type', 'exit_reason_note', 'asset_responsibility', 'handover_to',
+            'handover_to_name', 'handover_date', 'logistics_clearance', 'logistics_clearance_date',
+            'logistics_clearance_by', 'logistics_clearance_by_name', 'logistics_clearance_note',
+            'logistics_clearence_signature', 'finance_clearance', 'finance_clearance_date',
+            'finance_clearance_by', 'finance_clearance_by_name', 'finance_clearance_note',
+            'finance_clearance_signature', 'hr_clearance', 'hr_clearance_date', 'hr_clearance_by',
+            'hr_clearance_by_name', 'hr_clearance_note', 'hr_clearance_signature', 'sales_clearance',
+            'sales_clearance_date', 'sales_clearance_by', 'sales_clearance_by_name', 'sales_clearance_note',
+            'sales_clearance_signature', 'it_clearance', 'it_clearance_date', 'it_clearance_by',
+            'it_clearance_by_name', 'it_clearance_note', 'it_clearance_signature', 'employee_signature',
+            'exit_form_date', 'created_by', 'created_by_name', 'created_at', 'updated_at',
+
+        ]

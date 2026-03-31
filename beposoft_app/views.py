@@ -14199,3 +14199,209 @@ class FamilyStateBDOReport(APIView):
                 "status": "error",
                 "message": str(e)
             }, status=500)
+
+
+
+class EmployeeExitCreateListView(BaseTokenView):
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            data = request.data.copy()
+            data["created_by"] = authUser.pk
+
+            serializer = EmplyeeExitAddSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Employee exit created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating employee exit",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            exit_date_from = request.GET.get("exit_date_from", "").strip()
+            exit_date_to = request.GET.get("exit_date_to", "").strip()
+            employee_department = request.GET.get("employee_department", "").strip()
+
+            exits = EmployeeExit.objects.select_related(
+                "employee",
+                "employee__department_id",
+            ).all().order_by("-id")
+
+            if search:
+                exits = exits.filter(
+                    Q(employee__name__icontains=search)
+                )
+
+            if exit_date_from:
+                parsed_exit_date_from = parse_date(exit_date_from)
+                if parsed_exit_date_from:
+                    exits = exits.filter(exit_date__gte=parsed_exit_date_from)
+
+            if exit_date_to:
+                parsed_exit_date_to = parse_date(exit_date_to)
+                if parsed_exit_date_to:
+                    exits = exits.filter(exit_date__lte=parsed_exit_date_to)
+
+
+            if employee_department:
+                if employee_department.isdigit():
+                    exits = exits.filter(employee__department_id_id=int(employee_department))
+                else:
+                    exits = exits.filter(employee__department_id__name__icontains=employee_department)
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(exits, request)
+
+            serializer = EmplyeeExitViewSerializer(page, many=True)
+
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "message": "Employee exit list fetched successfully",
+                    "data": serializer.data
+                }
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching employee exits",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class EmployeeExitDetailView(BaseTokenView):
+    def get_object(self, pk):
+        return get_object_or_404(EmployeeExit, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            employee_exit = self.get_object(pk)
+            serializer = EmplyeeExitAddSerializer(employee_exit)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Employee exit fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching employee exit",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            employee_exit = self.get_object(pk)
+
+            data = request.data.copy()
+            data["created_by"] = authUser.pk
+
+            serializer = EmplyeeExitAddSerializer(employee_exit, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Employee exit updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating employee exit",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            employee_exit = self.get_object(pk)
+            employee_exit.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Employee exit deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while deleting employee exit",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -333,5 +333,8 @@ urlpatterns = [
     path("api/product/seller/invoice/item/delete/<int:item_id>/", ProductSellerInvoiceItemDeleteView.as_view()),
     path("api/product/seller/invoice/item/add/", ProductSellerInvoiceItemAddView.as_view()),
 
+    path('api/employee/exit/add/', EmployeeExitCreateListView.as_view(), name='employee-exit-create-list'),
+    path('api/employee/exit/edit/<int:pk>/', EmployeeExitDetailView.as_view(), name='employee-exit-detail'),
+
 ]
 
