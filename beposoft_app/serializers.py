@@ -2644,6 +2644,12 @@ class EmplyeeExitAddSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class EmplyeeExitUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeExit
+        fields = "__all__"
+
+
 class EmplyeeExitViewSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.name", read_only=True)
     employee_id = serializers.CharField(source="employee.staff_id", read_only=True)
