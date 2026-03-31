@@ -14348,7 +14348,7 @@ class EmployeeExitDetailView(BaseTokenView):
             data = request.data.copy()
             data["created_by"] = authUser.pk
 
-            serializer = EmplyeeExitAddSerializer(employee_exit, data=data, partial=True)
+            serializer = EmplyeeExitUpdateSerializer(employee_exit, data=data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(
