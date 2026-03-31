@@ -2017,3 +2017,56 @@ class ProductSellerInvoiceItem(models.Model):
         self.total = (self.quantity * self.price) - self.discount
         super().save(*args, **kwargs)
 
+
+class EmployeeExit(models.Model):
+    REASON_CHOICES = [
+        ('resignation', 'Resignation'),
+        ('termination', 'Termination'),
+        ('absconding', 'Absconding'),
+    ]
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="employee_exits")
+    exit_date = models.DateField()
+    reason = models.TextField(null=True, blank=True)
+    reason_type = models.CharField(max_length=20, choices=REASON_CHOICES, default='resignation')
+    exit_reason_note = models.TextField(null=True, blank=True)
+    asset_responsibility = models.TextField(null=True, blank=True)
+    handover_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="handover_exits")
+    handover_date = models.DateField(null=True, blank=True)
+    logistics_clearance = models.BooleanField(default=False)
+    logistics_clearance_date = models.DateField(null=True, blank=True)
+    logistics_clearance_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="logistics_clearance_exits")
+    logistics_clearance_note = models.TextField(null=True, blank=True)
+    logistics_clearence_signature = models.ImageField(upload_to='employee_exit/logistics_clearance_signatures/', null=True, blank=True)
+    finance_clearance = models.BooleanField(default=False)
+    finance_clearance_date = models.DateField(null=True, blank=True)
+    finance_clearance_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="finance_clearance_exits")
+    finance_clearance_note = models.TextField(null=True, blank=True)
+    finance_clearance_signature = models.ImageField(upload_to='employee_exit/finance_clearance_signatures/', null=True, blank=True)
+    hr_clearance = models.BooleanField(default=False)
+    hr_clearance_date = models.DateField(null=True, blank=True)
+    hr_clearance_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="hr_clearance_exits")
+    hr_clearance_note = models.TextField(null=True, blank=True)
+    hr_clearance_signature = models.ImageField(upload_to='employee_exit/hr_clearance_signatures/', null=True, blank=True)
+    sales_clearance = models.BooleanField(default=False)
+    sales_clearance_date = models.DateField(null=True, blank=True)
+    sales_clearance_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_clearance_exits")
+    sales_clearance_note = models.TextField(null=True, blank=True)
+    sales_clearance_signature = models.ImageField(upload_to='employee_exit/sales_clearance_signatures/', null=True, blank=True)
+    it_clearance = models.BooleanField(default=False)
+    it_clearance_date = models.DateField(null=True, blank=True)
+    it_clearance_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="it_clearance_exits")
+    it_clearance_note = models.TextField(null=True, blank=True)
+    it_clearance_signature = models.ImageField(upload_to='employee_exit/it_clearance_signatures/', null=True, blank=True)
+    employee_signature = models.ImageField(upload_to='employee_exit/employee_signatures/', null=True, blank=True)
+    exit_form_date = models.DateField(null=True, blank=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="created_employee_exits")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "employee_exit"
+
+    def __str__(self):
+        return f"{self.employee.name} - {self.exit_date} - {self.reason_type}"
+
