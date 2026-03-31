@@ -14316,7 +14316,7 @@ class EmployeeExitDetailView(BaseTokenView):
                 return error_response
 
             employee_exit = self.get_object(pk)
-            serializer = EmplyeeExitAddSerializer(employee_exit)
+            serializer = EmplyeeExitViewSerializer(employee_exit)
 
             return Response(
                 {
