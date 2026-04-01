@@ -2173,6 +2173,190 @@ class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
 
 
 
+class SalesTeamCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesTeam
+        fields = "__all__"
+
+class SalesTeamSerializer(serializers.ModelSerializer):
+    team_leader_name = serializers.CharField(source='team_leader.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+
+    class Meta:
+        model = SalesTeam
+        fields = [
+            'id',
+            'name',
+            'team_leader',
+            'team_leader_name',
+            'created_by',
+            'created_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+
+class SalesTeamMemberCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesTeamMember
+        fields = "__all__"
+
+
+class SalesTeamMemberSerializer(serializers.ModelSerializer):
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+
+    class Meta:
+        model = SalesTeamMember
+        fields = [
+            'id',
+            'team',
+            'team_name',
+            'user',
+            'user_name',
+            'created_by',
+            'created_by_name',
+            'joined_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'joined_at', 'updated_at']
+
+    def validate(self, attrs):
+        team = attrs.get('team')
+        user = attrs.get('user')
+
+        queryset = SalesTeamMember.objects.filter(team=team, user=user)
+
+        if self.instance:
+            queryset = queryset.exclude(id=self.instance.id)
+
+        if queryset.exists():
+            raise serializers.ValidationError("This user is already added to this team.")
+
+        return attrs
+
+
+
+class SalesTeamCDTimeSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SalesTeamCDTime
+        fields = [
+            'id',
+            'day',
+            'time_slot',
+            'from_time',
+            'to_time',
+            'created_by',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        from_time = attrs.get('from_time')
+        to_time = attrs.get('to_time')
+
+        if self.instance:
+            from_time = attrs.get('from_time', self.instance.from_time)
+            to_time = attrs.get('to_time', self.instance.to_time)
+
+        if from_time and to_time and from_time >= to_time:
+            raise serializers.ValidationError({
+                "to_time": "to_time must be greater than from_time."
+            })
+
+        return attrs
+
+
+class SalesTeamCDTimeViewSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+
+    class Meta:
+        model = SalesTeamCDTime
+        fields = [
+            'id',
+            'day',
+            'time_slot',
+            'from_time',
+            'to_time',
+            'created_by',
+            'created_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+
+
+from rest_framework import serializers
+from .models import SalesTeamDailyCDReport
+
+
+class SalesTeamDailyCDReportSerializer(serializers.ModelSerializer):
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    time_slot_day = serializers.CharField(source='time_slots.day', read_only=True)
+    time_slot_name = serializers.CharField(source='time_slots.time_slot', read_only=True)
+    time_slot_from_time = serializers.TimeField(source='time_slots.from_time', read_only=True)
+    time_slot_to_time = serializers.TimeField(source='time_slots.to_time', read_only=True)
+
+    class Meta:
+        model = SalesTeamDailyCDReport
+        fields = [
+            'id',
+            'team',
+            'team_name',
+            'user',
+            'user_name',
+            'time_slots',
+            'time_slot_day',
+            'time_slot_name',
+            'time_slot_from_time',
+            'time_slot_to_time',
+            'date',
+            'cd_time',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        user = attrs.get('user')
+        date = attrs.get('date')
+        team = attrs.get('team')
+        time_slots = attrs.get('time_slots')
+
+        if self.instance:
+            user = attrs.get('user', self.instance.user)
+            date = attrs.get('date', self.instance.date)
+            team = attrs.get('team', self.instance.team)
+            time_slots = attrs.get('time_slots', self.instance.time_slots)
+
+        queryset = SalesTeamDailyCDReport.objects.filter(user=user, date=date)
+        if self.instance:
+            queryset = queryset.exclude(id=self.instance.id)
+
+        if queryset.exists():
+            raise serializers.ValidationError({
+                "user": "This user already has a daily CD report for this date."
+            })
+
+        if team and user:
+            from .models import SalesTeamMember
+            is_member = SalesTeamMember.objects.filter(team=team, user=user).exists()
+            if not is_member:
+                raise serializers.ValidationError({
+                    "user": "This user is not a member of the selected team."
+                })
+
+        if time_slots and 'cd_time' not in attrs:
+            attrs['cd_time'] = f"{time_slots.day} - {time_slots.time_slot} ({time_slots.from_time} to {time_slots.to_time})"
+
+        return attrs
+
 # Reports and Analytics serializers based on daily sales
 
 class DailySalesReportSerializer(serializers.ModelSerializer):

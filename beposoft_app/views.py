@@ -14405,3 +14405,412 @@ class EmployeeExitDetailView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+class SalesTeamListCreateView(BaseTokenView):
+    def get(self, request):
+        try:
+            sales_teams = SalesTeam.objects.all().order_by('-id')
+            serializer = SalesTeamSerializer(sales_teams, many=True)
+            return Response({
+                "success": True,
+                "message": "Sales teams fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user = self.get_user_from_token(request)
+
+            data = request.data.copy()
+            data['created_by'] = user.id
+
+            serializer = SalesTeamCreateSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+                return Response({
+                    "success": True,
+                    "message": "Sales team created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SalesTeamDetailUpdateView(BaseTokenView):
+    def get(self, request, pk):
+        try:
+            sales_team = SalesTeam.objects.get(pk=pk)
+            serializer = SalesTeamSerializer(sales_team)
+            return Response({
+                "success": True,
+                "message": "Sales team fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except SalesTeam.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            sales_team = SalesTeam.objects.get(pk=pk)
+
+            data = request.data.copy()
+            serializer = SalesTeamCreateSerializer(sales_team, data=data, partial=False)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "message": "Sales team updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except SalesTeam.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+class SalesTeamMemberListCreateView(BaseTokenView):
+    def get(self, request):
+        try:
+            members = SalesTeamMember.objects.all().order_by('-id')
+            serializer = SalesTeamMemberSerializer(members, many=True)
+            return Response({
+                "success": True,
+                "message": "Sales team members fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user = self.get_user_from_token(request)
+
+            data = request.data.copy()
+            data['created_by'] = user.id
+
+            serializer = SalesTeamMemberCreateSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+                return Response({
+                    "success": True,
+                    "message": "Sales team member created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SalesTeamMemberDetailUpdateView(BaseTokenView):
+    def get(self, request, pk):
+        try:
+            member = SalesTeamMember.objects.get(pk=pk)
+            serializer = SalesTeamMemberSerializer(member)
+            return Response({
+                "success": True,
+                "message": "Sales team member fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except SalesTeamMember.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team member not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            member = SalesTeamMember.objects.get(pk=pk)
+
+            data = request.data.copy()
+            serializer = SalesTeamMemberCreateSerializer(member, data=data, partial=False)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "message": "Sales team member updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except SalesTeamMember.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team member not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SalesTeamCDTimeListCreateView(BaseTokenView):
+    def get(self, request):
+        try:
+            cd_times = SalesTeamCDTime.objects.all().order_by('-id')
+            serializer = SalesTeamCDTimeViewSerializer(cd_times, many=True)
+            return Response({
+                "success": True,
+                "message": "Sales team CD times fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user = self.get_user_from_token(request)
+
+            data = request.data.copy()
+            data['created_by'] = user.id
+
+            serializer = SalesTeamCDTimeSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(created_by=user)
+                return Response({
+                    "success": True,
+                    "message": "Sales team CD time created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SalesTeamCDTimeDetailUpdateView(BaseTokenView):
+    def get(self, request, pk):
+        try:
+            cd_time = SalesTeamCDTime.objects.get(pk=pk)
+            serializer = SalesTeamCDTimeViewSerializer(cd_time)
+            return Response({
+                "success": True,
+                "message": "Sales team CD time fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except SalesTeamCDTime.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team CD time not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            cd_time = SalesTeamCDTime.objects.get(pk=pk)
+
+            data = request.data.copy()
+            serializer = SalesTeamCDTimeSerializer(cd_time, data=data, partial=False)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "message": "Sales team CD time updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except SalesTeamCDTime.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team CD time not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+class SalesTeamDailyCDReportListCreateView(BaseTokenView):
+    def get(self, request):
+        try:
+            reports = SalesTeamDailyCDReport.objects.all().order_by('-id')
+            serializer = SalesTeamDailyCDReportSerializer(reports, many=True)
+            return Response({
+                "success": True,
+                "message": "Sales team daily CD reports fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            data = request.data.copy()
+
+            serializer = SalesTeamDailyCDReportSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "message": "Sales team daily CD report created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SalesTeamDailyCDReportDetailUpdateView(BaseTokenView):
+    def get(self, request, pk):
+        try:
+            report = SalesTeamDailyCDReport.objects.get(pk=pk)
+            serializer = SalesTeamDailyCDReportSerializer(report)
+            return Response({
+                "success": True,
+                "message": "Sales team daily CD report fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except SalesTeamDailyCDReport.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team daily CD report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        try:
+            report = SalesTeamDailyCDReport.objects.get(pk=pk)
+
+            data = request.data.copy()
+            serializer = SalesTeamDailyCDReportSerializer(report, data=data, partial=False)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "message": "Sales team daily CD report updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "success": False,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except SalesTeamDailyCDReport.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team daily CD report not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        

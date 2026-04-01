@@ -318,6 +318,15 @@ urlpatterns = [
     path('api/bdm/daily/created/report/', BdmDailyOverCreatedReportView.as_view(), name='bdm-daily-overall-report'),
     path('api/bdm/daily/overall/report/', BdmDailyOverallReportView.as_view(), name='bdm-daily-overall-report'),
 
+    path('api/sales/teams/add/', SalesTeamListCreateView.as_view(), name='sales-team-list-create'),
+    path('api/sales/teams/edit/<int:pk>/', SalesTeamDetailUpdateView.as_view(), name='sales-team-detail-update'),
+    path('api/sales/team/members/add/', SalesTeamMemberListCreateView.as_view(), name='sales-team-member-list-create'),
+    path('api/sales/team/members/edit/<int:pk>/', SalesTeamMemberDetailUpdateView.as_view(), name='sales-team-member-detail-update'),
+    path('api/sales/team/cd/times/add/', SalesTeamCDTimeListCreateView.as_view(), name='sales-team-cd-time-list-create'),
+    path('api/sales/team/cd/times/edit/<int:pk>/', SalesTeamCDTimeDetailUpdateView.as_view(), name='sales-team-cd-time-detail-update'),
+    path('api/sales/team/daily/cd/reports/add/', SalesTeamDailyCDReportListCreateView.as_view(), name='sales-team-daily-cd-report-list-create'),
+    path('api/sales/team/daily/cd/reports/edit/<int:pk>/', SalesTeamDailyCDReportDetailUpdateView.as_view(), name='sales-team-daily-cd-report-detail-update'),
+
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
     path("api/currency/edit/<int:currency_id>/", CurrencyDetailView.as_view()),
