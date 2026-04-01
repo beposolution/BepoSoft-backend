@@ -1779,6 +1779,7 @@ class StaffOrderUpdateItem(models.Model):
 class SalesTeam(models.Model):
     name = models.CharField(max_length=100)
     team_leader = models.ForeignKey(User, on_delete=models.CASCADE, related_name="leading_sales_teams")
+    division = models.ForeignKey(Family, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_teams")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_sales_teams")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1806,49 +1807,6 @@ class SalesTeamMember(models.Model):
         return f"{self.user.name} in {self.team.name}"
     
 
-class SalesTeamCDTime(models.Model):
-    DAY_CHOICES = [
-        ('Weekday', 'Weekday'),
-        ('Saturday', 'Saturday')
-    ]
-    TIME_CHOICES = [
-        ('AM', 'AM'),
-        ('PM', 'PM')
-    ]
-    day = models.CharField(max_length=20, choices=DAY_CHOICES, default='Weekday')
-    time_slot = models.CharField(max_length=20, choices=TIME_CHOICES, default='AM')
-    from_time = models.TimeField()
-    to_time = models.TimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_cd_times")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "sales_team_cd_time"
-
-    def __str__(self):
-        return f"{self.day} - {self.time_slot}"
-
-class SalesTeamDailyCDReport(models.Model):
-    team = models.ForeignKey(SalesTeam, on_delete=models.CASCADE, related_name="daily_cd_reports")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="daily_cd_reports")
-    time_slots = models.ForeignKey(SalesTeamCDTime, on_delete=models.CASCADE, related_name="daily_cd_reports")
-    date = models.DateField()
-    cd_time = models.CharField(max_length=100)
-    volume = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    billing = models.CharField(max_length=100, null=True, blank=True)
-    new_conversions = models.CharField(max_length=100, null=True, blank=True)
-    new_customer = models.CharField(max_length=100, null=True, blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="created_daily_cd_reports")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "sales_team_daily_cd_report"
-        unique_together = ("user", "date")
-
-    def __str__(self):
-        return f"{self.user.name} - {self.date} - {self.cd_time}"
 
 # Reports and Analytics models based on daily sales
 
