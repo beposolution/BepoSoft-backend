@@ -14735,11 +14735,15 @@ class SalesTeamDailyCDReportListCreateView(BaseTokenView):
 
     def post(self, request):
         try:
+            created_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
             data = request.data.copy()
 
             serializer = SalesTeamDailyCDReportSerializer(data=data)
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(created_by=created_user)
                 return Response({
                     "success": True,
                     "message": "Sales team daily CD report created successfully",
