@@ -14427,7 +14427,10 @@ class SalesTeamListCreateView(BaseTokenView):
 
     def post(self, request):
         try:
-            user = self.get_user_from_token(request)
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
 
             data = request.data.copy()
             data['created_by'] = user.id
@@ -14481,7 +14484,7 @@ class SalesTeamDetailUpdateView(BaseTokenView):
             sales_team = SalesTeam.objects.get(pk=pk)
 
             data = request.data.copy()
-            serializer = SalesTeamCreateSerializer(sales_team, data=data, partial=False)
+            serializer = SalesTeamCreateSerializer(sales_team, data=data, partial=True)
 
             if serializer.is_valid():
                 serializer.save()
@@ -14530,7 +14533,10 @@ class SalesTeamMemberListCreateView(BaseTokenView):
 
     def post(self, request):
         try:
-            user = self.get_user_from_token(request)
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
 
             data = request.data.copy()
             data['created_by'] = user.id
@@ -14584,7 +14590,7 @@ class SalesTeamMemberDetailUpdateView(BaseTokenView):
             member = SalesTeamMember.objects.get(pk=pk)
 
             data = request.data.copy()
-            serializer = SalesTeamMemberCreateSerializer(member, data=data, partial=False)
+            serializer = SalesTeamMemberCreateSerializer(member, data=data, partial=True)
 
             if serializer.is_valid():
                 serializer.save()
