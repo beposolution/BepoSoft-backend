@@ -14427,7 +14427,10 @@ class SalesTeamListCreateView(BaseTokenView):
 
     def post(self, request):
         try:
-            user = self.get_user_from_token(request)
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
 
             data = request.data.copy()
             data['created_by'] = user.id
