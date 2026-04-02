@@ -14631,22 +14631,55 @@ class SalesTeamDailyReportView(BaseTokenView):
             if error_response:
                 return error_response
 
+            search = request.GET.get('search', '').strip()
+            start_date = request.GET.get('start_date', '').strip()
+            end_date = request.GET.get('end_date', '').strip()
+
             reports = SalesTeamDailyReport.objects.filter(
                 created_by=authUser
             ).select_related(
                 'team', 'created_by', 'state', 'district'
             ).order_by('-id')
 
-            serializer = SalesTeamDailyReportSerializer(reports, many=True)
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Logged-in user sales team daily reports fetched successfully",
-                    "count": reports.count(),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            if search:
+                reports = reports.filter(
+                    Q(team__name__icontains=search) |
+                    Q(created_by__name__icontains=search)
+                )
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__lte=parsed_end_date)
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = SalesTeamDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Logged-in user sales team daily reports fetched successfully",
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
@@ -14774,7 +14807,7 @@ class SalesTeamDailyReportDetailView(BaseTokenView):
 
 class SalesTeamDailyReportAllView(BaseTokenView):
     """
-    GET -> view all reports
+    GET -> view all reports with search, date filters, and pagination
     """
     def get(self, request):
         try:
@@ -14782,21 +14815,54 @@ class SalesTeamDailyReportAllView(BaseTokenView):
             if error_response:
                 return error_response
 
+            search = request.GET.get('search', '').strip()
+            start_date = request.GET.get('start_date', '').strip()
+            end_date = request.GET.get('end_date', '').strip()
+
             reports = SalesTeamDailyReport.objects.all().select_related(
                 'team', 'created_by', 'state', 'district'
             ).order_by('-id')
 
-            serializer = SalesTeamDailyReportSerializer(reports, many=True)
+            if search:
+                reports = reports.filter(
+                    Q(team__name__icontains=search) |
+                    Q(created_by__name__icontains=search)
+                )
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "All sales team daily reports fetched successfully",
-                    "count": reports.count(),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__lte=parsed_end_date)
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+
+            serializer = SalesTeamDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "All sales team daily reports fetched successfully",
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
