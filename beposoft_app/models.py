@@ -1849,6 +1849,8 @@ class SalesTeamMemberDailyReport(models.Model):
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='dsr created')
     call_duration = models.CharField(max_length=50, null=True, blank=True)
     note = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "sales_team_member_daily_report"

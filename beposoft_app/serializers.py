@@ -2270,6 +2270,38 @@ class SalesTeamDailyReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
 
 
+
+class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    district_name = serializers.CharField(source='district.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
+
+    class Meta:
+        model = SalesTeamMemberDailyReport
+        fields = [
+            'id',
+            'team',
+            'team_name',
+            'state',
+            'state_name',
+            'district',
+            'district_name',
+            'created_by',
+            'created_by_name',
+            'invoice',
+            'invoice_number',
+            'phone',
+            'customer_name',
+            'call_status',
+            'status',
+            'call_duration',
+            'note',
+        ]
+        read_only_fields = ['created_by']
+
+
 # Reports and Analytics serializers based on daily sales
 
 class DailySalesReportSerializer(serializers.ModelSerializer):
