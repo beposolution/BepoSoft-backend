@@ -14617,3 +14617,193 @@ class SalesTeamMemberDetailUpdateView(BaseTokenView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
+
+class SalesTeamDailyReportView(BaseTokenView):
+    """
+    GET  -> list only logged-in user's reports
+    POST -> create report and save created_by from token
+    """
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            reports = SalesTeamDailyReport.objects.filter(
+                created_by=authUser
+            ).select_related(
+                'team', 'created_by', 'state', 'district'
+            ).order_by('-id')
+
+            serializer = SalesTeamDailyReportSerializer(reports, many=True)
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Logged-in user sales team daily reports fetched successfully",
+                    "count": reports.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching sales team daily reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = SalesTeamDailyReportSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=authUser)
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Sales team daily report created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating sales team daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SalesTeamDailyReportDetailView(BaseTokenView):
+    """
+    GET by id
+    PUT by id
+    """
+    def get_object(self, pk):
+        return get_object_or_404(SalesTeamDailyReport, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk)
+            serializer = SalesTeamDailyReportSerializer(report)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Sales team daily report fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching sales team daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk)
+
+            serializer = SalesTeamDailyReportSerializer(report, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Sales team daily report updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating sales team daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SalesTeamDailyReportAllView(BaseTokenView):
+    """
+    GET -> view all reports
+    """
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            reports = SalesTeamDailyReport.objects.all().select_related(
+                'team', 'created_by', 'state', 'district'
+            ).order_by('-id')
+
+            serializer = SalesTeamDailyReportSerializer(reports, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "All sales team daily reports fetched successfully",
+                    "count": reports.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching all sales team daily reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

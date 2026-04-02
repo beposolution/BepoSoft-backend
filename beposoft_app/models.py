@@ -1778,9 +1778,9 @@ class StaffOrderUpdateItem(models.Model):
 
 class SalesTeam(models.Model):
     name = models.CharField(max_length=100)
-    team_leader = models.ForeignKey(User, on_delete=models.CASCADE, related_name="leading_sales_teams")
+    team_leader = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="leading_sales_teams")
     division = models.ForeignKey(Family, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_teams")
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_sales_teams")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="created_sales_teams")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1806,6 +1806,55 @@ class SalesTeamMember(models.Model):
     def __str__(self):
         return f"{self.user.name} in {self.team.name}"
     
+
+
+class SalesTeamDailyReport(models.Model):
+    team = models.ForeignKey(SalesTeam, on_delete=models.CASCADE, null=True, blank=True, related_name="daily_reports")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_sales_team_reports")
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="sales_team_daily_reports")
+    district = models.ForeignKey(Districts, on_delete=models.CASCADE, related_name="sales_team_daily_reports")
+    unbilled = models.IntegerField(default=0)
+    billed = models.IntegerField(default=0)
+    new_customers = models.IntegerField(default=0)
+    new_conversions = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "sales_team_daily_report"
+
+    def __str__(self):
+        return f"Daily Report for {self.team.name} by {self.created_by.name}"
+    
+
+class SalesTeamMemberDailyReport(models.Model):
+    STATUS_CHOICES = [
+        ('dsr created', 'DSR Created'),
+        ('dsr approved', 'DSR Approved'),
+        ('dsr confirmed', 'DSR Confirmed'),
+        ('dsr rejected', 'DSR Rejected'),
+    ]
+    CALL_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('productive', 'Productive'),
+    ]
+    team = models.ForeignKey(SalesTeam, on_delete=models.CASCADE, null=True, blank=True, related_name="member_daily_reports")
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="sales_team_member_daily_reports")
+    district = models.ForeignKey(Districts, on_delete=models.CASCADE, related_name="sales_team_member_daily_reports")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_sales_team_member_reports")
+    invoice = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, related_name="sales_team_member_daily_reports")
+    phone = models.CharField(max_length=100, null=True, blank=True)
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    call_status = models.CharField(max_length=50, choices=CALL_STATUS_CHOICES, default='active')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='dsr created')
+    call_duration = models.CharField(max_length=50, null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "sales_team_member_daily_report"
+
+    def __str__(self):
+        return f"Member Daily Report for {self.created_by.name} - Invoice: {self.invoice.invoice if self.invoice else 'N/A'}"
 
 
 # Reports and Analytics models based on daily sales
