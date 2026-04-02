@@ -14641,14 +14641,12 @@ class SalesTeamDailyReportView(BaseTokenView):
                 'team', 'created_by', 'state', 'district'
             ).order_by('-id')
 
-            # Search filter
             if search:
                 reports = reports.filter(
                     Q(team__name__icontains=search) |
                     Q(created_by__name__icontains=search)
                 )
 
-            # Date filters on created_at
             if start_date:
                 parsed_start_date = parse_date(start_date)
                 if not parsed_start_date:
@@ -14673,16 +14671,15 @@ class SalesTeamDailyReportView(BaseTokenView):
                     )
                 reports = reports.filter(created_at__date__lte=parsed_end_date)
 
-            serializer = SalesTeamDailyReportSerializer(reports, many=True)
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Logged-in user sales team daily reports fetched successfully",
-                    "count": reports.count(),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = SalesTeamDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Logged-in user sales team daily reports fetched successfully",
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
@@ -14810,7 +14807,7 @@ class SalesTeamDailyReportDetailView(BaseTokenView):
 
 class SalesTeamDailyReportAllView(BaseTokenView):
     """
-    GET -> view all reports
+    GET -> view all reports with search, date filters, and pagination
     """
     def get(self, request):
         try:
@@ -14856,17 +14853,16 @@ class SalesTeamDailyReportAllView(BaseTokenView):
                     )
                 reports = reports.filter(created_at__date__lte=parsed_end_date)
 
-            serializer = SalesTeamDailyReportSerializer(reports, many=True)
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "All sales team daily reports fetched successfully",
-                    "count": reports.count(),
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            serializer = SalesTeamDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "All sales team daily reports fetched successfully",
+                "data": serializer.data
+            })
 
         except Exception as e:
             return Response(
