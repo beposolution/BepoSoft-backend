@@ -322,6 +322,7 @@ urlpatterns = [
     path('api/sales/teams/edit/<int:pk>/', SalesTeamDetailUpdateView.as_view(), name='sales-team-detail-update'),
     path('api/sales/team/members/add/', SalesTeamMemberListCreateView.as_view(), name='sales-team-member-list-create'),
     path('api/sales/team/members/edit/<int:pk>/', SalesTeamMemberDetailUpdateView.as_view(), name='sales-team-member-detail-update'),
+    path('api/my/sales/team/', MySalesTeamView.as_view(), name='my-sales-team'),
     path('api/sales/team/daily/report/add/', SalesTeamDailyReportView.as_view(), name='sales-team-daily-report'),
     path('api/sales/team/daily/report/edit/<int:pk>/', SalesTeamDailyReportDetailView.as_view(), name='sales-team-daily-report-detail'),
     path('api/sales/team/daily/report/all/', SalesTeamDailyReportAllView.as_view(), name='sales-team-daily-report-all'),

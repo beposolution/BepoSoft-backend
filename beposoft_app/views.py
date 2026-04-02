@@ -15271,3 +15271,50 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+class MySalesTeamView(BaseTokenView):
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team_member = SalesTeamMember.objects.select_related(
+                'team',
+                'team__team_leader',
+                'team__division',
+                'team__created_by'
+            ).filter(user=user).first()
+
+            if not team_member:
+                return Response(
+                    {
+                        "success": False,
+                        "message": "User is not assigned to any sales team"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = SalesTeamSerializer(team_member.team)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Sales team fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Something went wrong",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
