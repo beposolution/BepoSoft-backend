@@ -14873,3 +14873,401 @@ class SalesTeamDailyReportAllView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class SalesTeamMemberDailyReportView(BaseTokenView):
+    """
+    GET  -> logged-in user's own reports (created_by from token)
+    POST -> create report and save created_by from token
+    """
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            call_status = request.GET.get("call_status", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            state = request.GET.get("state", "").strip()
+            district = request.GET.get("district", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            reports = SalesTeamMemberDailyReport.objects.select_related(
+                'team',
+                'state',
+                'district',
+                'created_by',
+                'invoice',
+            ).filter(
+                created_by=authUser
+            ).order_by('-id')
+
+            if search:
+                reports = reports.filter(
+                    Q(customer_name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(invoice__invoice__icontains=search)
+                )
+
+            if call_status:
+                reports = reports.filter(call_status__iexact=call_status)
+
+            if status_filter:
+                reports = reports.filter(status__iexact=status_filter)
+
+            if state:
+                reports = reports.filter(state__name__icontains=state)
+
+            if district:
+                reports = reports.filter(district__name__icontains=district)
+
+            parsed_start_date = None
+            parsed_end_date = None
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__lte=parsed_end_date)
+
+            if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = SalesTeamMemberDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Your daily reports fetched successfully",
+                "data": serializer.data
+            })
+
+        except DatabaseError as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred while fetching reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching your daily reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = SalesTeamMemberDailyReportSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(created_by=authUser)
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Daily report created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except DatabaseError as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred while creating report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SalesTeamMemberDailyReportDetailView(BaseTokenView):
+    """
+    GET    -> single report only if created_by = logged-in user
+    PUT    -> update single report only if created_by = logged-in user
+    DELETE -> delete single report only if created_by = logged-in user
+    """
+
+    def get_object(self, pk, authUser):
+        return get_object_or_404(
+            SalesTeamMemberDailyReport.objects.select_related(
+                'team',
+                'state',
+                'district',
+                'created_by',
+                'invoice',
+            ),
+            pk=pk,
+            created_by=authUser
+        )
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk, authUser)
+            serializer = SalesTeamMemberDailyReportSerializer(report)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily report fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk, authUser)
+            serializer = SalesTeamMemberDailyReportSerializer(report, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save(created_by=authUser)
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Daily report updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            report = self.get_object(pk, authUser)
+            report.delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Daily report deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while deleting daily report",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+class SalesTeamMemberDailyReportAllView(BaseTokenView):
+    """
+    GET -> all reports with pagination"""
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            call_status = request.GET.get("call_status", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            state = request.GET.get("state", "").strip()
+            district = request.GET.get("district", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            reports = SalesTeamMemberDailyReport.objects.select_related(
+                'team',
+                'state',
+                'district',
+                'created_by',
+                'invoice',
+            ).all().order_by('-id')
+
+            if search:
+                reports = reports.filter(
+                    Q(customer_name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(invoice__invoice__icontains=search) |
+                    Q(created_by__name__icontains=search)
+                )
+
+            if call_status:
+                reports = reports.filter(call_status__iexact=call_status)
+
+            if status_filter:
+                reports = reports.filter(status__iexact=status_filter)
+
+            if created_by:
+                reports = reports.filter(created_by__name__icontains=created_by)
+
+            if state:
+                reports = reports.filter(state__name__icontains=state)
+
+            if district:
+                reports = reports.filter(district__name__icontains=district)
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__lte=parsed_end_date)
+
+            if start_date and end_date:
+                if parsed_start_date > parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "start_date cannot be greater than end_date"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = SalesTeamMemberDailyReportSerializer(page, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "All daily reports fetched successfully",
+                "data": serializer.data
+            })
+
+        except DatabaseError as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred while fetching all reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching all daily reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
