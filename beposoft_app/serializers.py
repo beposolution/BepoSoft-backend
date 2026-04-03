@@ -2242,6 +2242,37 @@ class SalesTeamMemberSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class SalesTeamMemberMiniSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.name', read_only=True)
+
+    class Meta:
+        model = SalesTeamMember
+        fields = ['id', 'user', 'user_name', 'joined_at']
+
+
+class MySalesTeamListSerializer(serializers.ModelSerializer):
+    team_leader_name = serializers.CharField(source='team_leader.name', read_only=True)
+    division_name = serializers.CharField(source='division.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    members = SalesTeamMemberMiniSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesTeam
+        fields = [
+            'id',
+            'name',
+            'team_leader',
+            'team_leader_name',
+            'division',
+            'division_name',
+            'created_by',
+            'created_by_name',
+            'created_at',
+            'updated_at',
+            'members',
+        ]
+
+
 
 class SalesTeamDailyReportSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(source='team.name', read_only=True)
@@ -2303,18 +2334,18 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_by']
 
 
-# class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = SalesTeamMemberDailyReport
-#         fields = ['status']
+class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesTeamMemberDailyReport
+        fields = ['status']
 
-#     def validate_status(self, value):
-#         valid_choices = [choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES]
-#         if value not in valid_choices:
-#             raise serializers.ValidationError(
-#                 f"Invalid status. Allowed values are: {', '.join(valid_choices)}"
-#             )
-#         return value
+    def validate_status(self, value):
+        valid_choices = [choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES]
+        if value not in valid_choices:
+            raise serializers.ValidationError(
+                f"Invalid status. Allowed values are: {', '.join(valid_choices)}"
+            )
+        return value
 
 
 # Reports and Analytics serializers based on daily sales

@@ -330,8 +330,8 @@ urlpatterns = [
     path('api/sales/team/member/daily/report/edit/<int:pk>/', SalesTeamMemberDailyReportDetailView.as_view(), name='sales-team-member-daily-report-detail'),
     path('api/sales/team/member/daily/report/all/', SalesTeamMemberDailyReportAllView.as_view(), name='sales-team-member-daily-report-all'),
     path('api/sales/team/<int:team_id>/members/list/', SalesTeamMembersByTeamView.as_view(), name='sales-team-members-by-team'),
-    # path('api/sales/team/summary/report/', SalesTeamSummaryReportView.as_view(), name='sales-team-summary-report'),
-    # path('api/sales/team/member/daily/report/status/<int:pk>/', SalesTeamMemberDailyReportStatusUpdateView.as_view(), name='sales-team-member-daily-report-status-update'),
+    path('api/sales/team/summary/report/', SalesTeamSummaryReportView.as_view(), name='sales-team-summary-report'),
+    path('api/sales/team/member/daily/report/status/<int:pk>/', SalesTeamMemberDailyReportStatusUpdateView.as_view(), name='sales-team-member-daily-report-status-update'),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
