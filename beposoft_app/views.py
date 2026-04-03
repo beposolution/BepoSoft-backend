@@ -15392,7 +15392,8 @@ class SalesTeamSummaryReportView(BaseTokenView):
         if not created_at:
             return None
 
-        hour = created_at.hour
+        local_created_at = timezone.localtime(created_at)
+        hour = local_created_at.hour
 
         if hour == 9:
             return "09:00-10:00"
@@ -15422,15 +15423,42 @@ class SalesTeamSummaryReportView(BaseTokenView):
             return 0
 
         try:
-            # remove spaces
-            value = str(value).strip()
+            value = str(value).strip().lower()
 
-            # if pure number
+            # Pure integer seconds like "120"
             if value.isdigit():
                 return int(value)
 
-            # if decimal like 30.0
-            return int(float(value))
+            # Float seconds like "120.0"
+            try:
+                return int(float(value))
+            except:
+                pass
+
+            # HH:MM:SS -> "02:04:07"
+            if re.match(r'^\d{1,2}:\d{1,2}:\d{1,2}$', value):
+                h, m, s = map(int, value.split(':'))
+                return h * 3600 + m * 60 + s
+
+            # MM:SS -> "04:07"
+            if re.match(r'^\d{1,2}:\d{1,2}$', value):
+                m, s = map(int, value.split(':'))
+                return m * 60 + s
+
+            # Text formats like "2 min 30 sec"
+            hours = re.search(r'(\d+)\s*h(?:our)?s?', value)
+            minutes = re.search(r'(\d+)\s*m(?:in)?s?', value)
+            seconds = re.search(r'(\d+)\s*s(?:ec)?s?', value)
+
+            total = 0
+            if hours:
+                total += int(hours.group(1)) * 3600
+            if minutes:
+                total += int(minutes.group(1)) * 60
+            if seconds:
+                total += int(seconds.group(1))
+
+            return total
 
         except:
             return 0
@@ -15651,12 +15679,14 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
                 bucket = grouped[team_key]["members"][member_key]["states"][state_key]
 
-                duration_value = self.parse_call_duration(item.call_duration)
-                bucket["total_call_duration"] += duration_value
+                duration_value_seconds = self.parse_call_duration(item.call_duration)
+                duration_value_minutes = round(duration_value_seconds / 60, 2)
+
+                bucket["total_call_duration"] += duration_value_minutes
 
                 slot_key = self.get_hour_slot_key(item.created_at)
                 if slot_key:
-                    bucket["hourly_durations"][slot_key] += duration_value
+                    bucket["hourly_durations"][slot_key] += duration_value_minutes
 
                 if item.invoice_id:
                     bucket["billing"] += 1

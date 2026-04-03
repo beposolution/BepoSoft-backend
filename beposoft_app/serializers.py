@@ -2330,6 +2330,7 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             'status',
             'call_duration',
             'note',
+            'created_at',
         ]
         read_only_fields = ['created_by']
 
