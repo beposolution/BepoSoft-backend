@@ -9,7 +9,7 @@ import itertools
 from .serializers import *
 from .models import User
 from django.contrib.auth.hashers import check_password, make_password
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, date
 from django.db.models import Q, Value
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from django.contrib.auth import authenticate
@@ -27,7 +27,6 @@ import pandas as pd
 import os
 from django.utils import timezone
 from django.shortcuts import render
-from datetime import date
 from rest_framework.pagination import PageNumberPagination
 from bepocart.models import *
 from django.core.files.base import ContentFile
@@ -15318,3 +15317,495 @@ class MySalesTeamView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class SalesTeamMembersByTeamView(BaseTokenView):
+    def get(self, request, team_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team = SalesTeam.objects.filter(id=team_id).first()
+            if not team:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Sales team not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            members = SalesTeamMember.objects.filter(team_id=team_id).select_related(
+                'team', 'user', 'created_by'
+            ).order_by('-id')
+
+            serializer = SalesTeamMemberSerializer(members, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Team members fetched successfully",
+                    "team_id": team.id,
+                    "team_name": team.name,
+                    "count": members.count(),
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching team members",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+# class SalesTeamSummaryReportView(BaseTokenView):
+#     """
+#     GET summary report like sheet format
+
+#     Filters:
+#     - status
+#     - start_date
+#     - end_date
+#     - team
+#     - created_by
+#     - state
+#     """
+
+#     HOURLY_SLOTS = [
+#         "09:00-10:00",
+#         "10:00-11:00",
+#         "11:00-12:00",
+#         "12:00-01:00",
+#         "01:00-02:00",
+#         "02:00-03:00",
+#         "03:00-04:00",
+#         "04:00-05:00",
+#         "05:00-06:00",
+#         "06:00-07:00",
+#     ]
+
+#     def get_hour_slot_key(self, created_at):
+#         if not created_at:
+#             return None
+
+#         hour = created_at.hour
+
+#         if hour == 9:
+#             return "09:00-10:00"
+#         elif hour == 10:
+#             return "10:00-11:00"
+#         elif hour == 11:
+#             return "11:00-12:00"
+#         elif hour == 12:
+#             return "12:00-01:00"
+#         elif hour == 13:
+#             return "01:00-02:00"
+#         elif hour == 14:
+#             return "02:00-03:00"
+#         elif hour == 15:
+#             return "03:00-04:00"
+#         elif hour == 16:
+#             return "04:00-05:00"
+#         elif hour == 17:
+#             return "05:00-06:00"
+#         elif hour == 18:
+#             return "06:00-07:00"
+
+#         return None
+
+#     def parse_call_duration(self, value):
+#         if not value:
+#             return 0
+
+#         try:
+#             # remove spaces
+#             value = str(value).strip()
+
+#             # if pure number
+#             if value.isdigit():
+#                 return int(value)
+
+#             # if decimal like 30.0
+#             return int(float(value))
+
+#         except:
+#             return 0
+
+#     def get_empty_slot_dict(self):
+#         return {
+#             "09:00-10:00": 0,
+#             "10:00-11:00": 0,
+#             "11:00-12:00": 0,
+#             "12:00-01:00": 0,
+#             "01:00-02:00": 0,
+#             "02:00-03:00": 0,
+#             "03:00-04:00": 0,
+#             "04:00-05:00": 0,
+#             "05:00-06:00": 0,
+#             "06:00-07:00": 0,
+#         }
+
+#     def get(self, request):
+#         try:
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+
+#             status_filter = request.GET.get("status", "").strip()
+#             start_date = request.GET.get("start_date", "").strip()
+#             end_date = request.GET.get("end_date", "").strip()
+#             team_id = request.GET.get("team", "").strip()
+#             created_by_id = request.GET.get("created_by", "").strip()
+#             state_id = request.GET.get("state", "").strip()
+#             search = request.GET.get("search", "").strip()
+
+#             valid_statuses = [choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES]
+#             if status_filter and status_filter not in valid_statuses:
+#                 return Response(
+#                     {
+#                         "status": "error",
+#                         "message": f"Invalid status. Allowed values are: {', '.join(valid_statuses)}"
+#                     },
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+
+#             parsed_start_date = None
+#             parsed_end_date = None
+
+#             if start_date:
+#                 parsed_start_date = parse_date(start_date)
+#                 if not parsed_start_date:
+#                     return Response(
+#                         {
+#                             "status": "error",
+#                             "message": "Invalid start_date format. Use YYYY-MM-DD"
+#                         },
+#                         status=status.HTTP_400_BAD_REQUEST
+#                     )
+
+#             if end_date:
+#                 parsed_end_date = parse_date(end_date)
+#                 if not parsed_end_date:
+#                     return Response(
+#                         {
+#                             "status": "error",
+#                             "message": "Invalid end_date format. Use YYYY-MM-DD"
+#                         },
+#                         status=status.HTTP_400_BAD_REQUEST
+#                     )
+
+#             if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+#                 return Response(
+#                     {
+#                         "status": "error",
+#                         "message": "start_date cannot be greater than end_date"
+#                     },
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+
+#             team_daily_qs = SalesTeamDailyReport.objects.select_related(
+#                 'team', 'created_by', 'state', 'district'
+#             ).all().order_by('-id')
+
+#             member_daily_qs = SalesTeamMemberDailyReport.objects.select_related(
+#                 'team', 'state', 'district', 'created_by', 'invoice'
+#             ).all().order_by('-id')
+
+#             if team_id:
+#                 team_daily_qs = team_daily_qs.filter(team_id=team_id)
+#                 member_daily_qs = member_daily_qs.filter(team_id=team_id)
+
+#             if created_by_id:
+#                 team_daily_qs = team_daily_qs.filter(created_by_id=created_by_id)
+#                 member_daily_qs = member_daily_qs.filter(created_by_id=created_by_id)
+
+#             if state_id:
+#                 team_daily_qs = team_daily_qs.filter(state_id=state_id)
+#                 member_daily_qs = member_daily_qs.filter(state_id=state_id)
+
+#             if parsed_start_date:
+#                 team_daily_qs = team_daily_qs.filter(created_at__date__gte=parsed_start_date)
+#                 member_daily_qs = member_daily_qs.filter(created_at__date__gte=parsed_start_date)
+
+#             if parsed_end_date:
+#                 team_daily_qs = team_daily_qs.filter(created_at__date__lte=parsed_end_date)
+#                 member_daily_qs = member_daily_qs.filter(created_at__date__lte=parsed_end_date)
+
+#             if status_filter:
+#                 member_daily_qs = member_daily_qs.filter(status=status_filter)
+
+#             if search:
+#                 member_daily_qs = member_daily_qs.filter(
+#                     Q(customer_name__icontains=search) |
+#                     Q(phone__icontains=search) |
+#                     Q(note__icontains=search) |
+#                     Q(created_by__name__icontains=search) |
+#                     Q(state__name__icontains=search) |
+#                     Q(district__name__icontains=search) |
+#                     Q(team__name__icontains=search)
+#                 )
+
+#             grouped = {}
+
+#             grand_totals = {
+#                 "team_unbilled": 0,
+#                 "total_unbilled": 0,
+#                 "unbilled_to_billed": 0,
+#                 "new_customer": 0,
+#                 "new_conversion": 0,
+#                 "billing": 0,
+#                 "volume": 0,
+#                 "total_call_duration": 0,
+#                 "hourly_durations": self.get_empty_slot_dict()
+#             }
+
+#             # Build from SalesTeamDailyReport
+#             for item in team_daily_qs:
+#                 team_key = item.team.id if item.team else 0
+#                 team_name = item.team.name if item.team else "No Team"
+
+#                 if team_key not in grouped:
+#                     grouped[team_key] = {
+#                         "team_id": item.team.id if item.team else None,
+#                         "team_name": team_name,
+#                         "team_unbilled": 0,
+#                         "members": {}
+#                     }
+
+#                 grouped[team_key]["team_unbilled"] += item.unbilled or 0
+
+#                 member_key = item.created_by.id
+#                 state_key = f"{item.state.id}_{member_key}"
+
+#                 if member_key not in grouped[team_key]["members"]:
+#                     grouped[team_key]["members"][member_key] = {
+#                         "created_by_id": item.created_by.id,
+#                         "created_by_name": item.created_by.name,
+#                         "states": {}
+#                     }
+
+#                 if state_key not in grouped[team_key]["members"][member_key]["states"]:
+#                     grouped[team_key]["members"][member_key]["states"][state_key] = {
+#                         "state_id": item.state.id,
+#                         "state_name": item.state.name,
+#                         "district_id": item.district.id if item.district else None,
+#                         "district_name": item.district.name if item.district else None,
+#                         "total_unbilled": 0,
+#                         "unbilled_to_billed": 0,
+#                         "new_customer": 0,
+#                         "new_conversion": 0,
+#                         "billing": 0,
+#                         "volume": 0,
+#                         "total_call_duration": 0,
+#                         "hourly_durations": self.get_empty_slot_dict()
+#                     }
+
+#                 bucket = grouped[team_key]["members"][member_key]["states"][state_key]
+#                 bucket["total_unbilled"] += item.unbilled or 0
+#                 bucket["unbilled_to_billed"] += item.billed or 0
+#                 bucket["new_customer"] += item.new_customers or 0
+#                 bucket["new_conversion"] += item.new_conversions or 0
+
+#             # Add member daily report durations and billing
+#             for item in member_daily_qs:
+#                 team_key = item.team.id if item.team else 0
+#                 team_name = item.team.name if item.team else "No Team"
+
+#                 if team_key not in grouped:
+#                     grouped[team_key] = {
+#                         "team_id": item.team.id if item.team else None,
+#                         "team_name": team_name,
+#                         "team_unbilled": 0,
+#                         "members": {}
+#                     }
+
+#                 member_key = item.created_by.id
+#                 state_key = f"{item.state.id}_{member_key}"
+
+#                 if member_key not in grouped[team_key]["members"]:
+#                     grouped[team_key]["members"][member_key] = {
+#                         "created_by_id": item.created_by.id,
+#                         "created_by_name": item.created_by.name,
+#                         "states": {}
+#                     }
+
+#                 if state_key not in grouped[team_key]["members"][member_key]["states"]:
+#                     grouped[team_key]["members"][member_key]["states"][state_key] = {
+#                         "state_id": item.state.id,
+#                         "state_name": item.state.name,
+#                         "district_id": item.district.id if item.district else None,
+#                         "district_name": item.district.name if item.district else None,
+#                         "total_unbilled": 0,
+#                         "unbilled_to_billed": 0,
+#                         "new_customer": 0,
+#                         "new_conversion": 0,
+#                         "billing": 0,
+#                         "volume": 0,
+#                         "total_call_duration": 0,
+#                         "hourly_durations": self.get_empty_slot_dict()
+#                     }
+
+#                 bucket = grouped[team_key]["members"][member_key]["states"][state_key]
+
+#                 duration_value = self.parse_call_duration(item.call_duration)
+#                 bucket["total_call_duration"] += duration_value
+
+#                 slot_key = self.get_hour_slot_key(item.created_at)
+#                 if slot_key:
+#                     bucket["hourly_durations"][slot_key] += duration_value
+
+#                 if item.invoice_id:
+#                     bucket["billing"] += 1
+#                     invoice_amount = getattr(item.invoice, "total_amount", 0) or 0
+#                     try:
+#                         bucket["volume"] += float(invoice_amount)
+#                     except:
+#                         pass
+
+#             response_data = []
+#             row_number = 1
+
+#             for team_key, team_value in grouped.items():
+#                 team_entry = {
+#                     "sl_no": row_number,
+#                     "team_id": team_value["team_id"],
+#                     "team_name": team_value["team_name"],
+#                     "team_unbilled": team_value["team_unbilled"],
+#                     "members": []
+#                 }
+
+#                 grand_totals["team_unbilled"] += team_value["team_unbilled"]
+
+#                 for member_key, member_value in team_value["members"].items():
+#                     member_entry = {
+#                         "created_by_id": member_value["created_by_id"],
+#                         "created_by_name": member_value["created_by_name"],
+#                         "states": []
+#                     }
+
+#                     for _, state_value in member_value["states"].items():
+#                         member_entry["states"].append(state_value)
+
+#                         grand_totals["total_unbilled"] += state_value["total_unbilled"]
+#                         grand_totals["unbilled_to_billed"] += state_value["unbilled_to_billed"]
+#                         grand_totals["new_customer"] += state_value["new_customer"]
+#                         grand_totals["new_conversion"] += state_value["new_conversion"]
+#                         grand_totals["billing"] += state_value["billing"]
+#                         grand_totals["volume"] += state_value["volume"]
+#                         grand_totals["total_call_duration"] += state_value["total_call_duration"]
+
+#                         for slot in self.HOURLY_SLOTS:
+#                             grand_totals["hourly_durations"][slot] += state_value["hourly_durations"][slot]
+
+#                     team_entry["members"].append(member_entry)
+
+#                 response_data.append(team_entry)
+#                 row_number += 1
+
+#             return Response(
+#                 {
+#                     "status": "success",
+#                     "message": "Sales team summary report fetched successfully",
+#                     "filters": {
+#                         "status": status_filter,
+#                         "start_date": start_date,
+#                         "end_date": end_date,
+#                         "team": team_id,
+#                         "created_by": created_by_id,
+#                         "state": state_id,
+#                         "search": search,
+#                     },
+#                     "data": response_data,
+#                     "totals": grand_totals
+#                 },
+#                 status=status.HTTP_200_OK
+#             )
+
+#         except DatabaseError as e:
+#             return Response(
+#                 {
+#                     "status": "error",
+#                     "message": "Database error occurred while fetching summary report",
+#                     "errors": str(e)
+#                 },
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+
+#         except Exception as e:
+#             return Response(
+#                 {
+#                     "status": "error",
+#                     "message": "An error occurred while fetching summary report",
+#                     "errors": str(e)
+#                 },
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+
+
+# class SalesTeamMemberDailyReportStatusUpdateView(BaseTokenView):
+#     """
+#     PUT -> update only status field
+#     """
+
+#     def put(self, request, pk):
+#         try:
+#             authUser, error_response = self.get_user_from_token(request)
+#             if error_response:
+#                 return error_response
+
+#             report = SalesTeamMemberDailyReport.objects.get(id=pk)
+
+#             serializer = SalesTeamMemberDailyReportStatusUpdateSerializer(
+#                 report,
+#                 data=request.data,
+#                 partial=True
+#             )
+
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 return Response(
+#                     {
+#                         "status": "success",
+#                         "message": "Report status updated successfully",
+#                         "data": serializer.data
+#                     },
+#                     status=status.HTTP_200_OK
+#                 )
+
+#             return Response(
+#                 {
+#                     "status": "error",
+#                     "message": "Validation failed",
+#                     "errors": serializer.errors
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         except SalesTeamMemberDailyReport.DoesNotExist:
+#             return Response(
+#                 {
+#                     "status": "error",
+#                     "message": "Report not found"
+#                 },
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
+
+#         except Exception as e:
+#             return Response(
+#                 {
+#                     "status": "error",
+#                     "message": "An error occurred while updating report status",
+#                     "errors": str(e)
+#                 },
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
