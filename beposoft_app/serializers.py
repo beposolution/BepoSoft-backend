@@ -2172,6 +2172,7 @@ class AdvanceAmountTransferSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_by", "created_at", "updated_at"]
 
 
+# sales team management serializers
 
 class SalesTeamCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -2300,6 +2301,20 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             'note',
         ]
         read_only_fields = ['created_by']
+
+
+# class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = SalesTeamMemberDailyReport
+#         fields = ['status']
+
+#     def validate_status(self, value):
+#         valid_choices = [choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES]
+#         if value not in valid_choices:
+#             raise serializers.ValidationError(
+#                 f"Invalid status. Allowed values are: {', '.join(valid_choices)}"
+#             )
+#         return value
 
 
 # Reports and Analytics serializers based on daily sales
