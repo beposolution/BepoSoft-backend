@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import *
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import DecimalField, Func, Sum
 from datetime import datetime
 from django.db.models import F, Sum, FloatField
 from django.db.models.functions import Cast
