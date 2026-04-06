@@ -15776,12 +15776,13 @@ class SalesTeamSummaryReportView(BaseTokenView):
             )
 
 
+
 class SalesTeamMemberDailyReportStatusUpdateView(BaseTokenView):
     """
-    PUT -> update only status field
+    PATCH -> update only status field
     """
 
-    def put(self, request, pk):
+    def patch(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
