@@ -15736,24 +15736,24 @@ class SalesTeamSummaryReportView(BaseTokenView):
                 response_data.append(team_entry)
                 row_number += 1
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Sales team summary report fetched successfully",
-                    "filters": {
-                        "status": status_filter,
-                        "start_date": start_date,
-                        "end_date": end_date,
-                        "team": team_id,
-                        "created_by": created_by_id,
-                        "state": state_id,
-                        "search": search,
-                    },
-                    "data": response_data,
-                    "totals": grand_totals
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(response_data, request)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Sales team summary report fetched successfully",
+                "filters": {
+                    "status": status_filter,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "team": team_id,
+                    "created_by": created_by_id,
+                    "state": state_id,
+                    "search": search,
                 },
-                status=status.HTTP_200_OK
-            )
+                "data": page,
+                "totals": grand_totals
+            })
 
         except DatabaseError as e:
             return Response(
