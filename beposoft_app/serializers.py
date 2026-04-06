@@ -2375,7 +2375,7 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
     invoice_details = SalesTeamMemberDailyReportInvoiceSerializer(source='invoice', read_only=True)
     customer_name = serializers.SerializerMethodField()
-    call_duration_average_8hrs = serializers.SerializerMethodField()
+    call_duration_percentage_8hrs = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesTeamMemberDailyReport
@@ -2399,7 +2399,7 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             'call_status',
             'status',
             'call_duration',
-            'call_duration_average_8hrs',
+            'call_duration_percentage_8hrs',
             'note',
             'created_at',
         ]
@@ -2413,17 +2413,17 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
         except Exception:
             return obj.customer_name
 
-    def duration_to_seconds(self, duration):
-        if not duration:
-            return 0
+    def _duration_to_seconds(self, duration):
         try:
+            if not duration:
+                return 0
             h, m, s = map(int, str(duration).split(":"))
             return h * 3600 + m * 60 + s
         except Exception:
             return 0
 
-    def get_call_duration_average_8hrs(self, obj):
-        total_seconds = self.duration_to_seconds(obj.call_duration)
+    def get_call_duration_percentage_8hrs(self, obj):
+        total_seconds = self._duration_to_seconds(obj.call_duration)
         total_minutes = total_seconds / 60
 
         if total_minutes <= 0:
