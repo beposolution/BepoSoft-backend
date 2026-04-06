@@ -2303,12 +2303,79 @@ class SalesTeamDailyReportSerializer(serializers.ModelSerializer):
 
 
 
+class SalesTeamMemberDailyReportInvoiceItemSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
+    image = serializers.SerializerMethodField()
+    quantity = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'product_id',
+            'name',
+            'image',
+            'quantity',
+        ]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if obj.product and obj.product.image:
+            try:
+                if request:
+                    return request.build_absolute_uri(obj.product.image.url)
+                return obj.product.image.url
+            except Exception:
+                return None
+        return None
+
+
+
+class SalesTeamMemberDailyReportInvoiceSerializer(serializers.ModelSerializer):
+    items = SalesTeamMemberDailyReportInvoiceItemSerializer(many=True, read_only=True)
+    total_quantity = serializers.SerializerMethodField()
+    total_items_count = serializers.SerializerMethodField()
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id',
+            'invoice',
+            'customer_name',
+            'total_amount',
+            'payment_status',
+            'status',
+            'order_date',
+            'items',
+            'total_quantity',
+            'total_items_count',
+        ]
+
+    def get_total_quantity(self, obj):
+        try:
+            return sum(item.quantity or 0 for item in obj.items.all())
+        except Exception:
+            return 0
+
+    def get_total_items_count(self, obj):
+        try:
+            return obj.items.count()
+        except Exception:
+            return 0
+
+
 class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(source='team.name', read_only=True)
+    division = serializers.IntegerField(source='team.division.id', read_only=True)
+    division_name = serializers.CharField(source='team.division.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     invoice_number = serializers.CharField(source='invoice.invoice', read_only=True)
+    invoice_details = SalesTeamMemberDailyReportInvoiceSerializer(source='invoice', read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    call_duration_average_8hrs = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesTeamMemberDailyReport
@@ -2316,6 +2383,8 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             'id',
             'team',
             'team_name',
+            'division',
+            'division_name',
             'state',
             'state_name',
             'district',
@@ -2324,16 +2393,44 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             'created_by_name',
             'invoice',
             'invoice_number',
+            'invoice_details',
             'phone',
             'customer_name',
             'call_status',
             'status',
             'call_duration',
+            'call_duration_average_8hrs',
             'note',
             'created_at',
         ]
         read_only_fields = ['created_by']
 
+    def get_customer_name(self, obj):
+        try:
+            if obj.invoice and obj.invoice.customer:
+                return obj.invoice.customer.name
+            return obj.customer_name
+        except Exception:
+            return obj.customer_name
+
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except Exception:
+            return 0
+
+    def get_call_duration_average_8hrs(self, obj):
+        total_seconds = self.duration_to_seconds(obj.call_duration)
+        total_minutes = total_seconds / 60
+
+        if total_minutes <= 0:
+            return 0.0
+
+        return round((total_minutes / (8 * 60)) * 100, 2)
+        
 
 class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
