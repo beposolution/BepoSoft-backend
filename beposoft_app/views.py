@@ -14881,6 +14881,30 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
     POST -> create report and save created_by from token
     """
 
+    def _duration_to_seconds(self, duration_str):
+        """
+        Convert HH:MM:SS into total seconds
+        """
+        try:
+            if not duration_str:
+                return 0
+            parts = duration_str.split(":")
+            if len(parts) != 3:
+                return 0
+            hours, minutes, seconds = map(int, parts)
+            return (hours * 3600) + (minutes * 60) + seconds
+        except:
+            return 0
+
+    def _seconds_to_hms(self, total_seconds):
+        """
+        Convert total seconds into HH:MM:SS
+        """
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -14961,6 +14985,33 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # SUMMARY ON FILTERED DATA
+            total_reports = reports.count()
+            active_count = reports.filter(call_status__iexact='active').count()
+            productive_count = reports.filter(call_status__iexact='productive').count()
+
+            dsr_created_count = reports.filter(status__iexact='dsr created').count()
+            dsr_approved_count = reports.filter(status__iexact='dsr approved').count()
+            dsr_confirmed_count = reports.filter(status__iexact='dsr confirmed').count()
+            dsr_rejected_count = reports.filter(status__iexact='dsr rejected').count()
+
+            total_call_duration_seconds = 0
+            for report in reports:
+                total_call_duration_seconds += self._duration_to_seconds(report.call_duration)
+
+            total_call_duration = self._seconds_to_hms(total_call_duration_seconds)
+
+            summary = {
+                "total_reports": total_reports,
+                "active_count": active_count,
+                "productive_count": productive_count,
+                "dsr_created_count": dsr_created_count,
+                "dsr_approved_count": dsr_approved_count,
+                "dsr_confirmed_count": dsr_confirmed_count,
+                "dsr_rejected_count": dsr_rejected_count,
+                "total_call_duration": total_call_duration,
+            }
+
             paginator = StandardPagination()
             page = paginator.paginate_queryset(reports, request)
             serializer = SalesTeamMemberDailyReportSerializer(page, many=True)
@@ -14968,6 +15019,7 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
             return paginator.get_paginated_response({
                 "status": "success",
                 "message": "Your daily reports fetched successfully",
+                "summary": summary,
                 "data": serializer.data
             })
 
