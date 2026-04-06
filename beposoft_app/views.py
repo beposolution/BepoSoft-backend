@@ -15545,6 +15545,10 @@ class SalesTeamMemberDailyReportByFamilyView(BaseTokenView):
                 staff_count
             )
 
+            total_amount = reports.aggregate(
+                total=Sum('invoice__total_amount')
+            )['total'] or 0
+
             paginator = StandardPagination()
             page = paginator.paginate_queryset(reports, request)
             serializer = SalesTeamMemberDailyReportSerializer(
@@ -15560,6 +15564,7 @@ class SalesTeamMemberDailyReportByFamilyView(BaseTokenView):
                 "staff_count": staff_count,
                 "total_call_duration": total_call_duration,
                 "call_duration_average_8hrs": call_duration_average_8hrs,
+                "total_amount": total_amount, 
                 "data": serializer.data
             })
 
