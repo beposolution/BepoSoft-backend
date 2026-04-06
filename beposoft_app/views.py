@@ -14882,13 +14882,10 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
     """
 
     def _duration_to_seconds(self, duration_str):
-        """
-        Convert HH:MM:SS into total seconds
-        """
         try:
             if not duration_str:
                 return 0
-            parts = duration_str.split(":")
+            parts = str(duration_str).split(":")
             if len(parts) != 3:
                 return 0
             hours, minutes, seconds = map(int, parts)
@@ -14897,13 +14894,18 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
             return 0
 
     def _seconds_to_hms(self, total_seconds):
-        """
-        Convert total seconds into HH:MM:SS
-        """
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
         return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    def _get_call_duration_average_8hrs(self, total_seconds, staff_count):
+        total_minutes = total_seconds / 60
+
+        if total_minutes <= 0 or staff_count <= 0:
+            return 0.0
+
+        return round((total_minutes / (staff_count * 8 * 60)) * 100, 2)
 
     def get(self, request):
         try:
@@ -14921,10 +14923,17 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
 
             reports = SalesTeamMemberDailyReport.objects.select_related(
                 'team',
+                'team__division',
                 'state',
                 'district',
                 'created_by',
                 'invoice',
+                'invoice__customer',
+            ).prefetch_related(
+                Prefetch(
+                    'invoice__items',
+                    queryset=OrderItem.objects.select_related('product')
+                )
             ).filter(
                 created_by=authUser
             ).order_by('-id')
@@ -14985,7 +14994,6 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # SUMMARY ON FILTERED DATA
             total_reports = reports.count()
             active_count = reports.filter(call_status__iexact='active').count()
             productive_count = reports.filter(call_status__iexact='productive').count()
@@ -15001,6 +15009,16 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
 
             total_call_duration = self._seconds_to_hms(total_call_duration_seconds)
 
+            staff_count = reports.values("created_by").distinct().count()
+            call_duration_average_8hrs = self._get_call_duration_average_8hrs(
+                total_call_duration_seconds,
+                staff_count
+            )
+
+            total_amount = reports.aggregate(
+                total_amount=Sum('invoice__total_amount')
+            )['total_amount'] or 0
+
             summary = {
                 "total_reports": total_reports,
                 "active_count": active_count,
@@ -15009,12 +15027,19 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
                 "dsr_approved_count": dsr_approved_count,
                 "dsr_confirmed_count": dsr_confirmed_count,
                 "dsr_rejected_count": dsr_rejected_count,
+                "staff_count": staff_count,
                 "total_call_duration": total_call_duration,
+                "call_duration_average_8hrs": call_duration_average_8hrs,
+                "total_amount": float(total_amount),
             }
 
             paginator = StandardPagination()
             page = paginator.paginate_queryset(reports, request)
-            serializer = SalesTeamMemberDailyReportSerializer(page, many=True)
+            serializer = SalesTeamMemberDailyReportSerializer(
+                page,
+                many=True,
+                context={'request': request}
+            )
 
             return paginator.get_paginated_response({
                 "status": "success",
