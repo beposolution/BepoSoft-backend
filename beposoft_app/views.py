@@ -10,7 +10,7 @@ from .serializers import *
 from .models import User
 from django.contrib.auth.hashers import check_password, make_password
 from datetime import datetime, timedelta, time, date
-from django.db.models import Q, Value
+from django.db.models import Q, Prefetch, Value
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from django.contrib.auth import authenticate
 from django.conf import settings
@@ -15210,7 +15210,44 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
 
 class SalesTeamMemberDailyReportAllView(BaseTokenView):
     """
-    GET -> all reports with pagination"""
+    GET -> all reports with pagination
+    """
+
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except Exception:
+            return 0
+
+    def add_call_durations(self, durations):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    def get_call_duration_average_8hrs(self, durations, staff_count):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        total_minutes = total_seconds / 60
+
+        if total_minutes <= 0 or staff_count <= 0:
+            return 0.0
+
+        return round((total_minutes / (staff_count * 8 * 60)) * 100, 2)
 
     def get(self, request):
         try:
@@ -15259,6 +15296,9 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
             if district:
                 reports = reports.filter(district__name__icontains=district)
 
+            parsed_start_date = None
+            parsed_end_date = None
+
             if start_date:
                 parsed_start_date = parse_date(start_date)
                 if not parsed_start_date:
@@ -15283,7 +15323,7 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
                     )
                 reports = reports.filter(created_at__date__lte=parsed_end_date)
 
-            if start_date and end_date:
+            if parsed_start_date and parsed_end_date:
                 if parsed_start_date > parsed_end_date:
                     return Response(
                         {
@@ -15293,6 +15333,14 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+            call_durations = list(reports.values_list("call_duration", flat=True))
+            total_call_duration = self.add_call_durations(call_durations)
+            staff_count = reports.values("created_by").distinct().count()
+            call_duration_average_8hrs = self.get_call_duration_average_8hrs(
+                call_durations,
+                staff_count
+            )
+
             paginator = StandardPagination()
             page = paginator.paginate_queryset(reports, request)
             serializer = SalesTeamMemberDailyReportSerializer(page, many=True)
@@ -15300,6 +15348,9 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
             return paginator.get_paginated_response({
                 "status": "success",
                 "message": "All daily reports fetched successfully",
+                "staff_count": staff_count,
+                "total_call_duration": total_call_duration,
+                "call_duration_average_8hrs": call_duration_average_8hrs,
                 "data": serializer.data
             })
 
@@ -15324,6 +15375,189 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
             )
 
 
+
+
+class SalesTeamMemberDailyReportByFamilyView(BaseTokenView):
+    """
+    GET -> all reports by family_id (division) with pagination
+    """
+
+    def duration_to_seconds(self, duration):
+        if not duration:
+            return 0
+        try:
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except Exception:
+            return 0
+
+    def add_call_durations(self, durations):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    def get_call_duration_average_8hrs(self, durations, staff_count):
+        total_seconds = 0
+
+        for duration in durations:
+            if duration:
+                total_seconds += self.duration_to_seconds(duration)
+
+        total_minutes = total_seconds / 60
+
+        if total_minutes <= 0 or staff_count <= 0:
+            return 0.0
+
+        return round((total_minutes / (staff_count * 8 * 60)) * 100, 2)
+
+    def get(self, request, family_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            call_status = request.GET.get("call_status", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            state = request.GET.get("state", "").strip()
+            district = request.GET.get("district", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            reports = SalesTeamMemberDailyReport.objects.select_related(
+                'team',
+                'team__division',
+                'state',
+                'district',
+                'created_by',
+                'invoice',
+            ).prefetch_related(
+                Prefetch(
+                    'invoice__items',
+                    queryset=OrderItem.objects.select_related('product')
+                )
+            ).filter(
+                team__division_id=family_id
+            ).order_by('-id')
+
+            if search:
+                reports = reports.filter(
+                    Q(customer_name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(invoice__invoice__icontains=search) |
+                    Q(created_by__name__icontains=search) |
+                    Q(team__name__icontains=search) |
+                    Q(state__name__icontains=search) |
+                    Q(district__name__icontains=search)
+                )
+
+            if call_status:
+                reports = reports.filter(call_status__iexact=call_status)
+
+            if status_filter:
+                reports = reports.filter(status__iexact=status_filter)
+
+            if created_by:
+                reports = reports.filter(created_by__name__icontains=created_by)
+
+            if state:
+                reports = reports.filter(state__name__icontains=state)
+
+            if district:
+                reports = reports.filter(district__name__icontains=district)
+
+            parsed_start_date = None
+            parsed_end_date = None
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                reports = reports.filter(created_at__date__lte=parsed_end_date)
+
+            if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            call_durations = list(reports.values_list("call_duration", flat=True))
+            total_call_duration = self.add_call_durations(call_durations)
+            staff_count = reports.values("created_by").distinct().count()
+            call_duration_average_8hrs = self.get_call_duration_average_8hrs(
+                call_durations,
+                staff_count
+            )
+
+            paginator = StandardPagination()
+            page = paginator.paginate_queryset(reports, request)
+            serializer = SalesTeamMemberDailyReportSerializer(
+                page,
+                many=True,
+                context={'request': request}
+            )
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Family wise daily reports fetched successfully",
+                "family_id": family_id,
+                "staff_count": staff_count,
+                "total_call_duration": total_call_duration,
+                "call_duration_average_8hrs": call_duration_average_8hrs,
+                "data": serializer.data
+            })
+
+        except DatabaseError as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred while fetching family wise reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching family wise daily reports",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 class MySalesTeamView(BaseTokenView):
     def get(self, request):
