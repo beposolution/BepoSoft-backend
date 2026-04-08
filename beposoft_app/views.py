@@ -16528,3 +16528,263 @@ class SalesTeamMemberDailyReportStatusUpdateView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+
+
+class FamilyAnalysisSummaryView(BaseTokenView):
+    def _parse_duration_to_seconds(self, duration_str):
+        try:
+            if not duration_str:
+                return 0
+
+            parts = str(duration_str).strip().split(":")
+            if len(parts) != 3:
+                return 0
+
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+
+            return hours * 3600 + minutes * 60 + seconds
+        except Exception:
+            return 0
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid or missing token"
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            from_date = request.GET.get("from_date", "").strip()
+            to_date = request.GET.get("to_date", "").strip()
+
+            attendance_filter = {}
+            sales_filter = {}
+            order_filter = {}
+
+            if from_date and to_date:
+                try:
+                    from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
+                    to_date_obj = datetime.strptime(to_date, "%Y-%m-%d")
+                    to_date_obj = to_date_obj.replace(hour=23, minute=59, second=59)
+
+                    attendance_filter["created_at__range"] = (from_date_obj, to_date_obj)
+                    sales_filter["created_at__range"] = (from_date_obj, to_date_obj)
+                    order_filter["updated_at__range"] = (from_date_obj, to_date_obj)
+
+                except Exception:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            elif from_date or to_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Both from_date and to_date are required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            family_map = {}
+            families = Family.objects.all().order_by("name")
+
+            for family in families:
+                family_map[family.id] = {
+                    "family_id": family.id,
+                    "family_name": family.name,
+                    "present": 0,
+                    "absent": 0,
+                    "half_day": 0,
+                    "total_amount": 0.0,
+                    "total_invoices": 0,
+                    "total_call_duration_seconds": 0,
+                    "call_entries_count": 0,
+                }
+
+            attendance_qs = (
+                BDMOrderAnalysisStaff.objects
+                .filter(staff__family__isnull=False, **attendance_filter)
+                .values("staff__family", "staff__family__name", "status")
+                .annotate(count=Count("id"))
+                .order_by("staff__family__name")
+            )
+
+            for item in attendance_qs:
+                family_id = item["staff__family"]
+                staff_status = item["status"]
+                count = item["count"]
+
+                if family_id not in family_map:
+                    family_map[family_id] = {
+                        "family_id": family_id,
+                        "family_name": item["staff__family__name"] or "",
+                        "present": 0,
+                        "absent": 0,
+                        "half_day": 0,
+                        "total_amount": 0.0,
+                        "total_invoices": 0,
+                        "total_call_duration_seconds": 0,
+                        "call_entries_count": 0,
+                    }
+
+                if staff_status == "present":
+                    family_map[family_id]["present"] = count
+                elif staff_status == "absent":
+                    family_map[family_id]["absent"] = count
+                elif staff_status == "half_day":
+                    family_map[family_id]["half_day"] = count
+
+            order_qs = (
+                Order.objects
+                .filter(family__isnull=False, **order_filter)
+                .values("family", "family__name")
+                .annotate(
+                    total_amount=Sum("total_amount"),
+                    total_invoices=Count("id")
+                )
+                .order_by("family__name")
+            )
+
+            for item in order_qs:
+                family_id = item["family"]
+
+                if family_id not in family_map:
+                    family_map[family_id] = {
+                        "family_id": family_id,
+                        "family_name": item["family__name"] or "",
+                        "present": 0,
+                        "absent": 0,
+                        "half_day": 0,
+                        "total_amount": 0.0,
+                        "total_invoices": 0,
+                        "total_call_duration_seconds": 0,
+                        "call_entries_count": 0,
+                    }
+
+                family_map[family_id]["total_amount"] = float(item["total_amount"] or 0)
+                family_map[family_id]["total_invoices"] = int(item["total_invoices"] or 0)
+
+            sales_qs = (
+                SalesAnalysis.objects
+                .filter(created_by__family__isnull=False, **sales_filter)
+                .values(
+                    "created_by__family",
+                    "created_by__family__name",
+                    "call_duration"
+                )
+                .order_by("created_by__family__name")
+            )
+
+            for item in sales_qs:
+                family_id = item["created_by__family"]
+                duration_str = item["call_duration"]
+                seconds = self._parse_duration_to_seconds(duration_str)
+
+                if family_id not in family_map:
+                    family_map[family_id] = {
+                        "family_id": family_id,
+                        "family_name": item["created_by__family__name"] or "",
+                        "present": 0,
+                        "absent": 0,
+                        "half_day": 0,
+                        "total_amount": 0.0,
+                        "total_invoices": 0,
+                        "total_call_duration_seconds": 0,
+                        "call_entries_count": 0,
+                    }
+
+                family_map[family_id]["total_call_duration_seconds"] += seconds
+
+                if seconds > 0:
+                    family_map[family_id]["call_entries_count"] += 1
+
+            results = []
+            overall_present = 0
+            overall_absent = 0
+            overall_half_day = 0
+            overall_total_amount = 0.0
+            overall_total_invoices = 0
+            overall_total_call_duration_seconds = 0
+            overall_call_entries_count = 0
+
+            for _, data in family_map.items():
+                total_seconds = data["total_call_duration_seconds"]
+                call_entries_count = data["call_entries_count"]
+
+                total_minutes = round(total_seconds / 60, 2) if total_seconds > 0 else 0
+                avg_minutes = round((total_seconds / call_entries_count) / 60, 2) if call_entries_count > 0 else 0
+                avg_percentage = round((avg_minutes / 480) * 100, 2) if avg_minutes > 0 else 0
+
+                results.append({
+                    "family_id": data["family_id"],
+                    "family_name": data["family_name"],
+                    "present": data["present"],
+                    "absent": data["absent"],
+                    "half_day": data["half_day"],
+                    "total_amount": round(data["total_amount"], 2),
+                    "total_invoices": data["total_invoices"],
+                    "total_call_count": call_entries_count,
+                    "total_call_duration": total_minutes,
+                    "call_duration_average_minutes": avg_minutes,
+                    "call_duration_average_percentage_8hrs": avg_percentage,
+                })
+
+                overall_present += data["present"]
+                overall_absent += data["absent"]
+                overall_half_day += data["half_day"]
+                overall_total_amount += data["total_amount"]
+                overall_total_invoices += data["total_invoices"]
+                overall_total_call_duration_seconds += total_seconds
+                overall_call_entries_count += call_entries_count
+
+            overall_total_minutes = round(overall_total_call_duration_seconds / 60, 2) if overall_total_call_duration_seconds > 0 else 0
+            overall_avg_minutes = round((overall_total_call_duration_seconds / overall_call_entries_count) / 60, 2) if overall_call_entries_count > 0 else 0
+            overall_avg_percentage = round((overall_avg_minutes / 480) * 100, 2) if overall_avg_minutes > 0 else 0
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Family-wise summary fetched successfully",
+                    "filters": {
+                        "from_date": from_date,
+                        "to_date": to_date
+                    },
+                    "overall": {
+                        "present": overall_present,
+                        "absent": overall_absent,
+                        "half_day": overall_half_day,
+                        "total_amount": round(overall_total_amount, 2),
+                        "total_invoices": overall_total_invoices,
+                        "total_call_count": overall_call_entries_count,
+                        "total_call_duration": overall_total_minutes,
+                        "call_duration_average_minutes": overall_avg_minutes,
+                        "call_duration_average_percentage_8hrs": overall_avg_percentage,
+                    },
+                    "results": results
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong while fetching family-wise summary",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
