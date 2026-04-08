@@ -16082,6 +16082,8 @@ class SalesTeamSummaryReportView(BaseTokenView):
         "06:00-07:00",
     ]
 
+    WORKING_MINUTES = 8 * 60  # 480 minutes
+
     def get_hour_slot_key(self, created_at):
         if not created_at:
             return None
@@ -16282,8 +16284,12 @@ class SalesTeamSummaryReportView(BaseTokenView):
                 "billing": 0,
                 "volume": 0,
                 "total_call_duration": 0,
-                "hourly_durations": self.get_empty_slot_dict()
+                "hourly_durations": self.get_empty_slot_dict(),
+                "call_duration_average_minutes": 0,
+                "call_duration_average_percentage": 0,
             }
+
+            total_duration_entries = 0
 
             # Build from SalesTeamDailyReport
             for item in team_daily_qs:
@@ -16378,6 +16384,9 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
                 bucket["total_call_duration"] += duration_value_minutes
 
+                if duration_value_minutes > 0:
+                    total_duration_entries += 1
+
                 slot_key = self.get_hour_slot_key(item.created_at)
                 if slot_key:
                     bucket["hourly_durations"][slot_key] += duration_value_minutes
@@ -16429,6 +16438,17 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
                 response_data.append(team_entry)
                 row_number += 1
+
+            # Final average calculations
+            if total_duration_entries > 0:
+                average_minutes = round(grand_totals["total_call_duration"] / total_duration_entries, 2)
+            else:
+                average_minutes = 0
+
+            average_percentage = round((average_minutes / self.WORKING_MINUTES) * 100, 2) if self.WORKING_MINUTES else 0
+
+            grand_totals["call_duration_average_minutes"] = average_minutes
+            grand_totals["call_duration_average_percentage"] = average_percentage
 
             paginator = StandardPagination()
             page = paginator.paginate_queryset(response_data, request)
