@@ -190,6 +190,7 @@ urlpatterns = [
 
     path('api/expense/add/',ExpensAddView.as_view()),
     path('api/expense/get/data/',ExpensAddGETView.as_view()),
+    path('api/expense/get/data/filter/', ExpenseFilteredGETView.as_view()),
     path("api/dashboard/expense/summary/", ExpenseDashboardSummaryView.as_view()),
     path('api/expense/get/<int:pk>/',ExpenseUpdate.as_view()),
     path('api/expense/addexpectemi/',ExpensAddViewExpectEmi.as_view()),
