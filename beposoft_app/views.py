@@ -16790,3 +16790,229 @@ class FamilyAnalysisSummaryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+
+class FamilyStaffAnalysisSummaryView(BaseTokenView):
+    def _parse_duration_to_seconds(self, duration_str):
+        try:
+            if not duration_str:
+                return 0
+
+            parts = str(duration_str).strip().split(":")
+            if len(parts) != 3:
+                return 0
+
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+
+            return (hours * 3600) + (minutes * 60) + seconds
+        except Exception:
+            return 0
+
+    def get(self, request, family_id, *args, **kwargs):
+        try:
+            user = self.get_user_from_token(request)
+            if not user:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid or missing token"
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            try:
+                family = Family.objects.get(id=family_id)
+            except Family.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Family not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            from_date = request.GET.get("from_date", "").strip()
+            to_date = request.GET.get("to_date", "").strip()
+
+            attendance_filter = {}
+            report_filter = {}
+
+            if from_date and to_date:
+                try:
+                    from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
+                    to_date_obj = datetime.strptime(to_date, "%Y-%m-%d")
+                    to_date_obj = to_date_obj.replace(hour=23, minute=59, second=59)
+
+                    attendance_filter["created_at__range"] = (from_date_obj, to_date_obj)
+                    report_filter["created_at__range"] = (from_date_obj, to_date_obj)
+
+                except Exception:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            elif from_date or to_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Both from_date and to_date are required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            staff_map = {}
+
+            allowed_staff_qs = User.objects.filter(
+                family_id=family_id,
+                department_id__name__in=["BDM", "BDO"]
+            ).select_related("department_id", "family").order_by("name")
+
+            allowed_staff_ids = list(allowed_staff_qs.values_list("id", flat=True))
+
+            for staff in allowed_staff_qs:
+                dept_name = staff.department_id.name if staff.department_id else ""
+                staff_map[staff.id] = {
+                    "staff_id": staff.id,
+                    "staff_name": staff.name,
+                    "department": dept_name if dept_name in ["BDM", "BDO"] else "",
+                    "present": 0,
+                    "absent": 0,
+                    "half_day": 0,
+                    "total_amount": 0.0,
+                    "total_invoices": 0,
+                    "total_call_count": 0,
+                    "total_call_duration_seconds": 0,
+                    "invoice_ids": set(),
+                }
+
+            attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                staff_id__in=allowed_staff_ids,
+                **attendance_filter
+            ).select_related("staff")
+
+            for row in attendance_qs:
+                staff_id = row.staff_id
+
+                if staff_id not in staff_map:
+                    continue
+
+                if row.status == "present":
+                    staff_map[staff_id]["present"] += 1
+                elif row.status == "absent":
+                    staff_map[staff_id]["absent"] += 1
+                elif row.status == "half_day":
+                    staff_map[staff_id]["half_day"] += 1
+
+            report_qs = SalesTeamMemberDailyReport.objects.filter(
+                created_by_id__in=allowed_staff_ids,
+                **report_filter
+            ).select_related("created_by", "invoice", "created_by__department_id")
+
+            for report in report_qs:
+                staff_id = report.created_by_id
+
+                if staff_id not in staff_map:
+                    continue
+
+                seconds = self._parse_duration_to_seconds(report.call_duration)
+                if seconds > 0:
+                    staff_map[staff_id]["total_call_count"] += 1
+                    staff_map[staff_id]["total_call_duration_seconds"] += seconds
+
+                if report.invoice_id and report.invoice_id not in staff_map[staff_id]["invoice_ids"]:
+                    staff_map[staff_id]["invoice_ids"].add(report.invoice_id)
+                    staff_map[staff_id]["total_invoices"] += 1
+                    staff_map[staff_id]["total_amount"] += float(report.invoice.total_amount or 0)
+
+            results = []
+            overall_present = 0
+            overall_absent = 0
+            overall_half_day = 0
+            overall_total_amount = 0.0
+            overall_total_invoices = 0
+            overall_total_call_count = 0
+            overall_total_call_duration_seconds = 0
+
+            for _, data in staff_map.items():
+                total_seconds = data["total_call_duration_seconds"]
+                total_call_count = data["total_call_count"]
+
+                total_call_duration = round(total_seconds / 60, 2) if total_seconds > 0 else 0
+                call_duration_average_minutes = round((total_seconds / total_call_count) / 60, 2) if total_call_count > 0 else 0
+                call_duration_average_percentage_8hrs = round((call_duration_average_minutes / 480) * 100, 2) if call_duration_average_minutes > 0 else 0
+
+                results.append({
+                    "staff_id": data["staff_id"],
+                    "staff_name": data["staff_name"],
+                    "department": data["department"],
+                    "present": data["present"],
+                    "absent": data["absent"],
+                    "half_day": data["half_day"],
+                    "total_amount": round(data["total_amount"], 2),
+                    "total_invoices": data["total_invoices"],
+                    "total_call_count": total_call_count,
+                    "total_call_duration": total_call_duration,
+                    "call_duration_average_minutes": call_duration_average_minutes,
+                    "call_duration_average_percentage_8hrs": call_duration_average_percentage_8hrs,
+                })
+
+                overall_present += data["present"]
+                overall_absent += data["absent"]
+                overall_half_day += data["half_day"]
+                overall_total_amount += data["total_amount"]
+                overall_total_invoices += data["total_invoices"]
+                overall_total_call_count += total_call_count
+                overall_total_call_duration_seconds += total_seconds
+
+            overall_total_call_duration = round(overall_total_call_duration_seconds / 60, 2) if overall_total_call_duration_seconds > 0 else 0
+            overall_call_duration_average_minutes = round((overall_total_call_duration_seconds / overall_total_call_count) / 60, 2) if overall_total_call_count > 0 else 0
+            overall_call_duration_average_percentage_8hrs = round((overall_call_duration_average_minutes / 480) * 100, 2) if overall_call_duration_average_minutes > 0 else 0
+
+            results = sorted(results, key=lambda x: (x["department"], x["staff_name"].lower() if x["staff_name"] else ""))
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Family staff-wise summary fetched successfully",
+                    "family": {
+                        "family_id": family.id,
+                        "family_name": family.name,
+                    },
+                    "filters": {
+                        "from_date": from_date,
+                        "to_date": to_date,
+                    },
+                    "summary": {
+                        "present": overall_present,
+                        "absent": overall_absent,
+                        "half_day": overall_half_day,
+                        "total_amount": round(overall_total_amount, 2),
+                        "total_invoices": overall_total_invoices,
+                        "total_call_count": overall_total_call_count,
+                        "total_call_duration": overall_total_call_duration,
+                        "call_duration_average_minutes": overall_call_duration_average_minutes,
+                        "call_duration_average_percentage_8hrs": overall_call_duration_average_percentage_8hrs,
+                    },
+                    "results": results
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong while fetching family staff-wise summary",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
