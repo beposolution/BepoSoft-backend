@@ -4906,6 +4906,174 @@ class ExpensAddGETView(BaseTokenView):
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class ExpenseFilteredGETView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            purpose = request.GET.get("purpose", "").strip()
+            purpose_id = request.GET.get("purpose_id", "").strip()
+            expense_type = request.GET.get("expense_type", "").strip()
+            company = request.GET.get("company", "").strip()
+            company_id = request.GET.get("company_id", "").strip()
+            bank = request.GET.get("bank", "").strip()
+            bank_id = request.GET.get("bank_id", "").strip()
+            added_by = request.GET.get("added_by", "").strip()
+            category_id = request.GET.get("category_id", "").strip()
+            asset_types = request.GET.get("asset_types", "").strip()
+            min_amount = request.GET.get("min_amount", "").strip()
+            max_amount = request.GET.get("max_amount", "").strip()
+            ordering = request.GET.get("ordering", "-id").strip()
+
+            expense_data = ExpenseModel.objects.select_related(
+                "company",
+                "payed_by",
+                "bank",
+                "category",
+                "purpose_of_payment",
+                "loan",
+            ).all()
+
+            if search:
+                expense_data = expense_data.filter(
+                    Q(company__name__icontains=search) |
+                    Q(bank__name__icontains=search) |
+                    Q(payed_by__name__icontains=search) |
+                    Q(purpose_of_payment__name__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(transaction_id__icontains=search) |
+                    Q(added_by__icontains=search) |
+                    Q(name__icontains=search) |
+                    Q(expense_type__icontains=search) |
+                    Q(amount__icontains=search)
+                )
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if parsed_start_date:
+                    expense_data = expense_data.filter(expense_date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if parsed_end_date:
+                    expense_data = expense_data.filter(expense_date__lte=parsed_end_date)
+
+            if purpose_id:
+                expense_data = expense_data.filter(purpose_of_payment_id=purpose_id)
+
+            if purpose:
+                expense_data = expense_data.filter(
+                    purpose_of_payment__name__icontains=purpose
+                )
+
+            if expense_type:
+                expense_data = expense_data.filter(expense_type__iexact=expense_type)
+
+            if company_id:
+                expense_data = expense_data.filter(company_id=company_id)
+
+            if company:
+                expense_data = expense_data.filter(company__name__icontains=company)
+
+            if bank_id:
+                expense_data = expense_data.filter(bank_id=bank_id)
+
+            if bank:
+                expense_data = expense_data.filter(bank__name__icontains=bank)
+
+            if added_by:
+                expense_data = expense_data.filter(added_by__icontains=added_by)
+
+            if category_id:
+                expense_data = expense_data.filter(category_id=category_id)
+
+            if asset_types:
+                expense_data = expense_data.filter(asset_types__iexact=asset_types)
+
+            if min_amount:
+                try:
+                    expense_data = expense_data.filter(amount__gte=Decimal(min_amount))
+                except (InvalidOperation, ValueError):
+                    pass
+
+            if max_amount:
+                try:
+                    expense_data = expense_data.filter(amount__lte=Decimal(max_amount))
+                except (InvalidOperation, ValueError):
+                    pass
+
+            allowed_ordering_fields = [
+                "id", "-id",
+                "expense_date", "-expense_date",
+                "amount", "-amount",
+                "expense_type", "-expense_type",
+                "added_by", "-added_by",
+            ]
+            if ordering not in allowed_ordering_fields:
+                ordering = "-id"
+
+            expense_data = expense_data.order_by(ordering)
+
+            overall_summary = expense_data.aggregate(
+                total_count=Count("id"),
+                total_amount=Coalesce(Sum("amount"), Decimal("0.00"))
+            )
+
+            serializer = ExpenseModelsSerializers(expense_data, many=True)
+
+            expenses_with_ids = []
+            for expense, serialized in zip(expense_data, serializer.data):
+                item = dict(serialized)
+                item["category_id"] = expense.category_id if expense.category_id else None
+                item["purpose_id"] = expense.purpose_of_payment_id if expense.purpose_of_payment_id else None
+                item["company_id"] = expense.company_id if expense.company_id else None
+                item["bank_id"] = expense.bank_id if expense.bank_id else None
+                expenses_with_ids.append(item)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Filtered expenses fetched successfully",
+                    "filters": {
+                        "search": search,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "purpose": purpose,
+                        "purpose_id": purpose_id,
+                        "expense_type": expense_type,
+                        "company": company,
+                        "company_id": company_id,
+                        "bank": bank,
+                        "bank_id": bank_id,
+                        "added_by": added_by,
+                        "category_id": category_id,
+                        "asset_types": asset_types,
+                        "min_amount": min_amount,
+                        "max_amount": max_amount,
+                        "ordering": ordering,
+                    },
+                    "summary": {
+                        "total_count": overall_summary["total_count"],
+                        "total_amount": str(overall_summary["total_amount"]),
+                    },
+                    "results": expenses_with_ids
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 
 class ExpenseDashboardSummaryView(BaseTokenView):
