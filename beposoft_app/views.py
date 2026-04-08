@@ -4822,27 +4822,55 @@ class ExpensAddGETView(BaseTokenView):
 
             expense_data = expense_data.order_by(ordering)
 
-            # Summary on filtered queryset before pagination
-            summary = expense_data.aggregate(
+            # Overall summary on FULL FILTERED queryset
+            overall_summary = expense_data.aggregate(
                 total_count=Count("id"),
                 total_amount=Coalesce(Sum("amount"), Decimal("0.00"))
             )
 
-            serializer_queryset = expense_data
+            # Summary by expense_type on FULL FILTERED queryset
+            type_rows = (
+                expense_data
+                .values("expense_type")
+                .annotate(
+                    count=Count("id"),
+                    amount=Coalesce(Sum("amount"), Decimal("0.00"))
+                )
+                .order_by("expense_type")
+            )
+
+            summary_map = {
+                "miscellaneous": {"count": 0, "amount": "0.00"},
+                "permanent": {"count": 0, "amount": "0.00"},
+                "emi": {"count": 0, "amount": "0.00"},
+                "cargo": {"count": 0, "amount": "0.00"},
+                "purchase": {"count": 0, "amount": "0.00"},
+                "others": {"count": 0, "amount": "0.00"},
+            }
+
+            known_types = {"miscellaneous", "permanent", "emi", "cargo", "purchase"}
+
+            for row in type_rows:
+                raw_type = (row.get("expense_type") or "").strip().lower()
+                key = raw_type if raw_type in known_types else "others"
+
+                summary_map[key]["count"] += row["count"]
+                summary_map[key]["amount"] = str(
+                    Decimal(summary_map[key]["amount"]) + (row["amount"] or Decimal("0.00"))
+                )
 
             paginator = StandardPagination()
-            page = paginator.paginate_queryset(serializer_queryset, request)
-
+            page = paginator.paginate_queryset(expense_data, request)
             serializer = ExpenseModelsSerializers(page, many=True)
 
-            expenses_with_category = []
+            expenses_with_ids = []
             for expense, serialized in zip(page, serializer.data):
                 item = dict(serialized)
                 item["category_id"] = expense.category_id if expense.category_id else None
                 item["purpose_id"] = expense.purpose_of_payment_id if expense.purpose_of_payment_id else None
                 item["company_id"] = expense.company_id if expense.company_id else None
                 item["bank_id"] = expense.bank_id if expense.bank_id else None
-                expenses_with_category.append(item)
+                expenses_with_ids.append(item)
 
             return paginator.get_paginated_response({
                 "status": "success",
@@ -4866,10 +4894,11 @@ class ExpensAddGETView(BaseTokenView):
                     "ordering": ordering,
                 },
                 "summary": {
-                    "total_count": summary["total_count"],
-                    "total_amount": str(summary["total_amount"]),
+                    "total_count": overall_summary["total_count"],
+                    "total_amount": str(overall_summary["total_amount"]),
                 },
-                "results": expenses_with_category
+                "summary_by_type": summary_map,
+                "results": expenses_with_ids
             })
 
         except Exception as e:
