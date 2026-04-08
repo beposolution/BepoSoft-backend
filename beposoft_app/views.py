@@ -16548,7 +16548,7 @@ class FamilyAnalysisSummaryView(BaseTokenView):
             minutes = int(parts[1])
             seconds = int(parts[2])
 
-            return hours * 3600 + minutes * 60 + seconds
+            return (hours * 3600) + (minutes * 60) + seconds
         except Exception:
             return 0
 
@@ -16568,8 +16568,7 @@ class FamilyAnalysisSummaryView(BaseTokenView):
             to_date = request.GET.get("to_date", "").strip()
 
             attendance_filter = {}
-            sales_filter = {}
-            order_filter = {}
+            report_filter = {}
 
             if from_date and to_date:
                 try:
@@ -16578,8 +16577,7 @@ class FamilyAnalysisSummaryView(BaseTokenView):
                     to_date_obj = to_date_obj.replace(hour=23, minute=59, second=59)
 
                     attendance_filter["created_at__range"] = (from_date_obj, to_date_obj)
-                    sales_filter["created_at__range"] = (from_date_obj, to_date_obj)
-                    order_filter["updated_at__range"] = (from_date_obj, to_date_obj)
+                    report_filter["created_at__range"] = (from_date_obj, to_date_obj)
 
                 except Exception:
                     return Response(
@@ -16648,24 +16646,28 @@ class FamilyAnalysisSummaryView(BaseTokenView):
                 elif staff_status == "half_day":
                     family_map[family_id]["half_day"] = count
 
-            order_qs = (
-                Order.objects
-                .filter(family__isnull=False, **order_filter)
-                .values("family", "family__name")
-                .annotate(
-                    total_amount=Sum("total_amount"),
-                    total_invoices=Count("id")
+            report_invoice_qs = (
+                SalesTeamMemberDailyReport.objects
+                .filter(
+                    created_by__family__isnull=False,
+                    invoice__isnull=False,
+                    **report_filter
                 )
-                .order_by("family__name")
+                .values("created_by__family", "created_by__family__name")
+                .annotate(
+                    total_amount=Sum("invoice__total_amount"),
+                    total_invoices=Count("invoice", distinct=True)
+                )
+                .order_by("created_by__family__name")
             )
 
-            for item in order_qs:
-                family_id = item["family"]
+            for item in report_invoice_qs:
+                family_id = item["created_by__family"]
 
                 if family_id not in family_map:
                     family_map[family_id] = {
                         "family_id": family_id,
-                        "family_name": item["family__name"] or "",
+                        "family_name": item["created_by__family__name"] or "",
                         "present": 0,
                         "absent": 0,
                         "half_day": 0,
@@ -16678,9 +16680,9 @@ class FamilyAnalysisSummaryView(BaseTokenView):
                 family_map[family_id]["total_amount"] = float(item["total_amount"] or 0)
                 family_map[family_id]["total_invoices"] = int(item["total_invoices"] or 0)
 
-            sales_qs = (
-                SalesAnalysis.objects
-                .filter(created_by__family__isnull=False, **sales_filter)
+            report_call_qs = (
+                SalesTeamMemberDailyReport.objects
+                .filter(created_by__family__isnull=False, **report_filter)
                 .values(
                     "created_by__family",
                     "created_by__family__name",
@@ -16689,7 +16691,7 @@ class FamilyAnalysisSummaryView(BaseTokenView):
                 .order_by("created_by__family__name")
             )
 
-            for item in sales_qs:
+            for item in report_call_qs:
                 family_id = item["created_by__family"]
                 duration_str = item["call_duration"]
                 seconds = self._parse_duration_to_seconds(duration_str)
