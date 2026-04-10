@@ -2446,6 +2446,114 @@ class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializ
         return value
 
 
+
+
+class SummarySerializer(serializers.Serializer):
+    total_bill = serializers.FloatField()
+    total_volume = serializers.IntegerField()
+    total_call_count = serializers.IntegerField()
+    total_call_duration = serializers.FloatField()
+    call_duration_average = serializers.FloatField()
+    call_duration_percentage_8hrs = serializers.FloatField()
+    total_bdo_count = serializers.IntegerField()
+    active_count = serializers.IntegerField()
+    productive_count = serializers.IntegerField()
+    unique_customer_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+
+    present_count = serializers.IntegerField()
+    absent_count = serializers.IntegerField()
+    half_day_count = serializers.IntegerField()
+    total_team_count = serializers.IntegerField()
+
+
+class TeamSerializer(serializers.Serializer):
+    team_id = serializers.IntegerField()
+    team_name = serializers.CharField()
+    summary = SummarySerializer()
+
+
+class FamilySerializer(serializers.Serializer):
+    family_id = serializers.IntegerField()
+    family_name = serializers.CharField()
+    summary = SummarySerializer()
+    teams = TeamSerializer(many=True)
+
+
+class FinalHierarchySerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    summary = SummarySerializer()
+    families = FamilySerializer(many=True)
+
+
+
+class FamilyMetricsSerializer(serializers.Serializer):
+    total_bill = serializers.FloatField()
+    total_volume = serializers.IntegerField()
+    total_call_count = serializers.IntegerField()
+    total_call_duration = serializers.FloatField()
+    call_duration_average = serializers.FloatField()
+    call_duration_percentage_8hrs = serializers.FloatField()
+    total_bdo_count = serializers.IntegerField()
+    active_count = serializers.IntegerField()
+    productive_count = serializers.IntegerField()
+    unique_customer_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+
+    present_count = serializers.IntegerField()
+    absent_count = serializers.IntegerField()
+    half_day_count = serializers.IntegerField()
+    total_team_count = serializers.IntegerField()
+
+
+class FamilyTeamMetricsSerializer(serializers.Serializer):
+    team_id = serializers.IntegerField()
+    team_name = serializers.CharField()
+    summary = FamilyMetricsSerializer()
+
+
+class FamilyDetailedResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    family = serializers.DictField()
+    summary = FamilyMetricsSerializer()
+    teams = FamilyTeamMetricsSerializer(many=True)
+
+
+
+class TeamMetricsSerializer(serializers.Serializer):
+    total_bill = serializers.FloatField()
+    total_volume = serializers.IntegerField()
+    total_call_count = serializers.IntegerField()
+    total_call_duration = serializers.FloatField()
+    call_duration_average = serializers.FloatField()
+    call_duration_percentage_8hrs = serializers.FloatField()
+    total_bdo_count = serializers.IntegerField()
+    active_count = serializers.IntegerField()
+    productive_count = serializers.IntegerField()
+    unique_customer_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+
+    present_count = serializers.IntegerField()
+    absent_count = serializers.IntegerField()
+    half_day_count = serializers.IntegerField()
+    total_team_count = serializers.IntegerField()
+
+
+class TeamMemberMetricsSerializer(serializers.Serializer):
+    staff_id = serializers.IntegerField()
+    staff_name = serializers.CharField()
+    summary = TeamMetricsSerializer()
+
+
+class TeamDetailedResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    team = serializers.DictField()
+    summary = TeamMetricsSerializer()
+    members = TeamMemberMetricsSerializer(many=True)
+
 # Reports and Analytics serializers based on daily sales
 
 class DailySalesReportSerializer(serializers.ModelSerializer):

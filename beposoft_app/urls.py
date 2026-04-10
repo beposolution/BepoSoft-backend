@@ -337,6 +337,9 @@ urlpatterns = [
     path('api/sales/team/member/daily/report/status/<int:pk>/', SalesTeamMemberDailyReportStatusUpdateView.as_view(), name='sales-team-member-daily-report-status-update'),
     path("api/family/analysis/summary/", FamilyAnalysisSummaryView.as_view(), name="family-analysis-summary"),
     path("api/family/analysis/staff/summary/<int:family_id>/", FamilyStaffAnalysisSummaryView.as_view(), name="family-staff-analysis-summary"),
+    path("api/family/summary/team/", FullHierarchySummaryView.as_view()),
+    path("api/family/detailed/summary/<int:family_id>/", FamilyDetailedSummaryView.as_view()),
+    path("api/team/detailed/summary/<int:team_id>/", TeamDetailedSummaryView.as_view()),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
