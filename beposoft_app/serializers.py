@@ -2272,6 +2272,19 @@ class MySalesTeamListSerializer(serializers.ModelSerializer):
             'members',
         ]
 
+class MySimpleTeamMembershipSerializer(serializers.ModelSerializer):
+    team_id = serializers.IntegerField(source='team.id', read_only=True)
+    team_name = serializers.CharField(source='team.name', read_only=True)
+
+    class Meta:
+        model = SalesTeamMember
+        fields = [
+            'team_id',
+            'team_name',
+            'joined_at',
+        ]
+
+
 
 
 class SalesTeamDailyReportSerializer(serializers.ModelSerializer):
@@ -2448,9 +2461,10 @@ class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializ
 
 
 
+
 class SummarySerializer(serializers.Serializer):
-    total_bill = serializers.FloatField()
-    total_volume = serializers.IntegerField()
+    total_bill = serializers.IntegerField()
+    total_volume = serializers.FloatField()
     total_call_count = serializers.IntegerField()
     total_call_duration = serializers.FloatField()
     call_duration_average = serializers.FloatField()
@@ -2460,7 +2474,6 @@ class SummarySerializer(serializers.Serializer):
     productive_count = serializers.IntegerField()
     unique_customer_count = serializers.IntegerField()
     report_count = serializers.IntegerField()
-
     present_count = serializers.IntegerField()
     absent_count = serializers.IntegerField()
     half_day_count = serializers.IntegerField()
@@ -2473,24 +2486,29 @@ class TeamSerializer(serializers.Serializer):
     summary = SummarySerializer()
 
 
-# class FamilySerializer(serializers.Serializer):
-#     family_id = serializers.IntegerField()
-#     family_name = serializers.CharField()
-#     summary = SummarySerializer()
-#     teams = TeamSerializer(many=True)
+class HierarchyFamilySerializer(serializers.Serializer):
+    family_id = serializers.IntegerField()
+    family_name = serializers.CharField()
+    summary = SummarySerializer()
+    teams = TeamSerializer(many=True)
 
 
 class FinalHierarchySerializer(serializers.Serializer):
     status = serializers.CharField()
     message = serializers.CharField()
     summary = SummarySerializer()
-    # families = FamilySerializer(many=True)
-
+    families = HierarchyFamilySerializer(many=True)
 
 
 class FamilyMetricsSerializer(serializers.Serializer):
     total_bill = serializers.FloatField()
     total_volume = serializers.IntegerField()
+    total_unbilled = serializers.FloatField(required=False)
+    new_customers = serializers.IntegerField(required=False)
+    new_conversions = serializers.IntegerField(required=False)
+    billing = serializers.IntegerField(required=False)
+    volume = serializers.FloatField(required=False)
+    hourly_durations = serializers.DictField(required=False)
     total_call_count = serializers.IntegerField()
     total_call_duration = serializers.FloatField()
     call_duration_average = serializers.FloatField()
@@ -2525,6 +2543,12 @@ class FamilyDetailedResponseSerializer(serializers.Serializer):
 class TeamMetricsSerializer(serializers.Serializer):
     total_bill = serializers.FloatField()
     total_volume = serializers.IntegerField()
+    total_unbilled = serializers.FloatField(required=False)
+    new_customers = serializers.IntegerField(required=False)
+    new_conversions = serializers.IntegerField(required=False)
+    billing = serializers.IntegerField(required=False)
+    volume = serializers.FloatField(required=False)
+    hourly_durations = serializers.DictField(required=False)
     total_call_count = serializers.IntegerField()
     total_call_duration = serializers.FloatField()
     call_duration_average = serializers.FloatField()
