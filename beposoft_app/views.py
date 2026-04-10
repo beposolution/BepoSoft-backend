@@ -16005,7 +16005,42 @@ class MySalesTeamView(BaseTokenView):
                 "success": False,
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
+class MySimpleTeamMembershipView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            memberships = SalesTeamMember.objects.filter(user=user).select_related('team')
+
+            if not memberships.exists():
+                return Response({
+                    "success": True,
+                    "is_team_member": False,
+                    "message": "User is not part of any sales team",
+                    "data": []
+                }, status=status.HTTP_200_OK)
+
+            serializer = MySimpleTeamMembershipSerializer(memberships, many=True)
+
+            return Response({
+                "success": True,
+                "is_team_member": True,
+                "message": "User team details fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class SalesTeamMembersByTeamView(BaseTokenView):
@@ -17038,6 +17073,7 @@ class FamilyStaffAnalysisSummaryView(BaseTokenView):
             )
 
 
+
 class FullHierarchySummaryView(BaseTokenView):
 
     def _duration_to_seconds(self, duration):
@@ -17055,7 +17091,7 @@ class FullHierarchySummaryView(BaseTokenView):
         bdo_ids = set()
         customers = set()
 
-        total_bill = 0
+        total_amount = 0
         total_seconds = 0
         total_call_count = 0
         active = 0
@@ -17072,14 +17108,12 @@ class FullHierarchySummaryView(BaseTokenView):
             elif r.call_status == "productive":
                 productive += 1
 
-            # BDO
             try:
                 if r.created_by.department_id.name == "BDO":
                     bdo_ids.add(r.created_by_id)
             except:
                 pass
 
-            # Customer
             try:
                 if r.invoice and r.invoice.customer:
                     customers.add(r.invoice.customer.name)
@@ -17088,18 +17122,15 @@ class FullHierarchySummaryView(BaseTokenView):
             except:
                 pass
 
-            # Invoice
             if r.invoice_id and r.invoice_id not in invoice_ids:
                 invoice_ids.add(r.invoice_id)
-                total_bill += float(r.invoice.total_amount or 0)
+                total_amount += float(r.invoice.total_amount or 0)
 
-            # Duration
             sec = self._duration_to_seconds(r.call_duration)
             if sec > 0:
                 total_seconds += sec
                 total_call_count += 1
 
-            # Attendance
             if r.created_by_id in attendance_map:
                 present += attendance_map[r.created_by_id]["present"]
                 absent += attendance_map[r.created_by_id]["absent"]
@@ -17110,8 +17141,8 @@ class FullHierarchySummaryView(BaseTokenView):
         percent = (avg / 480) * 100 if avg else 0
 
         return {
-            "total_bill": round(total_bill, 2),
-            "total_volume": len(invoice_ids),
+            "total_bill": len(invoice_ids),
+            "total_volume": round(total_amount, 2),
             "total_call_count": total_call_count,
             "total_call_duration": round(total_minutes, 2),
             "call_duration_average": round(avg, 2),
@@ -17133,31 +17164,30 @@ class FullHierarchySummaryView(BaseTokenView):
         if error:
             return error
 
-        # STAFF
-        staff_qs = User.objects.filter(
-            department_id__name__in=["BDM", "BDO"]
+        staff_ids = list(
+            User.objects.filter(
+                department_id__name__in=["BDM", "BDO"]
+            ).values_list("id", flat=True)
         )
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
 
-        staff_ids = list(staff_qs.values_list("id", flat=True))
-
-        # REPORTS
         reports = SalesTeamMemberDailyReport.objects.select_related(
             "team",
-            "team__division",
             "created_by",
             "created_by__department_id",
             "invoice",
             "invoice__customer",
         ).filter(created_by_id__in=staff_ids)
-
-        # ATTENDANCE
-        attendance_qs = BDMOrderAnalysisStaff.objects.filter(
-            staff_id__in=staff_ids
-        )
+        if start_date:
+            reports = reports.filter(created_at__date__gte=start_date)
+        
+        if end_date:
+            reports = reports.filter(created_at__date__lte=end_date)
 
         attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
 
-        for row in attendance_qs:
+        for row in BDMOrderAnalysisStaff.objects.filter(staff_id__in=staff_ids):
             if row.status == "present":
                 attendance_map[row.staff_id]["present"] += 1
             elif row.status == "absent":
@@ -17165,7 +17195,6 @@ class FullHierarchySummaryView(BaseTokenView):
             elif row.status == "half_day":
                 attendance_map[row.staff_id]["half_day"] += 1
 
-        # GROUPING
         family_map = {}
 
         for r in reports:
@@ -17173,23 +17202,19 @@ class FullHierarchySummaryView(BaseTokenView):
             if not r.team or not r.created_by.family:
                 continue
 
-            family = r.created_by.family
-            fid = family.id
+            fid = r.created_by.family.id
             tid = r.team.id
 
             if fid not in family_map:
                 family_map[fid] = {
-                    "family": family,
+                    "family": r.created_by.family,
                     "teams": {}
                 }
 
             if tid not in family_map[fid]["teams"]:
-                family_map[fid]["teams"][tid] = {
-                    "team": r.team,
-                    "reports": []
-                }
+                family_map[fid]["teams"][tid] = []
 
-            family_map[fid]["teams"][tid]["reports"].append(r)
+            family_map[fid]["teams"][tid].append(r)
 
         families = []
         overall_reports = []
@@ -17201,13 +17226,13 @@ class FullHierarchySummaryView(BaseTokenView):
             family_reports = []
             team_ids = set()
 
-            for tdata in fdata["teams"].values():
+            for team_id, team_reports in fdata["teams"].items():
 
-                team = tdata["team"]
+                team = team_reports[0].team
                 team_ids.add(team.id)
 
                 summary = self._build_summary(
-                    tdata["reports"],
+                    team_reports,
                     attendance_map,
                     {team.id}
                 )
@@ -17218,7 +17243,7 @@ class FullHierarchySummaryView(BaseTokenView):
                     "summary": summary
                 })
 
-                family_reports.extend(tdata["reports"])
+                family_reports.extend(team_reports)
 
             family_summary = self._build_summary(
                 family_reports,
@@ -17242,15 +17267,15 @@ class FullHierarchySummaryView(BaseTokenView):
             overall_team_ids
         )
 
-        return Response({
+        response_data = {
             "status": "success",
             "message": "Updated hierarchy summary",
             "summary": overall_summary,
             "families": families
-        }, status=status.HTTP_200_OK)
+        }
 
-
-
+        serializer = FinalHierarchySerializer(response_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class FamilyDetailedSummaryView(BaseTokenView):
 
@@ -17262,6 +17287,20 @@ class FamilyDetailedSummaryView(BaseTokenView):
             return h * 3600 + m * 60 + s
         except:
             return 0
+
+    def get_empty_slot_dict(self):
+        return {
+            "09:00-10:00": 0,
+            "10:00-11:00": 0,
+            "11:00-12:00": 0,
+            "12:00-01:00": 0,
+            "01:00-02:00": 0,
+            "02:00-03:00": 0,
+            "03:00-04:00": 0,
+            "04:00-05:00": 0,
+            "05:00-06:00": 0,
+            "06:00-07:00": 0,
+        }
 
     def _build_summary(self, reports, attendance_map, team_ids):
 
@@ -17278,6 +17317,14 @@ class FamilyDetailedSummaryView(BaseTokenView):
         present = 0
         absent = 0
         half_day = 0
+
+        total_unbilled = 0
+        billing = 0
+        volume = 0
+        hourly_durations = self.get_empty_slot_dict()
+
+        new_customers = 0
+        new_conversions = 0
 
         for r in reports:
 
@@ -17304,24 +17351,73 @@ class FamilyDetailedSummaryView(BaseTokenView):
                 invoice_ids.add(r.invoice_id)
                 total_bill += float(r.invoice.total_amount or 0)
 
+            if r.invoice_id:
+                billing += 1
+                try:
+                    volume += float(r.invoice.total_amount or 0)
+                except:
+                    pass
+
             sec = self._duration_to_seconds(r.call_duration)
+
             if sec > 0:
                 total_seconds += sec
                 total_call_count += 1
 
-            # attendance
+                minutes = sec / 60
+                hour = r.created_at.hour
+
+                if hour == 9:
+                    hourly_durations["09:00-10:00"] += minutes
+                elif hour == 10:
+                    hourly_durations["10:00-11:00"] += minutes
+                elif hour == 11:
+                    hourly_durations["11:00-12:00"] += minutes
+                elif hour == 12:
+                    hourly_durations["12:00-01:00"] += minutes
+                elif hour == 13:
+                    hourly_durations["01:00-02:00"] += minutes
+                elif hour == 14:
+                    hourly_durations["02:00-03:00"] += minutes
+                elif hour == 15:
+                    hourly_durations["03:00-04:00"] += minutes
+                elif hour == 16:
+                    hourly_durations["04:00-05:00"] += minutes
+                elif hour == 17:
+                    hourly_durations["05:00-06:00"] += minutes
+                elif hour == 18:
+                    hourly_durations["06:00-07:00"] += minutes
+
             if r.created_by_id in attendance_map:
                 present += attendance_map[r.created_by_id]["present"]
                 absent += attendance_map[r.created_by_id]["absent"]
                 half_day += attendance_map[r.created_by_id]["half_day"]
+
+        if team_ids:
+            daily_reports = SalesTeamDailyReport.objects.filter(
+                team_id__in=team_ids
+            )
+
+            for dr in daily_reports:
+                new_customers += dr.new_customers or 0
+                new_conversions += dr.new_conversions or 0
 
         total_minutes = total_seconds / 60 if total_seconds else 0
         avg = (total_minutes / total_call_count) if total_call_count else 0
         percent = (avg / 480) * 100 if avg else 0
 
         return {
-            "total_bill": round(total_bill, 2),
-            "total_volume": len(invoice_ids),
+            "total_bill": len(invoice_ids),
+            "total_volume": round(total_bill, 2),
+
+            "total_unbilled": total_unbilled,
+            "billing": billing,
+            "volume": round(volume, 2),
+            "hourly_durations": hourly_durations,
+
+            "new_customers": new_customers,
+            "new_conversions": new_conversions,
+
             "total_call_count": total_call_count,
             "total_call_duration": round(total_minutes, 2),
             "call_duration_average": round(avg, 2),
@@ -17360,7 +17456,6 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "invoice__customer",
         ).filter(created_by_id__in=staff_ids)
 
-        # attendance
         attendance_qs = BDMOrderAnalysisStaff.objects.filter(
             staff_id__in=staff_ids
         )
@@ -17375,7 +17470,6 @@ class FamilyDetailedSummaryView(BaseTokenView):
             elif row.status == "half_day":
                 attendance_map[row.staff_id]["half_day"] += 1
 
-        # group teams
         team_map = defaultdict(list)
 
         for r in reports:
@@ -17421,8 +17515,6 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "teams": teams
         }, status=status.HTTP_200_OK)
 
-
-
 class TeamDetailedSummaryView(BaseTokenView):
 
     def _duration_to_seconds(self, duration):
@@ -17433,6 +17525,20 @@ class TeamDetailedSummaryView(BaseTokenView):
             return h * 3600 + m * 60 + s
         except:
             return 0
+
+    def get_empty_slot_dict(self):
+        return {
+            "09:00-10:00": 0,
+            "10:00-11:00": 0,
+            "11:00-12:00": 0,
+            "12:00-01:00": 0,
+            "01:00-02:00": 0,
+            "02:00-03:00": 0,
+            "03:00-04:00": 0,
+            "04:00-05:00": 0,
+            "05:00-06:00": 0,
+            "06:00-07:00": 0,
+        }
 
     def _build_summary(self, reports, attendance_map):
 
@@ -17445,10 +17551,19 @@ class TeamDetailedSummaryView(BaseTokenView):
         total_call_count = 0
         active = 0
         productive = 0
+        
 
         present = 0
         absent = 0
         half_day = 0
+
+        total_unbilled = 0
+        billing = 0
+        volume = 0
+        hourly_durations = self.get_empty_slot_dict()
+
+        new_customers = 0
+        new_conversions = 0
 
         for r in reports:
 
@@ -17475,24 +17590,75 @@ class TeamDetailedSummaryView(BaseTokenView):
                 invoice_ids.add(r.invoice_id)
                 total_bill += float(r.invoice.total_amount or 0)
 
+            if r.invoice_id:
+                billing += 1
+                try:
+                    volume += float(r.invoice.total_amount or 0)
+                except:
+                    pass
+
             sec = self._duration_to_seconds(r.call_duration)
+
             if sec > 0:
                 total_seconds += sec
                 total_call_count += 1
 
-            # attendance
+                minutes = sec / 60
+                hour = r.created_at.hour
+
+                if hour == 9:
+                    hourly_durations["09:00-10:00"] += minutes
+                elif hour == 10:
+                    hourly_durations["10:00-11:00"] += minutes
+                elif hour == 11:
+                    hourly_durations["11:00-12:00"] += minutes
+                elif hour == 12:
+                    hourly_durations["12:00-01:00"] += minutes
+                elif hour == 13:
+                    hourly_durations["01:00-02:00"] += minutes
+                elif hour == 14:
+                    hourly_durations["02:00-03:00"] += minutes
+                elif hour == 15:
+                    hourly_durations["03:00-04:00"] += minutes
+                elif hour == 16:
+                    hourly_durations["04:00-05:00"] += minutes
+                elif hour == 17:
+                    hourly_durations["05:00-06:00"] += minutes
+                elif hour == 18:
+                    hourly_durations["06:00-07:00"] += minutes
+
             if r.created_by_id in attendance_map:
                 present += attendance_map[r.created_by_id]["present"]
                 absent += attendance_map[r.created_by_id]["absent"]
                 half_day += attendance_map[r.created_by_id]["half_day"]
+
+        team_ids = list(set([r.team_id for r in reports if r.team_id]))
+
+        if team_ids:
+            daily_reports = SalesTeamDailyReport.objects.filter(
+                team_id__in=team_ids
+            )
+
+            for dr in daily_reports:
+                new_customers += dr.new_customers or 0
+                new_conversions += dr.new_conversions or 0
 
         total_minutes = total_seconds / 60 if total_seconds else 0
         avg = (total_minutes / total_call_count) if total_call_count else 0
         percent = (avg / 480) * 100 if avg else 0
 
         return {
-            "total_bill": round(total_bill, 2),
-            "total_volume": len(invoice_ids),
+            "total_bill": len(invoice_ids),
+            "total_volume": round(total_bill, 2),
+
+            "total_unbilled": total_unbilled,
+            "billing": billing,
+            "volume": round(volume, 2),
+            "hourly_durations": hourly_durations,
+
+            "new_customers": new_customers,
+            "new_conversions": new_conversions,
+
             "total_call_count": total_call_count,
             "total_call_duration": round(total_minutes, 2),
             "call_duration_average": round(avg, 2),
@@ -17506,7 +17672,7 @@ class TeamDetailedSummaryView(BaseTokenView):
             "present_count": present,
             "absent_count": absent,
             "half_day_count": half_day,
-            "total_team_count": 1,  # only one team
+            "total_team_count": 1,
         }
 
     def get(self, request, team_id):
@@ -17522,11 +17688,11 @@ class TeamDetailedSummaryView(BaseTokenView):
             "invoice",
             "invoice__customer",
         ).filter(team_id=team_id)
+
         search = request.GET.get("search", "").strip()
         start_date = request.GET.get("start_date")
         end_date = request.GET.get("end_date")
-        
-        #  SEARCH
+
         if search:
             reports = reports.filter(
                 Q(created_by__name__icontains=search) |
@@ -17534,14 +17700,13 @@ class TeamDetailedSummaryView(BaseTokenView):
                 Q(customer_name__icontains=search) |
                 Q(invoice__invoice__icontains=search)
             )
-        
-        #  DATE FILTER
+
         if start_date:
             reports = reports.filter(created_at__date__gte=start_date)
-        
+
         if end_date:
             reports = reports.filter(created_at__date__lte=end_date)
-        #  STAFF FILTER
+
         staff_id = request.GET.get("staff_id")
         if staff_id:
             reports = reports.filter(created_by_id=staff_id)
@@ -17559,7 +17724,6 @@ class TeamDetailedSummaryView(BaseTokenView):
 
         staff_ids = list(reports.values_list("created_by_id", flat=True).distinct())
 
-        # attendance
         attendance_qs = BDMOrderAnalysisStaff.objects.filter(
             staff_id__in=staff_ids
         )
@@ -17574,7 +17738,6 @@ class TeamDetailedSummaryView(BaseTokenView):
             elif row.status == "half_day":
                 attendance_map[row.staff_id]["half_day"] += 1
 
-        # group members
         member_map = defaultdict(list)
 
         for r in reports:
@@ -17590,17 +17753,19 @@ class TeamDetailedSummaryView(BaseTokenView):
                 "staff_name": staff.name,
                 "summary": self._build_summary(staff_reports, attendance_map)
             })
+
         paginator = StandardPagination()
         page = paginator.paginate_queryset(members, request)
+
         team_summary = self._build_summary(reports, attendance_map)
 
         return paginator.get_paginated_response({
-    "status": "success",
-    "message": "Team detailed summary fetched",
-    "team": {
-        "team_id": team.id,
-        "team_name": team.name
-    },
-    "summary": team_summary,
-    "members": page
-})
+            "status": "success",
+            "message": "Team detailed summary fetched",
+            "team": {
+                "team_id": team.id,
+                "team_name": team.name
+            },
+            "summary": team_summary,
+            "members": page
+        })
