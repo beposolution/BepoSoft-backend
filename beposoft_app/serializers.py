@@ -2473,18 +2473,18 @@ class TeamSerializer(serializers.Serializer):
     summary = SummarySerializer()
 
 
-class FamilySerializer(serializers.Serializer):
-    family_id = serializers.IntegerField()
-    family_name = serializers.CharField()
-    summary = SummarySerializer()
-    teams = TeamSerializer(many=True)
+# class FamilySerializer(serializers.Serializer):
+#     family_id = serializers.IntegerField()
+#     family_name = serializers.CharField()
+#     summary = SummarySerializer()
+#     teams = TeamSerializer(many=True)
 
 
 class FinalHierarchySerializer(serializers.Serializer):
     status = serializers.CharField()
     message = serializers.CharField()
     summary = SummarySerializer()
-    families = FamilySerializer(many=True)
+    # families = FamilySerializer(many=True)
 
 
 
