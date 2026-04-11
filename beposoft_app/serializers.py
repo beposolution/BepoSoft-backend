@@ -2456,16 +2456,28 @@ class SalesTeamMemberDailyReportWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesTeamMemberDailyReport
         fields = [
+            'id',
             'team',
+            'team_name',
+            'division',
+            'division_name',
             'state',
+            'state_name',
             'district',
+            'district_name',
+            'created_by',
+            'created_by_name',
             'invoice',
+            'invoice_number',
+            'invoice_details',
             'phone',
             'customer_name',
             'call_status',
             'status',
             'call_duration',
+            'call_duration_percentage_8hrs',
             'note',
+            'created_at',
         ]
 
     def validate(self, attrs):
@@ -2509,7 +2521,7 @@ class SalesTeamMemberDailyReportWriteSerializer(serializers.ModelSerializer):
             validated_data['customer_name'] = ""
         return super().update(instance, validated_data)
 
-        
+
 
 class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:
