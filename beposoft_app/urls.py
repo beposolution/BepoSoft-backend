@@ -341,6 +341,7 @@ urlpatterns = [
     path("api/family/summary/team/", FullHierarchySummaryView.as_view()),
     path("api/family/detailed/summary/<int:family_id>/", FamilyDetailedSummaryView.as_view()),
     path("api/team/detailed/summary/<int:team_id>/", TeamDetailedSummaryView.as_view()),
+    path('api/my/sales/team/detailed/summary/', MyTeamDetailedSummaryView.as_view(), name='my-sales-team-detailed-summary'),
 
 
     path("api/currency/add/", CurrencyListCreateView.as_view()),
