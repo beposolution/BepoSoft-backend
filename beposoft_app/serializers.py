@@ -2443,6 +2443,16 @@ class SalesTeamMemberDailyReportSerializer(serializers.ModelSerializer):
             return 0.0
 
         return round((total_minutes / (8 * 60)) * 100, 2)
+    
+
+
+
+class SalesTeamMemberDailyReportADDSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SalesTeamMemberDailyReport
+        fields = "__all__"
+        read_only_fields = ['created_by']
         
 
 class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializer):
