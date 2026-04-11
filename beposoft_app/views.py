@@ -15453,7 +15453,7 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
             if error_response:
                 return error_response
 
-            serializer = SalesTeamMemberDailyReportSerializer(data=request.data)
+            serializer = SalesTeamMemberDailyReportWriteSerializer(data=request.data)
             if serializer.is_valid():
                 serializer.save(created_by=authUser)
                 return Response(
@@ -15550,7 +15550,7 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
                 return error_response
 
             report = self.get_object(pk, authUser)
-            serializer = SalesTeamMemberDailyReportSerializer(report, data=request.data, partial=True)
+            serializer = SalesTeamMemberDailyReportWriteSerializer(report, data=request.data, partial=True)
 
             if serializer.is_valid():
                 serializer.save(created_by=authUser)
