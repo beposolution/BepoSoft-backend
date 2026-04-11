@@ -18035,6 +18035,7 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                 "team",
                 "created_by",
                 "created_by__department_id",
+                "created_by__family",
                 "invoice",
                 "invoice__manage_staff",
                 "invoice__warehouses",

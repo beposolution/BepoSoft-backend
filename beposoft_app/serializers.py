@@ -2618,13 +2618,28 @@ class TeamMemberReportSerializer(serializers.ModelSerializer):
     district = serializers.StringRelatedField()
     created_by = serializers.StringRelatedField()
     invoice = InvoiceDetailSerializer(read_only=True)
+    family_id = serializers.IntegerField(source='created_by.family.id', read_only=True)
+    family_name = serializers.CharField(source='created_by.family.name', read_only=True)
 
     class Meta:
         model = SalesTeamMemberDailyReport
         fields = [
-            "id", "team", "state", "district", "created_by", "invoice",
-            "phone", "customer_name", "call_status", "status", "call_duration",
-            "note", "created_at", "updated_at",
+            "id",
+            "team",
+            "state",
+            "district",
+            "created_by",
+            "family_id",
+            "family_name",
+            "invoice",
+            "phone",
+            "customer_name",
+            "call_status",
+            "status",
+            "call_duration",
+            "note",
+            "created_at",
+            "updated_at",
         ]
 
 
