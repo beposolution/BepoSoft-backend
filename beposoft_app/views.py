@@ -35,6 +35,7 @@ from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Cast, NullIf
 from django.db.models.functions import TruncDate
 import calendar
+from django.utils.timezone import localtime
 
 logger = logging.getLogger(__name__)
 
@@ -17365,8 +17366,7 @@ class FamilyDetailedSummaryView(BaseTokenView):
                 total_call_count += 1
 
                 minutes = sec / 60
-                hour = r.created_at.hour
-
+                hour = localtime(r.created_at).hour
                 if hour == 9:
                     hourly_durations["09:00-10:00"] += minutes
                 elif hour == 10:
@@ -17631,7 +17631,7 @@ class TeamDetailedSummaryView(BaseTokenView):
                 total_call_count += 1
 
                 minutes = sec / 60
-                hour = r.created_at.hour
+                hour = localtime(r.created_at).hour
 
                 if hour == 9:
                     hourly_durations["09:00-10:00"] += minutes
@@ -17835,3 +17835,349 @@ class TeamDetailedSummaryView(BaseTokenView):
             "summary": team_summary,
             "members": page
         })
+
+
+class MyTeamDetailedSummaryView(BaseTokenView):
+
+    def _duration_to_seconds(self, duration):
+        try:
+            if not duration:
+                return 0
+            h, m, s = map(int, str(duration).split(":"))
+            return h * 3600 + m * 60 + s
+        except:
+            return 0
+
+    def _invoice_total(self, invoice):
+        total = Decimal("0.00")
+        if not invoice:
+            return float(total)
+
+        for item in invoice.items.all():
+            rate = Decimal(str(item.rate or 0))
+            discount = Decimal(str(item.discount or 0))
+            qty = Decimal(str(item.quantity or 0))
+            tax = Decimal(str(item.tax or 0))
+
+            base = max(rate - discount, Decimal("0.00")) * qty
+            tax_amount = base * tax / Decimal("100")
+            total += base + tax_amount
+
+        return float(round(total, 2))
+
+    def get_empty_slot_dict(self):
+        return {
+            "09:00-10:00": 0,
+            "10:00-11:00": 0,
+            "11:00-12:00": 0,
+            "12:00-01:00": 0,
+            "01:00-02:00": 0,
+            "02:00-03:00": 0,
+            "03:00-04:00": 0,
+            "04:00-05:00": 0,
+            "05:00-06:00": 0,
+            "06:00-07:00": 0,
+        }
+
+    def _build_summary(self, reports, attendance_map):
+        invoice_ids = set()
+        bdo_ids = set()
+        customers = set()
+
+        total_bill = 0
+        total_seconds = 0
+        total_call_count = 0
+        active = 0
+        productive = 0
+
+        present = 0
+        absent = 0
+        half_day = 0
+
+        total_unbilled = 0
+        billing = 0
+        volume = 0
+        hourly_durations = self.get_empty_slot_dict()
+
+        new_customers = 0
+        new_conversions = 0
+
+        for r in reports:
+            if r.call_status == "active":
+                active += 1
+            elif r.call_status == "productive":
+                productive += 1
+
+            try:
+                if r.created_by.department_id.name == "BDO":
+                    bdo_ids.add(r.created_by_id)
+            except:
+                pass
+
+            try:
+                if r.invoice and r.invoice.customer:
+                    customers.add(r.invoice.customer.name)
+                elif r.customer_name:
+                    customers.add(r.customer_name)
+            except:
+                pass
+
+            if r.invoice_id and r.invoice_id not in invoice_ids:
+                invoice_ids.add(r.invoice_id)
+                total_bill += self._invoice_total(r.invoice)
+
+            if r.invoice_id:
+                billing += 1
+                try:
+                    volume += self._invoice_total(r.invoice)
+                except:
+                    pass
+
+            sec = self._duration_to_seconds(r.call_duration)
+
+            if sec > 0:
+                total_seconds += sec
+                total_call_count += 1
+
+                minutes = sec / 60
+                hour = localtime(r.created_at).hour
+
+                if hour == 9:
+                    hourly_durations["09:00-10:00"] += minutes
+                elif hour == 10:
+                    hourly_durations["10:00-11:00"] += minutes
+                elif hour == 11:
+                    hourly_durations["11:00-12:00"] += minutes
+                elif hour == 12:
+                    hourly_durations["12:00-01:00"] += minutes
+                elif hour == 13:
+                    hourly_durations["01:00-02:00"] += minutes
+                elif hour == 14:
+                    hourly_durations["02:00-03:00"] += minutes
+                elif hour == 15:
+                    hourly_durations["03:00-04:00"] += minutes
+                elif hour == 16:
+                    hourly_durations["04:00-05:00"] += minutes
+                elif hour == 17:
+                    hourly_durations["05:00-06:00"] += minutes
+                elif hour == 18:
+                    hourly_durations["06:00-07:00"] += minutes
+
+            if r.created_by_id in attendance_map:
+                present += attendance_map[r.created_by_id]["present"]
+                absent += attendance_map[r.created_by_id]["absent"]
+                half_day += attendance_map[r.created_by_id]["half_day"]
+
+        team_ids = list(set([r.team_id for r in reports if r.team_id]))
+
+        if team_ids:
+            daily_reports = SalesTeamDailyReport.objects.filter(team_id__in=team_ids)
+
+            for dr in daily_reports:
+                new_customers += dr.new_customers or 0
+                new_conversions += dr.new_conversions or 0
+
+        total_minutes = total_seconds / 60 if total_seconds else 0
+        avg = (total_minutes / total_call_count) if total_call_count else 0
+        percent = (avg / 480) * 100 if avg else 0
+
+        return {
+            "total_bill": len(invoice_ids),
+            "total_volume": round(total_bill, 2),
+
+            "total_unbilled": total_unbilled,
+            "billing": billing,
+            "volume": round(volume, 2),
+            "hourly_durations": hourly_durations,
+
+            "new_customers": new_customers,
+            "new_conversions": new_conversions,
+
+            "total_call_count": total_call_count,
+            "total_call_duration": round(total_minutes, 2),
+            "call_duration_average": round(avg, 2),
+            "call_duration_percentage_8hrs": round(percent, 2),
+            "total_bdo_count": len(bdo_ids),
+            "active_count": active,
+            "productive_count": productive,
+            "unique_customer_count": len(customers),
+            "report_count": len(reports),
+
+            "present_count": present,
+            "absent_count": absent,
+            "half_day_count": half_day,
+            "total_team_count": 1,
+        }
+
+    def get(self, request):
+        try:
+            authUser, error = self.get_user_from_token(request)
+            if error:
+                return error
+
+            sales_teams = SalesTeam.objects.filter(team_leader=authUser).select_related(
+                "team_leader",
+                "division",
+                "created_by"
+            )
+
+            if not sales_teams.exists():
+                return Response({
+                    "success": True,
+                    "is_team_leader": False,
+                    "message": "Logged-in user is not a team leader of any sales team",
+                    "data": []
+                }, status=status.HTTP_200_OK)
+
+            team_ids = list(sales_teams.values_list("id", flat=True))
+
+            reports = SalesTeamMemberDailyReport.objects.select_related(
+                "team",
+                "created_by",
+                "created_by__department_id",
+                "invoice",
+                "invoice__manage_staff",
+                "invoice__warehouses",
+                "invoice__company",
+                "invoice__customer",
+                "invoice__billing_address",
+                "invoice__family",
+                "invoice__state",
+                "invoice__locked_by",
+                "state",
+                "district",
+            ).prefetch_related(
+                Prefetch(
+                    "invoice__items",
+                    queryset=OrderItem.objects.select_related(
+                        "product",
+                        "size",
+                        "variant",
+                    )
+                )
+            ).filter(team_id__in=team_ids)
+
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            staff_id = request.GET.get("staff_id")
+            state_id = request.GET.get("state_id")
+            district_id = request.GET.get("district_id")
+            invoice_id = request.GET.get("invoice_id")
+            customer_id = request.GET.get("customer_id")
+            team_id = request.GET.get("team_id")
+
+            if team_id:
+                reports = reports.filter(team_id=team_id)
+
+            if search:
+                reports = reports.filter(
+                    Q(created_by__name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(customer_name__icontains=search) |
+                    Q(invoice__invoice__icontains=search) |
+                    Q(team__name__icontains=search)
+                )
+
+            if start_date:
+                reports = reports.filter(created_at__date__gte=start_date)
+
+            if end_date:
+                reports = reports.filter(created_at__date__lte=end_date)
+
+            if staff_id:
+                reports = reports.filter(created_by_id=staff_id)
+
+            if state_id:
+                reports = reports.filter(state_id=state_id)
+
+            if district_id:
+                reports = reports.filter(district_id=district_id)
+
+            if invoice_id:
+                reports = reports.filter(invoice_id=invoice_id)
+
+            if customer_id:
+                reports = reports.filter(invoice__customer_id=customer_id)
+
+            if not reports.exists():
+                return Response({
+                    "success": True,
+                    "is_team_leader": True,
+                    "message": "No data found",
+                    "data": []
+                }, status=status.HTTP_200_OK)
+
+            staff_ids = list(reports.values_list("created_by_id", flat=True).distinct())
+
+            attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                staff_id__in=staff_ids
+            )
+
+            attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
+
+            for row in attendance_qs:
+                if row.status == "present":
+                    attendance_map[row.staff_id]["present"] += 1
+                elif row.status == "absent":
+                    attendance_map[row.staff_id]["absent"] += 1
+                elif row.status == "half_day":
+                    attendance_map[row.staff_id]["half_day"] += 1
+
+            team_wise_reports = defaultdict(list)
+            for r in reports:
+                team_wise_reports[r.team_id].append(r)
+
+            final_data = []
+
+            for team in sales_teams:
+                team_reports = team_wise_reports.get(team.id, [])
+
+                if not team_reports:
+                    final_data.append({
+                        "team": {
+                            "team_id": team.id,
+                            "team_name": team.name
+                        },
+                        "summary": {},
+                        "members": []
+                    })
+                    continue
+
+                member_map = defaultdict(list)
+                for r in team_reports:
+                    member_map[r.created_by_id].append(r)
+
+                members = []
+
+                for member_staff_id, staff_reports in member_map.items():
+                    staff = staff_reports[0].created_by
+
+                    members.append({
+                        "staff_id": staff.id,
+                        "staff_name": staff.name,
+                        "summary": self._build_summary(staff_reports, attendance_map),
+                        "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
+                    })
+
+                final_data.append({
+                    "team": {
+                        "team_id": team.id,
+                        "team_name": team.name
+                    },
+                    "summary": self._build_summary(team_reports, attendance_map),
+                    "members": members
+                })
+
+            return Response({
+                "success": True,
+                "is_team_leader": True,
+                "message": "My team detailed summary fetched successfully",
+                "data": final_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
