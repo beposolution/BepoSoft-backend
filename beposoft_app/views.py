@@ -17459,6 +17459,14 @@ class FamilyDetailedSummaryView(BaseTokenView):
         attendance_qs = BDMOrderAnalysisStaff.objects.filter(
             staff_id__in=staff_ids
         )
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+
+        if start_date:
+            reports = reports.filter(created_at__date__gte=start_date)
+
+        if end_date:
+            reports = reports.filter(created_at__date__lte=end_date)
 
         attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
 
@@ -17515,6 +17523,8 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "teams": teams
         }, status=status.HTTP_200_OK)
 
+
+
 class TeamDetailedSummaryView(BaseTokenView):
 
     def _duration_to_seconds(self, duration):
@@ -17525,6 +17535,23 @@ class TeamDetailedSummaryView(BaseTokenView):
             return h * 3600 + m * 60 + s
         except:
             return 0
+
+    def _invoice_total(self, invoice):
+        total = Decimal("0.00")
+        if not invoice:
+            return float(total)
+
+        for item in invoice.items.all():
+            rate = Decimal(str(item.rate or 0))
+            discount = Decimal(str(item.discount or 0))
+            qty = Decimal(str(item.quantity or 0))
+            tax = Decimal(str(item.tax or 0))
+
+            base = max(rate - discount, Decimal("0.00")) * qty
+            tax_amount = base * tax / Decimal("100")
+            total += base + tax_amount
+
+        return float(round(total, 2))
 
     def get_empty_slot_dict(self):
         return {
@@ -17551,7 +17578,6 @@ class TeamDetailedSummaryView(BaseTokenView):
         total_call_count = 0
         active = 0
         productive = 0
-        
 
         present = 0
         absent = 0
@@ -17588,12 +17614,13 @@ class TeamDetailedSummaryView(BaseTokenView):
 
             if r.invoice_id and r.invoice_id not in invoice_ids:
                 invoice_ids.add(r.invoice_id)
-                total_bill += float(r.invoice.total_amount or 0)
+
+                total_bill += self._invoice_total(r.invoice)
 
             if r.invoice_id:
                 billing += 1
                 try:
-                    volume += float(r.invoice.total_amount or 0)
+                    volume += self._invoice_total(r.invoice)
                 except:
                     pass
 
@@ -17686,7 +17713,25 @@ class TeamDetailedSummaryView(BaseTokenView):
             "created_by",
             "created_by__department_id",
             "invoice",
+            "invoice__manage_staff",
+            "invoice__warehouses",
+            "invoice__company",
             "invoice__customer",
+            "invoice__billing_address",
+            "invoice__family",
+            "invoice__state",
+            "invoice__locked_by",
+            "state",
+            "district",
+        ).prefetch_related(
+            Prefetch(
+                "invoice__items",
+                queryset=OrderItem.objects.select_related(
+                    "product",
+                    "size",
+                    "variant",
+                )
+            )
         ).filter(team_id=team_id)
 
         search = request.GET.get("search", "").strip()
@@ -17706,10 +17751,30 @@ class TeamDetailedSummaryView(BaseTokenView):
 
         if end_date:
             reports = reports.filter(created_at__date__lte=end_date)
-
+        
         staff_id = request.GET.get("staff_id")
+        state_id = request.GET.get("state_id")
+        district_id = request.GET.get("district_id")
+        invoice_id = request.GET.get("invoice_id")
+        customer_id = request.GET.get("customer_id")
+
+
         if staff_id:
             reports = reports.filter(created_by_id=staff_id)
+
+        if state_id:
+            reports = reports.filter(state_id=state_id)
+
+        if district_id:
+            reports = reports.filter(district_id=district_id)
+
+
+        if invoice_id:
+            reports = reports.filter(invoice_id=invoice_id)
+
+     
+        if customer_id:
+            reports = reports.filter(invoice__customer_id=customer_id)
 
         if not reports.exists():
             return Response({
@@ -17751,7 +17816,8 @@ class TeamDetailedSummaryView(BaseTokenView):
             members.append({
                 "staff_id": staff.id,
                 "staff_name": staff.name,
-                "summary": self._build_summary(staff_reports, attendance_map)
+                "summary": self._build_summary(staff_reports, attendance_map),
+                "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
             })
 
         paginator = StandardPagination()

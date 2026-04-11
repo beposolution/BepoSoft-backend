@@ -2540,6 +2540,84 @@ class FamilyDetailedResponseSerializer(serializers.Serializer):
 
 
 
+class ProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Products
+        fields = [
+            "id",
+            "name", 
+            "image", 
+        ]
+
+
+class OrderItemDetailSerializer(serializers.ModelSerializer):
+    product = ProductDetailSerializer(read_only=True)
+ 
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "id", "product",  "quantity",
+        ]
+
+
+class CustomerDetailSerializer(serializers.ModelSerializer):
+    state = serializers.StringRelatedField()
+
+    class Meta:
+        model = Customers
+        fields = [
+            "id",  "name",  "phone",  
+             "state", 
+        ]
+
+
+class InvoiceDetailSerializer(serializers.ModelSerializer):
+    
+    customer = CustomerDetailSerializer(read_only=True)
+    family_id = serializers.IntegerField(source="family.id", read_only=True)
+    family_name = serializers.CharField(source="family.name", read_only=True)
+    items = OrderItemDetailSerializer(many=True, read_only=True)
+    invoice_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",  "customer", "invoice","family_id", "family_name",
+             "order_date", "payment_status", "invoice_total", "items",
+        ]
+
+    def get_invoice_total(self, obj):
+        total = Decimal("0.00")
+        for item in obj.items.all():
+            rate = Decimal(str(item.rate or 0))
+            discount = Decimal(str(item.discount or 0))
+            qty = Decimal(str(item.quantity or 0))
+            tax = Decimal(str(item.tax or 0))
+
+            base = max(rate - discount, Decimal("0.00")) * qty
+            tax_amount = base * tax / Decimal("100")
+            total += base + tax_amount
+
+        return float(round(total, 2))
+
+
+class TeamMemberReportSerializer(serializers.ModelSerializer):
+    team = serializers.StringRelatedField()
+    state = serializers.StringRelatedField()
+    district = serializers.StringRelatedField()
+    created_by = serializers.StringRelatedField()
+    invoice = InvoiceDetailSerializer(read_only=True)
+
+    class Meta:
+        model = SalesTeamMemberDailyReport
+        fields = [
+            "id", "team", "state", "district", "created_by", "invoice",
+            "phone", "customer_name", "call_status", "status", "call_duration",
+            "note", "created_at", "updated_at",
+        ]
+
+
 class TeamMetricsSerializer(serializers.Serializer):
     total_bill = serializers.FloatField()
     total_volume = serializers.IntegerField()
@@ -2569,6 +2647,7 @@ class TeamMemberMetricsSerializer(serializers.Serializer):
     staff_id = serializers.IntegerField()
     staff_name = serializers.CharField()
     summary = TeamMetricsSerializer()
+    reports = TeamMemberReportSerializer(many=True)
 
 
 class TeamDetailedResponseSerializer(serializers.Serializer):
