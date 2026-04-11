@@ -2620,6 +2620,8 @@ class TeamMemberReportSerializer(serializers.ModelSerializer):
     invoice = InvoiceDetailSerializer(read_only=True)
     family_id = serializers.IntegerField(source='created_by.family.id', read_only=True)
     family_name = serializers.CharField(source='created_by.family.name', read_only=True)
+    call_duration_minutes = serializers.SerializerMethodField()
+    call_duration_percentage_8hrs = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesTeamMemberDailyReport
@@ -2637,10 +2639,31 @@ class TeamMemberReportSerializer(serializers.ModelSerializer):
             "call_status",
             "status",
             "call_duration",
+            "call_duration_minutes",
+            "call_duration_percentage_8hrs",
             "note",
             "created_at",
             "updated_at",
         ]
+
+    def _duration_to_seconds(self, duration):
+        try:
+            if not duration:
+                return 0
+            h, m, s = map(int, duration.split(":"))
+            return h * 3600 + m * 60 + s
+        except:
+            return 0
+
+    def get_call_duration_minutes(self, obj):
+        seconds = self._duration_to_seconds(obj.call_duration)
+        return round(seconds / 60, 2)
+
+    def get_call_duration_percentage_8hrs(self, obj):
+        seconds = self._duration_to_seconds(obj.call_duration)
+        minutes = seconds / 60 if seconds else 0
+        percentage = (minutes / 480) * 100 if minutes else 0
+        return round(percentage, 2)
 
 
 class TeamMetricsSerializer(serializers.Serializer):
