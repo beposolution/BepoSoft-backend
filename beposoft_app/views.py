@@ -4769,7 +4769,17 @@ class ExpensAddGETView(BaseTokenView):
 
             # Expense type
             if expense_type:
-                expense_data = expense_data.filter(expense_type__iexact=expense_type)
+                expense_type = expense_type.strip().lower()
+                known_types = {"miscellaneous", "permanent", "emi", "cargo", "purchase"}
+
+                if expense_type == "others":
+                    expense_data = expense_data.filter(
+                        Q(expense_type__isnull=True) |
+                        Q(expense_type__exact="") |
+                        ~Q(expense_type__in=list(known_types))
+                    )
+                else:
+                    expense_data = expense_data.filter(expense_type__iexact=expense_type)
 
             # Company filters
             if company_id:
