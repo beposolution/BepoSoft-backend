@@ -16113,6 +16113,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
     - team
     - created_by
     - state
+    - family
     """
 
     HOURLY_SLOTS = [
@@ -16167,27 +16168,22 @@ class SalesTeamSummaryReportView(BaseTokenView):
         try:
             value = str(value).strip().lower()
 
-            # Pure integer seconds like "120"
             if value.isdigit():
                 return int(value)
 
-            # Float seconds like "120.0"
             try:
                 return int(float(value))
             except:
                 pass
 
-            # HH:MM:SS -> "02:04:07"
             if re.match(r'^\d{1,2}:\d{1,2}:\d{1,2}$', value):
                 h, m, s = map(int, value.split(':'))
                 return h * 3600 + m * 60 + s
 
-            # MM:SS -> "04:07"
             if re.match(r'^\d{1,2}:\d{1,2}$', value):
                 m, s = map(int, value.split(':'))
                 return m * 60 + s
 
-            # Text formats like "2 min 30 sec"
             hours = re.search(r'(\d+)\s*h(?:our)?s?', value)
             minutes = re.search(r'(\d+)\s*m(?:in)?s?', value)
             seconds = re.search(r'(\d+)\s*s(?:ec)?s?', value)
@@ -16231,6 +16227,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
             team_id = request.GET.get("team", "").strip()
             created_by_id = request.GET.get("created_by", "").strip()
             state_id = request.GET.get("state", "").strip()
+            family_id = request.GET.get("family", "").strip()
             search = request.GET.get("search", "").strip()
 
             valid_statuses = [choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES]
@@ -16278,11 +16275,11 @@ class SalesTeamSummaryReportView(BaseTokenView):
                 )
 
             team_daily_qs = SalesTeamDailyReport.objects.select_related(
-                'team', 'created_by', 'state', 'district'
+                'team', 'created_by', 'state', 'district', 'created_by__family'
             ).all().order_by('-id')
 
             member_daily_qs = SalesTeamMemberDailyReport.objects.select_related(
-                'team', 'state', 'district', 'created_by', 'invoice'
+                'team', 'state', 'district', 'created_by', 'invoice', 'created_by__family'
             ).all().order_by('-id')
 
             if team_id:
@@ -16296,6 +16293,10 @@ class SalesTeamSummaryReportView(BaseTokenView):
             if state_id:
                 team_daily_qs = team_daily_qs.filter(state_id=state_id)
                 member_daily_qs = member_daily_qs.filter(state_id=state_id)
+
+            if family_id:
+                team_daily_qs = team_daily_qs.filter(created_by__family_id=family_id)
+                member_daily_qs = member_daily_qs.filter(created_by__family_id=family_id)
 
             if parsed_start_date:
                 team_daily_qs = team_daily_qs.filter(created_at__date__gte=parsed_start_date)
@@ -16314,6 +16315,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     Q(phone__icontains=search) |
                     Q(note__icontains=search) |
                     Q(created_by__name__icontains=search) |
+                    Q(created_by__family__name__icontains=search) |
                     Q(state__name__icontains=search) |
                     Q(district__name__icontains=search) |
                     Q(team__name__icontains=search)
@@ -16337,7 +16339,6 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
             total_duration_entries = 0
 
-            # Build from SalesTeamDailyReport
             for item in team_daily_qs:
                 team_key = item.team.id if item.team else 0
                 team_name = item.team.name if item.team else "No Team"
@@ -16359,6 +16360,8 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     grouped[team_key]["members"][member_key] = {
                         "created_by_id": item.created_by.id,
                         "created_by_name": item.created_by.name,
+                        "family_id": item.created_by.family.id if item.created_by.family else None,
+                        "family_name": item.created_by.family.name if item.created_by.family else None,
                         "states": {}
                     }
 
@@ -16384,7 +16387,6 @@ class SalesTeamSummaryReportView(BaseTokenView):
                 bucket["new_customer"] += item.new_customers or 0
                 bucket["new_conversion"] += item.new_conversions or 0
 
-            # Add member daily report durations and billing
             for item in member_daily_qs:
                 team_key = item.team.id if item.team else 0
                 team_name = item.team.name if item.team else "No Team"
@@ -16404,6 +16406,8 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     grouped[team_key]["members"][member_key] = {
                         "created_by_id": item.created_by.id,
                         "created_by_name": item.created_by.name,
+                        "family_id": item.created_by.family.id if item.created_by.family else None,
+                        "family_name": item.created_by.family.name if item.created_by.family else None,
                         "states": {}
                     }
 
@@ -16463,6 +16467,8 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     member_entry = {
                         "created_by_id": member_value["created_by_id"],
                         "created_by_name": member_value["created_by_name"],
+                        "family_id": member_value["family_id"],
+                        "family_name": member_value["family_name"],
                         "states": []
                     }
 
@@ -16485,7 +16491,6 @@ class SalesTeamSummaryReportView(BaseTokenView):
                 response_data.append(team_entry)
                 row_number += 1
 
-            # Final average calculations
             if total_duration_entries > 0:
                 average_minutes = round(grand_totals["total_call_duration"] / total_duration_entries, 2)
             else:
@@ -16509,6 +16514,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     "team": team_id,
                     "created_by": created_by_id,
                     "state": state_id,
+                    "family": family_id,
                     "search": search,
                 },
                 "data": page,
