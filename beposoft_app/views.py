@@ -17804,20 +17804,14 @@ class TeamDetailedSummaryView(BaseTokenView):
 
     def _invoice_total(self, invoice):
         total = Decimal("0.00")
-        if not invoice:
+        try:
+            if not invoice:
+                return float(total)
+
+            total = Decimal(str(invoice.total_amount or 0))
+            return float(round(total, 2))
+        except:
             return float(total)
-
-        for item in invoice.items.all():
-            rate = Decimal(str(item.rate or 0))
-            discount = Decimal(str(item.discount or 0))
-            qty = Decimal(str(item.quantity or 0))
-            tax = Decimal(str(item.tax or 0))
-
-            base = max(rate - discount, Decimal("0.00")) * qty
-            tax_amount = base * tax / Decimal("100")
-            total += base + tax_amount
-
-        return float(round(total, 2))
 
     def get_empty_slot_dict(self):
         return {
