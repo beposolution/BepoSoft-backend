@@ -17189,197 +17189,360 @@ class FullHierarchySummaryView(BaseTokenView):
         except:
             return 0
 
-    def _build_summary(self, reports, attendance_map, team_ids):
+    def _build_attendance_details(self, reports, attendance_map):
+        try:
+            staff_ids_in_reports = set()
 
-        invoice_ids = set()
-        bdo_ids = set()
-        customers = set()
+            for r in reports:
+                if r.created_by_id:
+                    staff_ids_in_reports.add(r.created_by_id)
 
-        total_amount = 0
-        total_seconds = 0
-        total_call_count = 0
-        active = 0
-        productive = 0
+            present_list = []
+            absent_list = []
+            half_day_list = []
 
-        present = 0
-        absent = 0
-        half_day = 0
+            present_total = 0
+            absent_total = 0
+            half_day_total = 0
 
-        for r in reports:
-
-            if r.call_status == "active":
-                active += 1
-            elif r.call_status == "productive":
-                productive += 1
-
-            try:
-                if r.created_by.department_id.name == "BDO":
-                    bdo_ids.add(r.created_by_id)
-            except:
-                pass
-
-            try:
-                if r.invoice and r.invoice.customer:
-                    customers.add(r.invoice.customer.name)
-                elif r.customer_name:
-                    customers.add(r.customer_name)
-            except:
-                pass
-
-            if r.invoice_id and r.invoice_id not in invoice_ids:
-                invoice_ids.add(r.invoice_id)
-                total_amount += float(r.invoice.total_amount or 0)
-
-            sec = self._duration_to_seconds(r.call_duration)
-            if sec > 0:
-                total_seconds += sec
-                total_call_count += 1
-
-            if r.created_by_id in attendance_map:
-                present += attendance_map[r.created_by_id]["present"]
-                absent += attendance_map[r.created_by_id]["absent"]
-                half_day += attendance_map[r.created_by_id]["half_day"]
-
-        total_minutes = total_seconds / 60 if total_seconds else 0
-        avg = (total_minutes / total_call_count) if total_call_count else 0
-        percent = (avg / 480) * 100 if avg else 0
-
-        return {
-            "total_bill": len(invoice_ids),
-            "total_volume": round(total_amount, 2),
-            "total_call_count": total_call_count,
-            "total_call_duration": round(total_minutes, 2),
-            "call_duration_average": round(avg, 2),
-            "call_duration_percentage_8hrs": round(percent, 2),
-            "total_bdo_count": len(bdo_ids),
-            "active_count": active,
-            "productive_count": productive,
-            "unique_customer_count": len(customers),
-            "report_count": len(reports),
-            "present_count": present,
-            "absent_count": absent,
-            "half_day_count": half_day,
-            "total_team_count": len(team_ids),
-        }
-
-    def get(self, request):
-
-        authUser, error = self.get_user_from_token(request)
-        if error:
-            return error
-
-        staff_ids = list(
-            User.objects.filter(
-                department_id__name__in=["BDM", "BDO"]
-            ).values_list("id", flat=True)
-        )
-        start_date = request.GET.get("start_date")
-        end_date = request.GET.get("end_date")
-
-        reports = SalesTeamMemberDailyReport.objects.select_related(
-            "team",
-            "created_by",
-            "created_by__department_id",
-            "invoice",
-            "invoice__customer",
-        ).filter(created_by_id__in=staff_ids)
-        if start_date:
-            reports = reports.filter(created_at__date__gte=start_date)
-        
-        if end_date:
-            reports = reports.filter(created_at__date__lte=end_date)
-
-        attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
-
-        for row in BDMOrderAnalysisStaff.objects.filter(staff_id__in=staff_ids):
-            if row.status == "present":
-                attendance_map[row.staff_id]["present"] += 1
-            elif row.status == "absent":
-                attendance_map[row.staff_id]["absent"] += 1
-            elif row.status == "half_day":
-                attendance_map[row.staff_id]["half_day"] += 1
-
-        family_map = {}
-
-        for r in reports:
-
-            if not r.team or not r.created_by.family:
-                continue
-
-            fid = r.created_by.family.id
-            tid = r.team.id
-
-            if fid not in family_map:
-                family_map[fid] = {
-                    "family": r.created_by.family,
-                    "teams": {}
-                }
-
-            if tid not in family_map[fid]["teams"]:
-                family_map[fid]["teams"][tid] = []
-
-            family_map[fid]["teams"][tid].append(r)
-
-        families = []
-        overall_reports = []
-        overall_team_ids = set()
-
-        for fdata in family_map.values():
-
-            team_list = []
-            family_reports = []
-            team_ids = set()
-
-            for team_id, team_reports in fdata["teams"].items():
-
-                team = team_reports[0].team
-                team_ids.add(team.id)
-
-                summary = self._build_summary(
-                    team_reports,
-                    attendance_map,
-                    {team.id}
+            for staff_id in staff_ids_in_reports:
+                staff_data = attendance_map.get(
+                    staff_id,
+                    {
+                        "staff_name": "",
+                        "present": 0,
+                        "absent": 0,
+                        "half_day": 0,
+                    }
                 )
 
-                team_list.append({
-                    "team_id": team.id,
-                    "team_name": team.name,
-                    "summary": summary
-                })
+                if staff_data["present"] > 0:
+                    present_list.append({
+                        "staff_id": staff_id,
+                        "staff_name": staff_data["staff_name"],
+                        "count": staff_data["present"]
+                    })
+                    present_total += staff_data["present"]
 
-                family_reports.extend(team_reports)
+                if staff_data["absent"] > 0:
+                    absent_list.append({
+                        "staff_id": staff_id,
+                        "staff_name": staff_data["staff_name"],
+                        "count": staff_data["absent"]
+                    })
+                    absent_total += staff_data["absent"]
 
-            family_summary = self._build_summary(
-                family_reports,
-                attendance_map,
-                team_ids
+                if staff_data["half_day"] > 0:
+                    half_day_list.append({
+                        "staff_id": staff_id,
+                        "staff_name": staff_data["staff_name"],
+                        "count": staff_data["half_day"]
+                    })
+                    half_day_total += staff_data["half_day"]
+
+            present_list.sort(key=lambda x: x["staff_name"].lower())
+            absent_list.sort(key=lambda x: x["staff_name"].lower())
+            half_day_list.sort(key=lambda x: x["staff_name"].lower())
+
+            return {
+                "present_count": present_total,
+                "absent_count": absent_total,
+                "half_day_count": half_day_total,
+                "attendance_details": {
+                    "present": present_list,
+                    "absent": absent_list,
+                    "half_day": half_day_list,
+                }
+            }
+        except:
+            return {
+                "present_count": 0,
+                "absent_count": 0,
+                "half_day_count": 0,
+                "attendance_details": {
+                    "present": [],
+                    "absent": [],
+                    "half_day": [],
+                }
+            }
+
+    def _build_summary(self, reports, attendance_map, team_ids):
+        try:
+            invoice_ids = set()
+            bdo_ids = set()
+            customers = set()
+
+            total_amount = 0
+            total_seconds = 0
+            total_call_count = 0
+            active = 0
+            productive = 0
+
+            for r in reports:
+
+                if r.call_status == "active":
+                    active += 1
+                elif r.call_status == "productive":
+                    productive += 1
+
+                try:
+                    if r.created_by.department_id.name == "BDO":
+                        bdo_ids.add(r.created_by_id)
+                except:
+                    pass
+
+                try:
+                    if r.invoice and r.invoice.customer:
+                        customers.add(r.invoice.customer.name)
+                    elif r.customer_name:
+                        customers.add(r.customer_name)
+                except:
+                    pass
+
+                try:
+                    if r.invoice_id and r.invoice_id not in invoice_ids:
+                        invoice_ids.add(r.invoice_id)
+                        total_amount += float(r.invoice.total_amount or 0)
+                except:
+                    pass
+
+                sec = self._duration_to_seconds(r.call_duration)
+                if sec > 0:
+                    total_seconds += sec
+                    total_call_count += 1
+
+            attendance_summary = self._build_attendance_details(reports, attendance_map)
+
+            total_minutes = total_seconds / 60 if total_seconds else 0
+            avg = (total_minutes / total_call_count) if total_call_count else 0
+            percent = (avg / 480) * 100 if avg else 0
+
+            return {
+                "total_bill": len(invoice_ids),
+                "total_volume": round(total_amount, 2),
+                "total_call_count": total_call_count,
+                "total_call_duration": round(total_minutes, 2),
+                "call_duration_average": round(avg, 2),
+                "call_duration_percentage_8hrs": round(percent, 2),
+                "total_bdo_count": len(bdo_ids),
+                "active_count": active,
+                "productive_count": productive,
+                "unique_customer_count": len(customers),
+                "report_count": len(reports),
+                "present_count": attendance_summary["present_count"],
+                "absent_count": attendance_summary["absent_count"],
+                "half_day_count": attendance_summary["half_day_count"],
+                "total_team_count": len(team_ids),
+                "attendance_details": attendance_summary["attendance_details"],
+            }
+        except:
+            return {
+                "total_bill": 0,
+                "total_volume": 0.0,
+                "total_call_count": 0,
+                "total_call_duration": 0.0,
+                "call_duration_average": 0.0,
+                "call_duration_percentage_8hrs": 0.0,
+                "total_bdo_count": 0,
+                "active_count": 0,
+                "productive_count": 0,
+                "unique_customer_count": 0,
+                "report_count": 0,
+                "present_count": 0,
+                "absent_count": 0,
+                "half_day_count": 0,
+                "total_team_count": 0,
+                "attendance_details": {
+                    "present": [],
+                    "absent": [],
+                    "half_day": [],
+                },
+            }
+
+    def get(self, request):
+        try:
+            authUser, error = self.get_user_from_token(request)
+            if error:
+                return error
+
+            staff_queryset = User.objects.filter(
+                department_id__name__in=["BDM", "BDO"]
+            ).select_related("family", "department_id")
+
+            staff_ids = list(staff_queryset.values_list("id", flat=True))
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            reports = SalesTeamMemberDailyReport.objects.select_related(
+                "team",
+                "created_by",
+                "created_by__department_id",
+                "created_by__family",
+                "invoice",
+                "invoice__customer",
+            ).filter(created_by_id__in=staff_ids)
+
+            if start_date:
+                reports = reports.filter(created_at__date__gte=start_date)
+
+            if end_date:
+                reports = reports.filter(created_at__date__lte=end_date)
+
+            attendance_rows = BDMOrderAnalysisStaff.objects.select_related("staff").filter(
+                staff_id__in=staff_ids
             )
 
-            families.append({
-                "family_id": fdata["family"].id,
-                "family_name": fdata["family"].name,
-                "summary": family_summary,
-                "teams": team_list
+            if start_date:
+                attendance_rows = attendance_rows.filter(created_at__date__gte=start_date)
+
+            if end_date:
+                attendance_rows = attendance_rows.filter(created_at__date__lte=end_date)
+
+            attendance_map = defaultdict(lambda: {
+                "staff_name": "",
+                "present": 0,
+                "absent": 0,
+                "half_day": 0
             })
 
-            overall_reports.extend(family_reports)
-            overall_team_ids.update(team_ids)
+            for row in attendance_rows:
+                try:
+                    attendance_map[row.staff_id]["staff_name"] = row.staff.name if row.staff else ""
 
-        overall_summary = self._build_summary(
-            overall_reports,
-            attendance_map,
-            overall_team_ids
-        )
+                    if row.status == "present":
+                        attendance_map[row.staff_id]["present"] += 1
+                    elif row.status == "absent":
+                        attendance_map[row.staff_id]["absent"] += 1
+                    elif row.status == "half_day":
+                        attendance_map[row.staff_id]["half_day"] += 1
+                except:
+                    pass
 
-        response_data = {
-            "status": "success",
-            "message": "Updated hierarchy summary",
-            "summary": overall_summary,
-            "families": families
-        }
+            family_map = {}
 
-        serializer = FinalHierarchySerializer(response_data)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            for r in reports:
+                try:
+                    if not r.team or not r.created_by.family:
+                        continue
+
+                    fid = r.created_by.family.id
+                    tid = r.team.id
+
+                    if fid not in family_map:
+                        family_map[fid] = {
+                            "family": r.created_by.family,
+                            "teams": {}
+                        }
+
+                    if tid not in family_map[fid]["teams"]:
+                        family_map[fid]["teams"][tid] = []
+
+                    family_map[fid]["teams"][tid].append(r)
+                except:
+                    pass
+
+            families = []
+            overall_reports = []
+            overall_team_ids = set()
+
+            for fdata in family_map.values():
+                try:
+                    team_list = []
+                    family_reports = []
+                    team_ids = set()
+
+                    for team_id, team_reports in fdata["teams"].items():
+                        try:
+                            team = team_reports[0].team
+                            team_ids.add(team.id)
+
+                            summary = self._build_summary(
+                                team_reports,
+                                attendance_map,
+                                {team.id}
+                            )
+
+                            team_list.append({
+                                "team_id": team.id,
+                                "team_name": team.name,
+                                "summary": summary
+                            })
+
+                            family_reports.extend(team_reports)
+                        except:
+                            pass
+
+                    family_summary = self._build_summary(
+                        family_reports,
+                        attendance_map,
+                        team_ids
+                    )
+
+                    families.append({
+                        "family_id": fdata["family"].id,
+                        "family_name": fdata["family"].name,
+                        "summary": family_summary,
+                        "teams": team_list
+                    })
+
+                    overall_reports.extend(family_reports)
+                    overall_team_ids.update(team_ids)
+                except:
+                    pass
+
+            overall_summary = self._build_summary(
+                overall_reports,
+                attendance_map,
+                overall_team_ids
+            )
+
+            response_data = {
+                "status": "success",
+                "message": "Updated hierarchy summary",
+                "summary": overall_summary,
+                "families": families
+            }
+
+            serializer = FinalHierarchySerializer(response_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print("FullHierarchySummaryView GET Error:", str(e))
+            traceback.print_exc()
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong while fetching hierarchy summary",
+                    "error": str(e),
+                    "summary": {
+                        "total_bill": 0,
+                        "total_volume": 0.0,
+                        "total_call_count": 0,
+                        "total_call_duration": 0.0,
+                        "call_duration_average": 0.0,
+                        "call_duration_percentage_8hrs": 0.0,
+                        "total_bdo_count": 0,
+                        "active_count": 0,
+                        "productive_count": 0,
+                        "unique_customer_count": 0,
+                        "report_count": 0,
+                        "present_count": 0,
+                        "absent_count": 0,
+                        "half_day_count": 0,
+                        "total_team_count": 0,
+                        "attendance_details": {
+                            "present": [],
+                            "absent": [],
+                            "half_day": []
+                        }
+                    },
+                    "families": []
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
 
 class FamilyDetailedSummaryView(BaseTokenView):
 
