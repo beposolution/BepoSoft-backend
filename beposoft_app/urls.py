@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/add/staff/',CreateUserView.as_view(),name="add-staff"), 
     path('api/add/staff2/',CreateUser2View.as_view(),name="add-staff2"), 
     path('api/staffs/',Users.as_view(),name="staffs"), 
+    path('api/get/staffs/',StaffsGET.as_view(),name="staffs GET"), 
     path('api/users/family/<int:family_id>/', UsersByFamilyView.as_view(), name='users-by-family'),
     path('api/staff/orders/',StaffOrders.as_view(),name="staffs"),
     path('api/manager/customers/',ManagerUnderCustomer.as_view(),name="staffs"), 
