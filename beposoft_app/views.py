@@ -381,6 +381,93 @@ class Users(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class StaffsGET(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            supervisor_id = request.GET.get("supervisor_id", "").strip()
+            department_id = request.GET.get("department_id", "").strip()
+            warehouse_id = request.GET.get("warehouse_id", "").strip()
+            country_code = request.GET.get("country_code", "").strip()
+            approval_status = request.GET.get("approval_status", "").strip()
+            family = request.GET.get("family", "").strip()
+            blood_group = request.GET.get("blood_group", "").strip()
+
+            users = User.objects.select_related(
+                "family",
+                "supervisor_id",
+                "department_id",
+                "warehouse_id",
+                "country_code"
+            ).prefetch_related(
+                "allocated_states"
+            ).all().order_by("-id")
+
+            if supervisor_id:
+                users = users.filter(supervisor_id_id=supervisor_id)
+
+            if department_id:
+                users = users.filter(department_id_id=department_id)
+
+            if warehouse_id:
+                users = users.filter(warehouse_id_id=warehouse_id)
+
+            if country_code:
+                users = users.filter(country_code_id=country_code)
+
+            if approval_status:
+                users = users.filter(approval_status__iexact=approval_status)
+
+            if family:
+                users = users.filter(family_id=family)
+
+            if blood_group:
+                users = users.filter(blood_group__iexact=blood_group)
+
+            if search:
+                users = users.filter(
+                    Q(pan_no__icontains=search) |
+                    Q(aadhar_no__icontains=search) |
+                    Q(staff_id__icontains=search) |
+                    Q(designation__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(name__icontains=search) |
+                    Q(username__icontains=search)
+                )
+
+            paginator = StandardPagination()
+            paginated_users = paginator.paginate_queryset(users, request)
+            serializer = UserUpdateSerilizers(paginated_users, many=True)
+
+            return paginator.get_paginated_response({
+                "message": "Users fetching is successfully completed",
+                "data": serializer.data
+            })
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "User does not exist"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching users",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 
 class UsersByFamilyView(BaseTokenView):
     def get(self, request, family_id):
