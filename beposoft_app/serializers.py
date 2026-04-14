@@ -2470,6 +2470,16 @@ class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializ
 
 
 
+class AttendanceStaffSerializer(serializers.Serializer):
+    staff_id = serializers.IntegerField()
+    staff_name = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class AttendanceSummarySerializer(serializers.Serializer):
+    present = AttendanceStaffSerializer(many=True)
+    absent = AttendanceStaffSerializer(many=True)
+    half_day = AttendanceStaffSerializer(many=True)
 
 
 class SummarySerializer(serializers.Serializer):
@@ -2488,6 +2498,7 @@ class SummarySerializer(serializers.Serializer):
     absent_count = serializers.IntegerField()
     half_day_count = serializers.IntegerField()
     total_team_count = serializers.IntegerField()
+    attendance_details = AttendanceSummarySerializer()
 
 
 class TeamSerializer(serializers.Serializer):
