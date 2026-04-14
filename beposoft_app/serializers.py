@@ -2609,18 +2609,13 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_invoice_total(self, obj):
-        total = Decimal("0.00")
-        for item in obj.items.all():
-            rate = Decimal(str(item.rate or 0))
-            discount = Decimal(str(item.discount or 0))
-            qty = Decimal(str(item.quantity or 0))
-            tax = Decimal(str(item.tax or 0))
+        try:
+            if not obj:
+                return 0.0
 
-            base = max(rate - discount, Decimal("0.00")) * qty
-            tax_amount = base * tax / Decimal("100")
-            total += base + tax_amount
-
-        return float(round(total, 2))
+            return float(round(Decimal(str(obj.total_amount or 0)), 2))
+        except:
+            return 0.0
 
 
 class TeamMemberReportSerializer(serializers.ModelSerializer):
