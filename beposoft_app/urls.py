@@ -224,6 +224,7 @@ urlpatterns = [
     path('api/finance/report/bank/account/type/',BankAccountTypeReportView.as_view()),
     path('api/receipts/get/',AllpaymentReceiptsView.as_view()),
     path('api/internal/transfers/', InternalTransferView.as_view(), name='internal_transfers'),
+    path('api/internal/transfers/get/', InternalTransferGETView.as_view(), name='internal_transfers_get'),
     path('api/internal/transfers/<int:id>/', InternalTransferByIdView.as_view(), name='internal_transfer_by_id'),
     path('api/cod/transfers/', CODTransferView.as_view(), name='cod_transfers'),
     path('api/cod/transfers/<int:id>/', CODTransferByIdView.as_view(), name='cod_transfer_by_id'),
