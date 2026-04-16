@@ -1917,7 +1917,7 @@ class InternalTransferViewSerializer(serializers.ModelSerializer):
         model = InternalTransfer
         fields = ['sender_bank','sender_bank_name','receiver_bank','id',
                   'receiver_bank_name','amount','description','created_at',
-                  'transactionID','created_by','created_by_name']
+                  'transactionID','created_by','created_by_name','payment_receipt']
         
 
 class CODTransferSerializer(serializers.ModelSerializer):

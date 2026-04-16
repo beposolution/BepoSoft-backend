@@ -7193,6 +7193,79 @@ class InternalTransferView(BaseTokenView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class InternalTransferGETView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            sender_bank = request.GET.get("sender_bank", "").strip()
+            receiver_bank = request.GET.get("receiver_bank", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            search = request.GET.get("search", "").strip()
+
+            transfers = InternalTransfer.objects.select_related(
+                "sender_bank",
+                "receiver_bank",
+                "created_by"
+            ).all().order_by("-id")
+
+            if sender_bank:
+                transfers = transfers.filter(sender_bank_id=sender_bank)
+
+            if receiver_bank:
+                transfers = transfers.filter(receiver_bank_id=receiver_bank)
+
+            if created_by:
+                transfers = transfers.filter(created_by_id=created_by)
+
+            if start_date:
+                try:
+                    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+                    transfers = transfers.filter(created_at__date__gte=start_date_obj)
+                except ValueError:
+                    return Response(
+                        {"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if end_date:
+                try:
+                    end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+                    transfers = transfers.filter(created_at__date__lte=end_date_obj)
+                except ValueError:
+                    return Response(
+                        {"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if search:
+                transfers = transfers.filter(
+                    Q(amount__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(transactionID__icontains=search) |
+                    Q(payment_receipt__icontains=search)
+                )
+
+            paginator = StandardPagination()
+            paginated_transfers = paginator.paginate_queryset(transfers, request)
+            serializer = InternalTransferViewSerializer(paginated_transfers, many=True)
+
+            return paginator.get_paginated_response({
+                "message": "Internal transfers fetched successfully",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 
 class InternalTransferByIdView(BaseTokenView):
