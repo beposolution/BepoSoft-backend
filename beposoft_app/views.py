@@ -7338,6 +7338,78 @@ class CODTransferView(BaseTokenView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CODTransferGETView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            sender_bank = request.GET.get("sender_bank", "").strip()
+            receiver_bank = request.GET.get("receiver_bank", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+
+            created_at_start_date = request.GET.get("created_at_start_date", "").strip()
+            created_at_end_date = request.GET.get("created_at_end_date", "").strip()
+            created_end_start_date = request.GET.get("created_end_start_date", "").strip()
+            created_end_end_date = request.GET.get("created_end_end_date", "").strip()
+
+            transfers = CODTransfer.objects.select_related(
+                "sender_bank",
+                "receiver_bank",
+                "created_by"
+            ).all().order_by("-id")
+
+            if sender_bank:
+                transfers = transfers.filter(sender_bank_id=sender_bank)
+
+            if receiver_bank:
+                transfers = transfers.filter(receiver_bank_id=receiver_bank)
+
+            if created_by:
+                transfers = transfers.filter(created_by_id=created_by)
+
+            if created_at_start_date:
+                transfers = transfers.filter(created_at__date__gte=created_at_start_date)
+
+            if created_at_end_date:
+                transfers = transfers.filter(created_at__date__lte=created_at_end_date)
+
+            if created_end_start_date:
+                transfers = transfers.filter(created_end__date__gte=created_end_start_date)
+
+            if created_end_end_date:
+                transfers = transfers.filter(created_end__date__lte=created_end_end_date)
+
+            if search:
+                transfers = transfers.filter(
+                    Q(payment_receipt__icontains=search) |
+                    Q(transactionID__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(amount__icontains=search)
+                )
+
+            paginator = StandardPagination()
+            paginated_transfers = paginator.paginate_queryset(transfers, request)
+            serializer = CODTransferViewSerializer(paginated_transfers, many=True)
+
+            return paginator.get_paginated_response({
+                "message": "COD transfers fetched successfully",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching COD transfers",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 
 class CODTransferByIdView(BaseTokenView):
