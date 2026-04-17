@@ -1378,6 +1378,22 @@ class OrderModelSerilizer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = "__all__"
+
+
+class OrderPaymentImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderPaymentImages
+        fields = ["id", "image", "uploaded_at"]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
         
 class FamilyOrderModelSerilizer(serializers.ModelSerializer):
     manage_staff = serializers.CharField(source="manage_staff.name")
@@ -1389,6 +1405,7 @@ class FamilyOrderModelSerilizer(serializers.ModelSerializer):
     customerID = serializers.IntegerField(source="customer.pk", read_only=True)
     warehouse=FamilyOrderWarehouseModelSerilizer(many=True,read_only=True)
     state = serializers.CharField(source="state.name")
+    payment_images = OrderPaymentImageSerializer(many=True, read_only=True)
 
     
     class Meta:

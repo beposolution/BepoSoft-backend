@@ -7139,7 +7139,7 @@ class BDOBDMFamilyBasedOrderGetView(BaseTokenView):
             # Base queryset
             orders = Order.objects.select_related(
                 "manage_staff", "customer", "state", "family", "company", "billing_address"
-            ).prefetch_related("warehouse").filter(
+            ).prefetch_related("warehouse", "payment_images").filter(
                 family=authUser.family.pk,
                 manage_staff__department_id__name__in=["BDO", "BDM", "SD"]
             ).order_by("-id")
