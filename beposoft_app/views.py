@@ -3556,164 +3556,6 @@ class AllReceiptsView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class AllReceiptsGETView(APIView):
-    def get(self, request):
-        try:
-            # Query params
-            created_by = request.GET.get("created_by", "").strip()
-            bank = request.GET.get("bank", "").strip()
-            search = request.GET.get("search", "").strip()
-            start_date = request.GET.get("start_date", "").strip()
-            end_date = request.GET.get("end_date", "").strip()
-
-            # Fetch all and annotate with type
-            advance_receipts = [
-                {**receipt, "receipt_type": "advance"}
-                for receipt in AdvanceReceiptSerializer(
-                    AdvanceReceipt.objects.all().order_by("-id"),
-                    many=True
-                ).data
-            ]
-
-            bank_receipts = [
-                {**receipt, "receipt_type": "bank"}
-                for receipt in BankReceiptSerializer(
-                    BankReceipt.objects.all().order_by("-id"),
-                    many=True
-                ).data
-            ]
-
-            payment_receipts = [
-                {**receipt, "receipt_type": "payment"}
-                for receipt in PaymentRecieptSerializers(
-                    PaymentReceipt.objects.all().order_by("-id"),
-                    many=True
-                ).data
-            ]
-
-            # Combine
-            all_receipts = advance_receipts + bank_receipts + payment_receipts
-
-            # Filter by created_by
-            if created_by:
-                try:
-                    created_by_int = int(created_by)
-                    all_receipts = [
-                        receipt for receipt in all_receipts
-                        if receipt.get("created_by") == created_by_int
-                    ]
-                except ValueError:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid created_by value. It must be an integer."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # Filter by bank
-            if bank:
-                try:
-                    bank_int = int(bank)
-                    all_receipts = [
-                        receipt for receipt in all_receipts
-                        if receipt.get("bank") == bank_int
-                    ]
-                except ValueError:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid bank value. It must be an integer."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # Search filter
-            if search:
-                search_lower = search.lower()
-                all_receipts = [
-                    receipt for receipt in all_receipts
-                    if (
-                        search_lower in str(receipt.get("amount", "")).lower() or
-                        search_lower in str(receipt.get("payment_receipt", "")).lower() or
-                        search_lower in str(receipt.get("remark", "")).lower() or
-                        search_lower in str(receipt.get("transactionID", "")).lower()
-                    )
-                ]
-
-            # Date range filter
-            parsed_start_date = None
-            parsed_end_date = None
-
-            if start_date:
-                parsed_start_date = parse_date(start_date)
-                if not parsed_start_date:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid start_date format. Use YYYY-MM-DD."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            if end_date:
-                parsed_end_date = parse_date(end_date)
-                if not parsed_end_date:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid end_date format. Use YYYY-MM-DD."
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            if parsed_start_date or parsed_end_date:
-                filtered_receipts = []
-
-                for receipt in all_receipts:
-                    receipt_date_str = receipt.get("received_at")
-                    receipt_date = parse_date(str(receipt_date_str)) if receipt_date_str else None
-
-                    if not receipt_date:
-                        continue
-
-                    if parsed_start_date and receipt_date < parsed_start_date:
-                        continue
-
-                    if parsed_end_date and receipt_date > parsed_end_date:
-                        continue
-
-                    filtered_receipts.append(receipt)
-
-                all_receipts = filtered_receipts
-
-            # Sort by id descending after filters
-            sorted_receipts = sorted(
-                all_receipts,
-                key=lambda x: x.get("id", 0),
-                reverse=True
-            )
-
-            # Pagination
-            paginator = StandardPagination()
-            paginated_receipts = paginator.paginate_queryset(sorted_receipts, request)
-
-            return paginator.get_paginated_response({
-                "message": "All receipts fetched successfully",
-                "count_before_pagination": len(sorted_receipts),
-                "receipts": paginated_receipts
-            })
-
-        except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "An error occurred while fetching receipts",
-                    "errors": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
         
 class AdvanceReceiptListView(APIView):
     def get(self, request):
@@ -18413,19 +18255,29 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             return 0
 
     def _invoice_total(self, invoice):
-        total = Decimal("0.00")
         if not invoice:
-            return float(total)
+            return 0.0
 
-        for item in invoice.items.all():
-            rate = Decimal(str(item.rate or 0))
-            discount = Decimal(str(item.discount or 0))
-            qty = Decimal(str(item.quantity or 0))
-            tax = Decimal(str(item.tax or 0))
+        try:
+            if invoice.total_amount is not None:
+                return float(round(Decimal(str(invoice.total_amount)), 2))
+        except (InvalidOperation, TypeError, ValueError):
+            pass
 
-            base = max(rate - discount, Decimal("0.00")) * qty
-            tax_amount = base * tax / Decimal("100")
-            total += base + tax_amount
+        total = Decimal("0.00")
+
+        try:
+            for item in invoice.items.all():
+                rate = Decimal(str(item.rate or 0))
+                discount = Decimal(str(item.discount or 0))
+                qty = Decimal(str(item.quantity or 0))
+                tax = Decimal(str(item.tax or 0))
+
+                base = max(rate - discount, Decimal("0.00")) * qty
+                tax_amount = base * tax / Decimal("100")
+                total += base + tax_amount
+        except Exception:
+            return 0.0
 
         return float(round(total, 2))
 
