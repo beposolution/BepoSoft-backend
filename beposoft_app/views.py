@@ -10,7 +10,7 @@ from .serializers import *
 from .models import User
 from django.contrib.auth.hashers import check_password, make_password
 from datetime import datetime, timedelta, time, date
-from django.db.models import Q, Prefetch, Value
+from django.db.models import Q, CharField, Prefetch, Value
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from django.contrib.auth import authenticate
 from django.conf import settings
@@ -5377,6 +5377,124 @@ class GRVaddView(BaseTokenView):
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class GRVGETView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            order_filter = request.GET.get("order", "").strip()
+            manage_staff_filter = request.GET.get("manage_staff", "").strip()
+            customer_filter = request.GET.get("customer", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            remark_filter = request.GET.get("remark", "").strip()
+            returnreason_filter = request.GET.get("returnreason", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            grvdata = GRVModel.objects.select_related(
+                "order",
+                "order__manage_staff",
+                "order__customer",
+                "order__billing_address",
+                "order__family",
+                "product_id"
+            ).annotate(
+                price_as_text=Cast("price", output_field=CharField())
+            ).order_by("-id")
+
+            # Filter by order
+            if order_filter:
+                if order_filter.isdigit():
+                    grvdata = grvdata.filter(order_id=int(order_filter))
+                else:
+                    grvdata = grvdata.filter(
+                        Q(order__invoice__icontains=order_filter)
+                    )
+
+            # Filter by manage_staff
+            if manage_staff_filter:
+                if manage_staff_filter.isdigit():
+                    grvdata = grvdata.filter(order__manage_staff_id=int(manage_staff_filter))
+                else:
+                    grvdata = grvdata.filter(
+                        Q(order__manage_staff__name__icontains=manage_staff_filter) |
+                        Q(order__manage_staff__username__icontains=manage_staff_filter)
+                    )
+
+            # Filter by customer
+            if customer_filter:
+                if customer_filter.isdigit():
+                    grvdata = grvdata.filter(order__customer_id=int(customer_filter))
+                else:
+                    grvdata = grvdata.filter(
+                        Q(order__customer__name__icontains=customer_filter)
+                    )
+
+            # Filter by date range on GRVModel.date
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if parsed_start_date:
+                    grvdata = grvdata.filter(date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if parsed_end_date:
+                    grvdata = grvdata.filter(date__lte=parsed_end_date)
+
+            # Filter by status choices
+            if status_filter:
+                grvdata = grvdata.filter(status__iexact=status_filter)
+
+            # Filter by remark choices
+            if remark_filter:
+                grvdata = grvdata.filter(remark__iexact=remark_filter)
+
+            # Filter by return reason choices
+            if returnreason_filter:
+                grvdata = grvdata.filter(returnreason__iexact=returnreason_filter)
+
+            # Search for remark, price, returnreason, product
+            if search:
+                grvdata = grvdata.filter(
+                    Q(remark__icontains=search) |
+                    Q(price_as_text__icontains=search) |
+                    Q(returnreason__icontains=search) |
+                    Q(product__icontains=search)
+                )
+
+            if not grvdata.exists():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "No GRV records found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            paginator = StandardPagination()
+            paginated_grvdata = paginator.paginate_queryset(grvdata, request)
+            serializer = GRVSerializer(paginated_grvdata, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "GRV records fetched successfully",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 class GRVGetViewById(BaseTokenView):
     def get(self, request, pk):
