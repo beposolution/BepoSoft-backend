@@ -1824,7 +1824,9 @@ class SalesTeamDailyReport(models.Model):
         db_table = "sales_team_daily_report"
 
     def __str__(self):
-        return f"Daily Report for {self.team.name} by {self.created_by.name}"
+        team_name = self.team.name if self.team else "No Team"
+        creator_name = self.created_by.name if self.created_by else "Unknown User"
+        return f"Daily Report for {team_name} by {creator_name}"
     
 
 class SalesTeamMemberDailyReport(models.Model):
