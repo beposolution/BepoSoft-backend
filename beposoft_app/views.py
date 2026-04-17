@@ -18255,19 +18255,29 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             return 0
 
     def _invoice_total(self, invoice):
-        total = Decimal("0.00")
         if not invoice:
-            return float(total)
+            return 0.0
 
-        for item in invoice.items.all():
-            rate = Decimal(str(item.rate or 0))
-            discount = Decimal(str(item.discount or 0))
-            qty = Decimal(str(item.quantity or 0))
-            tax = Decimal(str(item.tax or 0))
+        try:
+            if invoice.total_amount is not None:
+                return float(round(Decimal(str(invoice.total_amount)), 2))
+        except (InvalidOperation, TypeError, ValueError):
+            pass
 
-            base = max(rate - discount, Decimal("0.00")) * qty
-            tax_amount = base * tax / Decimal("100")
-            total += base + tax_amount
+        total = Decimal("0.00")
+
+        try:
+            for item in invoice.items.all():
+                rate = Decimal(str(item.rate or 0))
+                discount = Decimal(str(item.discount or 0))
+                qty = Decimal(str(item.quantity or 0))
+                tax = Decimal(str(item.tax or 0))
+
+                base = max(rate - discount, Decimal("0.00")) * qty
+                tax_amount = base * tax / Decimal("100")
+                total += base + tax_amount
+        except Exception:
+            return 0.0
 
         return float(round(total, 2))
 
