@@ -17833,7 +17833,7 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "06:00-07:00": 0,
         }
 
-    def _build_summary(self, reports, attendance_map, team_ids):
+    def _build_summary(self, reports, attendance_map, team_ids, start_date=None, end_date=None):
 
         invoice_ids = set()
         bdo_ids = set()
@@ -17927,6 +17927,12 @@ class FamilyDetailedSummaryView(BaseTokenView):
             daily_reports = SalesTeamDailyReport.objects.filter(
                 team_id__in=team_ids
             )
+
+            if start_date:
+                daily_reports = daily_reports.filter(created_at__date__gte=start_date)
+
+            if end_date:
+                daily_reports = daily_reports.filter(created_at__date__lte=end_date)
 
             for dr in daily_reports:
                 new_customers += dr.new_customers or 0
@@ -18025,7 +18031,9 @@ class FamilyDetailedSummaryView(BaseTokenView):
             summary = self._build_summary(
                 team_reports,
                 attendance_map,
-                {team.id}
+                {team.id},
+                start_date,
+                end_date
             )
 
             teams.append({
@@ -18039,7 +18047,9 @@ class FamilyDetailedSummaryView(BaseTokenView):
         family_summary = self._build_summary(
             all_reports,
             attendance_map,
-            team_ids
+            team_ids,
+            start_date,
+            end_date
         )
 
         return Response({
@@ -18091,7 +18101,7 @@ class TeamDetailedSummaryView(BaseTokenView):
             "06:00-07:00": 0,
         }
 
-    def _build_summary(self, reports, attendance_map):
+    def _build_summary(self, reports, attendance_map, daily_reports_queryset=None):
 
         invoice_ids = set()
         bdo_ids = set()
@@ -18114,6 +18124,8 @@ class TeamDetailedSummaryView(BaseTokenView):
 
         new_customers = 0
         new_conversions = 0
+
+        counted_attendance_staff = set()
 
         for r in reports:
 
@@ -18138,7 +18150,6 @@ class TeamDetailedSummaryView(BaseTokenView):
 
             if r.invoice_id and r.invoice_id not in invoice_ids:
                 invoice_ids.add(r.invoice_id)
-
                 total_bill += self._invoice_total(r.invoice)
 
             if r.invoice_id:
@@ -18147,6 +18158,8 @@ class TeamDetailedSummaryView(BaseTokenView):
                     volume += self._invoice_total(r.invoice)
                 except:
                     pass
+            else:
+                total_unbilled += 1
 
             sec = self._duration_to_seconds(r.call_duration)
 
@@ -18178,19 +18191,14 @@ class TeamDetailedSummaryView(BaseTokenView):
                 elif hour == 18:
                     hourly_durations["06:00-07:00"] += minutes
 
-            if r.created_by_id in attendance_map:
+            if r.created_by_id in attendance_map and r.created_by_id not in counted_attendance_staff:
                 present += attendance_map[r.created_by_id]["present"]
                 absent += attendance_map[r.created_by_id]["absent"]
                 half_day += attendance_map[r.created_by_id]["half_day"]
+                counted_attendance_staff.add(r.created_by_id)
 
-        team_ids = list(set([r.team_id for r in reports if r.team_id]))
-
-        if team_ids:
-            daily_reports = SalesTeamDailyReport.objects.filter(
-                team_id__in=team_ids
-            )
-
-            for dr in daily_reports:
+        if daily_reports_queryset is not None:
+            for dr in daily_reports_queryset:
                 new_customers += dr.new_customers or 0
                 new_conversions += dr.new_conversions or 0
 
@@ -18275,13 +18283,12 @@ class TeamDetailedSummaryView(BaseTokenView):
 
         if end_date:
             reports = reports.filter(created_at__date__lte=end_date)
-        
+
         staff_id = request.GET.get("staff_id")
         state_id = request.GET.get("state_id")
         district_id = request.GET.get("district_id")
         invoice_id = request.GET.get("invoice_id")
         customer_id = request.GET.get("customer_id")
-
 
         if staff_id:
             reports = reports.filter(created_by_id=staff_id)
@@ -18292,11 +18299,9 @@ class TeamDetailedSummaryView(BaseTokenView):
         if district_id:
             reports = reports.filter(district_id=district_id)
 
-
         if invoice_id:
             reports = reports.filter(invoice_id=invoice_id)
 
-     
         if customer_id:
             reports = reports.filter(invoice__customer_id=customer_id)
 
@@ -18327,6 +18332,34 @@ class TeamDetailedSummaryView(BaseTokenView):
             elif row.status == "half_day":
                 attendance_map[row.staff_id]["half_day"] += 1
 
+        report_dates = list(reports.values_list("created_at__date", flat=True).distinct())
+
+        team_daily_reports = SalesTeamDailyReport.objects.filter(
+            team_id=team_id,
+            created_at__date__in=report_dates
+        )
+
+        if start_date:
+            team_daily_reports = team_daily_reports.filter(created_at__date__gte=start_date)
+
+        if end_date:
+            team_daily_reports = team_daily_reports.filter(created_at__date__lte=end_date)
+
+        if staff_id:
+            team_daily_reports = team_daily_reports.filter(created_by_id=staff_id)
+        else:
+            team_daily_reports = team_daily_reports.filter(created_by_id__in=staff_ids)
+
+        if state_id:
+            team_daily_reports = team_daily_reports.filter(state_id=state_id)
+        else:
+            team_daily_reports = team_daily_reports.filter(state_id__in=reports.values_list("state_id", flat=True).distinct())
+
+        if district_id:
+            team_daily_reports = team_daily_reports.filter(district_id=district_id)
+        else:
+            team_daily_reports = team_daily_reports.filter(district_id__in=reports.values_list("district_id", flat=True).distinct())
+
         member_map = defaultdict(list)
 
         for r in reports:
@@ -18334,20 +18367,40 @@ class TeamDetailedSummaryView(BaseTokenView):
 
         members = []
 
-        for staff_id, staff_reports in member_map.items():
+        for member_staff_id, staff_reports in member_map.items():
             staff = staff_reports[0].created_by
+
+            staff_dates = list(set([localtime(x.created_at).date() for x in staff_reports]))
+            staff_state_ids = list(set([x.state_id for x in staff_reports if x.state_id]))
+            staff_district_ids = list(set([x.district_id for x in staff_reports if x.district_id]))
+
+            staff_daily_reports = SalesTeamDailyReport.objects.filter(
+                team_id=team_id,
+                created_by_id=member_staff_id,
+                created_at__date__in=staff_dates,
+                state_id__in=staff_state_ids,
+                district_id__in=staff_district_ids
+            )
 
             members.append({
                 "staff_id": staff.id,
                 "staff_name": staff.name,
-                "summary": self._build_summary(staff_reports, attendance_map),
+                "summary": self._build_summary(
+                    staff_reports,
+                    attendance_map,
+                    daily_reports_queryset=staff_daily_reports
+                ),
                 "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
             })
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(members, request)
 
-        team_summary = self._build_summary(reports, attendance_map)
+        team_summary = self._build_summary(
+            reports,
+            attendance_map,
+            daily_reports_queryset=team_daily_reports
+        )
 
         return paginator.get_paginated_response({
             "status": "success",
