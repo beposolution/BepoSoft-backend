@@ -14273,6 +14273,42 @@ class ProductSellerInvoiceItemAddView(BaseTokenView):
             }, status=500)
 
 
+
+class OrderSummaryDashboardView(BaseTokenView):
+    def get(self, request):
+        try:
+            valid_statuses = [
+                'Invoice Created',
+                'Invoice Approved',
+                'Waiting For Confirmation',
+                'To Print',
+                'Packing under progress',
+                'Packed',
+                'Ready to ship',
+                'Shipped',
+            ]
+
+            summary = Order.objects.filter(
+                status__in=valid_statuses
+            ).aggregate(
+                total_bills=Count('id'),
+                total_amount=Coalesce(Sum('total_amount'), 0.0)
+            )
+
+            return Response({
+                "success": True,
+                "total_bills": summary["total_bills"],
+                "total_amount": summary["total_amount"]
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 class MyDailySalesReportView(BaseTokenView):
 
     def get(self, request):
