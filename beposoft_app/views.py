@@ -18509,6 +18509,32 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             "06:00-07:00": 0,
         }
 
+    def get_time_duration_map(self):
+        return {
+            "09:00-10:00": (9, 10),
+            "10:00-11:00": (10, 11),
+            "11:00-12:00": (11, 12),
+            "12:00-01:00": (12, 13),
+            "01:00-02:00": (13, 14),
+            "02:00-03:00": (14, 15),
+            "03:00-04:00": (15, 16),
+            "04:00-05:00": (16, 17),
+            "05:00-06:00": (17, 18),
+            "06:00-07:00": (18, 19),
+
+            # optional UI-friendly labels
+            "9 AM - 10 AM": (9, 10),
+            "10 AM - 11 AM": (10, 11),
+            "11 AM - 12 PM": (11, 12),
+            "12 PM - 1 PM": (12, 13),
+            "1 PM - 2 PM": (13, 14),
+            "2 PM - 3 PM": (14, 15),
+            "3 PM - 4 PM": (15, 16),
+            "4 PM - 5 PM": (16, 17),
+            "5 PM - 6 PM": (17, 18),
+            "6 PM - 7 PM": (18, 19),
+        }
+
     def _build_summary(self, reports, attendance_map=None, team_member_ids=None):
         invoice_ids = set()
         bdo_ids = set()
@@ -18677,8 +18703,8 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             invoice_id = request.GET.get("invoice_id")
             customer_id = request.GET.get("customer_id")
             team_id = request.GET.get("team_id")
+            time_duration = request.GET.get("time_duration", "").strip()
 
-            # attendance filters
             attendance_status = request.GET.get("attendance_status", "").strip()
             attendance_start_date = request.GET.get("attendance_start_date")
             attendance_end_date = request.GET.get("attendance_end_date")
@@ -18760,6 +18786,17 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
             if customer_id:
                 reports = reports.filter(invoice__customer_id=customer_id)
+
+            if time_duration:
+                time_map = self.get_time_duration_map()
+                selected_slot = time_map.get(time_duration)
+
+                if selected_slot:
+                    start_hour, end_hour = selected_slot
+                    reports = reports.filter(
+                        created_at__hour__gte=start_hour,
+                        created_at__hour__lt=end_hour
+                    )
 
             attendance_qs = BDMOrderAnalysisStaff.objects.select_related(
                 "staff",
@@ -18850,7 +18887,6 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                         "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
                     })
 
-                # also include attendance-only staff if any exist outside team member table
                 extra_attendance_staff_ids = [
                     sid for sid in attendance_detail_map.keys()
                     if sid not in member_staff_ids
@@ -18879,7 +18915,6 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                     "members": members
                 })
 
-            # if no reports and no attendance for all teams
             has_any_data = False
             for team_data in final_data:
                 if team_data["members"]:
@@ -18908,6 +18943,7 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                     "invoice_id": invoice_id,
                     "customer_id": customer_id,
                     "team_id": team_id,
+                    "time_duration": time_duration,
                     "attendance_status": attendance_status,
                     "attendance_start_date": attendance_start_date,
                     "attendance_end_date": attendance_end_date,
