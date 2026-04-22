@@ -17976,7 +17976,8 @@ class FamilyDetailedSummaryView(BaseTokenView):
 
         total_minutes = total_seconds / 60 if total_seconds else 0
         avg = (total_minutes / total_call_count) if total_call_count else 0
-        percent = (avg / 480) * 100 if avg else 0
+        # percent = (avg / 480) * 100 if avg else 0
+        percent = (total_minutes / 480) * 100 if total_minutes else 0
 
         return {
             "total_bill": len(invoice_ids),
