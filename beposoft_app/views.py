@@ -18532,6 +18532,8 @@ class MyTeamDetailedSummaryView(BaseTokenView):
         new_customers = 0
         new_conversions = 0
 
+        processed_attendance_staff = set()
+
         for r in reports:
             if r.call_status == "active":
                 active += 1
@@ -18593,10 +18595,11 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                 elif hour == 18:
                     hourly_durations["06:00-07:00"] += minutes
 
-            if r.created_by_id in attendance_map:
+            if r.created_by_id in attendance_map and r.created_by_id not in processed_attendance_staff:
                 present += attendance_map[r.created_by_id]["present"]
                 absent += attendance_map[r.created_by_id]["absent"]
                 half_day += attendance_map[r.created_by_id]["half_day"]
+                processed_attendance_staff.add(r.created_by_id)
 
         team_ids = list(set([r.team_id for r in reports if r.team_id]))
 
@@ -18741,11 +18744,26 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
             staff_ids = list(reports.values_list("created_by_id", flat=True).distinct())
 
-            attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+            attendance_qs = BDMOrderAnalysisStaff.objects.select_related(
+                "staff",
+                "analysis"
+            ).filter(
                 staff_id__in=staff_ids
             )
 
+            if staff_id:
+                attendance_qs = attendance_qs.filter(staff_id=staff_id)
+
+            # If your BDMOrderAnalysisData model has a real attendance date field like analysis__date,
+            # replace analysis__created_at__date with analysis__date
+            if start_date:
+                attendance_qs = attendance_qs.filter(analysis__created_at__date__gte=start_date)
+
+            if end_date:
+                attendance_qs = attendance_qs.filter(analysis__created_at__date__lte=end_date)
+
             attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
+            attendance_detail_map = defaultdict(list)
 
             for row in attendance_qs:
                 if row.status == "present":
@@ -18754,6 +18772,15 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                     attendance_map[row.staff_id]["absent"] += 1
                 elif row.status == "half_day":
                     attendance_map[row.staff_id]["half_day"] += 1
+
+                attendance_detail_map[row.staff_id].append({
+                    "id": row.id,
+                    "staff_id": row.staff.id if row.staff else None,
+                    "staff_name": row.staff.name if row.staff else None,
+                    "status": row.status,
+                    "created_at": row.created_at,
+                    "updated_at": row.updated_at,
+                })
 
             team_wise_reports = defaultdict(list)
             for r in reports:
@@ -18783,10 +18810,21 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
                 for member_staff_id, staff_reports in member_map.items():
                     staff = staff_reports[0].created_by
+                    staff_attendance = attendance_map.get(member_staff_id, {
+                        "present": 0,
+                        "absent": 0,
+                        "half_day": 0
+                    })
 
                     members.append({
                         "staff_id": staff.id,
                         "staff_name": staff.name,
+                        "attendance_summary": {
+                            "present_count": staff_attendance["present"],
+                            "absent_count": staff_attendance["absent"],
+                            "half_day_count": staff_attendance["half_day"],
+                        },
+                        "attendance_details": attendance_detail_map.get(member_staff_id, []),
                         "summary": self._build_summary(staff_reports, attendance_map),
                         "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
                     })
