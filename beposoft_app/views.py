@@ -4355,6 +4355,10 @@ class WarehouseSummaryView(APIView):
                     total_actual_weight_g / 1000 if total_actual_weight_g > 0 else 0
                 )
 
+                total_weight_field_kg = (
+                    total_weight_field / 1000 if total_weight_field > 0 else 0
+                )
+
                 return {
                     "total_boxes": total_boxes,
                     "total_actual_weight_g": round(total_actual_weight_g, 2),
@@ -4363,6 +4367,7 @@ class WarehouseSummaryView(APIView):
                     "average": round(average, 2),
                     "total_volume": round(total_volume, 2),
                     "total_weight_field": round(total_weight_field, 2),
+                    "total_weight_field_kg": round(total_weight_field_kg, 3),
                 }
 
             today_summary = get_summary(qs_today)
