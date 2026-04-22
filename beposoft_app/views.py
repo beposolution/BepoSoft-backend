@@ -18509,7 +18509,7 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             "06:00-07:00": 0,
         }
 
-    def _build_summary(self, reports, attendance_map):
+    def _build_summary(self, reports, attendance_map=None, team_member_ids=None):
         invoice_ids = set()
         bdo_ids = set()
         customers = set()
@@ -18532,8 +18532,6 @@ class MyTeamDetailedSummaryView(BaseTokenView):
         new_customers = 0
         new_conversions = 0
 
-        processed_attendance_staff = set()
-
         for r in reports:
             if r.call_status == "active":
                 active += 1
@@ -18541,7 +18539,7 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                 productive += 1
 
             try:
-                if r.created_by.department_id.name == "BDO":
+                if r.created_by.department_id and r.created_by.department_id.name == "BDO":
                     bdo_ids.add(r.created_by_id)
             except:
                 pass
@@ -18564,6 +18562,8 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                     volume += self._invoice_total(r.invoice)
                 except:
                     pass
+            else:
+                total_unbilled += 1
 
             sec = self._duration_to_seconds(r.call_duration)
 
@@ -18595,11 +18595,15 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                 elif hour == 18:
                     hourly_durations["06:00-07:00"] += minutes
 
-            if r.created_by_id in attendance_map and r.created_by_id not in processed_attendance_staff:
-                present += attendance_map[r.created_by_id]["present"]
-                absent += attendance_map[r.created_by_id]["absent"]
-                half_day += attendance_map[r.created_by_id]["half_day"]
-                processed_attendance_staff.add(r.created_by_id)
+        if attendance_map:
+            if team_member_ids is None:
+                team_member_ids = list(set([r.created_by_id for r in reports]))
+
+            for staff_id in team_member_ids:
+                attendance = attendance_map.get(staff_id, {"present": 0, "absent": 0, "half_day": 0})
+                present += attendance["present"]
+                absent += attendance["absent"]
+                half_day += attendance["half_day"]
 
         team_ids = list(set([r.team_id for r in reports if r.team_id]))
 
@@ -18664,6 +18668,42 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
             team_ids = list(sales_teams.values_list("id", flat=True))
 
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            staff_id = request.GET.get("staff_id")
+            state_id = request.GET.get("state_id")
+            district_id = request.GET.get("district_id")
+            invoice_id = request.GET.get("invoice_id")
+            customer_id = request.GET.get("customer_id")
+            team_id = request.GET.get("team_id")
+
+            # attendance filters
+            attendance_status = request.GET.get("attendance_status", "").strip()
+            attendance_start_date = request.GET.get("attendance_start_date")
+            attendance_end_date = request.GET.get("attendance_end_date")
+
+            if team_id:
+                sales_teams = sales_teams.filter(id=team_id)
+                team_ids = list(sales_teams.values_list("id", flat=True))
+
+            team_members_qs = SalesTeamMember.objects.select_related(
+                "team",
+                "user",
+                "user__department_id",
+                "user__family",
+            ).filter(team_id__in=team_ids)
+
+            if staff_id:
+                team_members_qs = team_members_qs.filter(user_id=staff_id)
+
+            team_member_map = defaultdict(list)
+            all_team_member_ids = set()
+
+            for tm in team_members_qs:
+                team_member_map[tm.team_id].append(tm)
+                all_team_member_ids.add(tm.user_id)
+
             reports = SalesTeamMemberDailyReport.objects.select_related(
                 "team",
                 "created_by",
@@ -18690,19 +18730,6 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                     )
                 )
             ).filter(team_id__in=team_ids)
-
-            search = request.GET.get("search", "").strip()
-            start_date = request.GET.get("start_date")
-            end_date = request.GET.get("end_date")
-            staff_id = request.GET.get("staff_id")
-            state_id = request.GET.get("state_id")
-            district_id = request.GET.get("district_id")
-            invoice_id = request.GET.get("invoice_id")
-            customer_id = request.GET.get("customer_id")
-            team_id = request.GET.get("team_id")
-
-            if team_id:
-                reports = reports.filter(team_id=team_id)
 
             if search:
                 reports = reports.filter(
@@ -18734,32 +18761,27 @@ class MyTeamDetailedSummaryView(BaseTokenView):
             if customer_id:
                 reports = reports.filter(invoice__customer_id=customer_id)
 
-            if not reports.exists():
-                return Response({
-                    "success": True,
-                    "is_team_leader": True,
-                    "message": "No data found",
-                    "data": []
-                }, status=status.HTTP_200_OK)
-
-            staff_ids = list(reports.values_list("created_by_id", flat=True).distinct())
-
             attendance_qs = BDMOrderAnalysisStaff.objects.select_related(
                 "staff",
                 "analysis"
             ).filter(
-                staff_id__in=staff_ids
+                staff_id__in=list(all_team_member_ids)
             )
+
+            if attendance_status:
+                attendance_qs = attendance_qs.filter(status=attendance_status)
 
             if staff_id:
                 attendance_qs = attendance_qs.filter(staff_id=staff_id)
 
-            # If your BDMOrderAnalysisData model has a real attendance date field like analysis__date,
-            # replace analysis__created_at__date with analysis__date
-            if start_date:
+            if attendance_start_date:
+                attendance_qs = attendance_qs.filter(analysis__created_at__date__gte=attendance_start_date)
+            elif start_date:
                 attendance_qs = attendance_qs.filter(analysis__created_at__date__gte=start_date)
 
-            if end_date:
+            if attendance_end_date:
+                attendance_qs = attendance_qs.filter(analysis__created_at__date__lte=attendance_end_date)
+            elif end_date:
                 attendance_qs = attendance_qs.filter(analysis__created_at__date__lte=end_date)
 
             attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
@@ -18775,12 +18797,15 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
                 attendance_detail_map[row.staff_id].append({
                     "id": row.id,
+                    "analysis_id": row.analysis_id,
                     "staff_id": row.staff.id if row.staff else None,
                     "staff_name": row.staff.name if row.staff else None,
                     "status": row.status,
                     "created_at": row.created_at,
                     "updated_at": row.updated_at,
                 })
+
+            reports = list(reports.order_by("-created_at"))
 
             team_wise_reports = defaultdict(list)
             for r in reports:
@@ -18790,27 +18815,19 @@ class MyTeamDetailedSummaryView(BaseTokenView):
 
             for team in sales_teams:
                 team_reports = team_wise_reports.get(team.id, [])
+                members_in_team = team_member_map.get(team.id, [])
+                member_staff_ids = [m.user_id for m in members_in_team]
 
-                if not team_reports:
-                    final_data.append({
-                        "team": {
-                            "team_id": team.id,
-                            "team_name": team.name
-                        },
-                        "summary": {},
-                        "members": []
-                    })
-                    continue
-
-                member_map = defaultdict(list)
+                member_report_map = defaultdict(list)
                 for r in team_reports:
-                    member_map[r.created_by_id].append(r)
+                    member_report_map[r.created_by_id].append(r)
 
                 members = []
 
-                for member_staff_id, staff_reports in member_map.items():
-                    staff = staff_reports[0].created_by
-                    staff_attendance = attendance_map.get(member_staff_id, {
+                for member in members_in_team:
+                    staff = member.user
+                    staff_reports = member_report_map.get(staff.id, [])
+                    staff_attendance = attendance_map.get(staff.id, {
                         "present": 0,
                         "absent": 0,
                         "half_day": 0
@@ -18824,24 +18841,77 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                             "absent_count": staff_attendance["absent"],
                             "half_day_count": staff_attendance["half_day"],
                         },
-                        "attendance_details": attendance_detail_map.get(member_staff_id, []),
-                        "summary": self._build_summary(staff_reports, attendance_map),
+                        "attendance_details": attendance_detail_map.get(staff.id, []),
+                        "summary": self._build_summary(
+                            staff_reports,
+                            attendance_map=attendance_map,
+                            team_member_ids=[staff.id]
+                        ),
                         "reports": TeamMemberReportSerializer(staff_reports, many=True).data,
                     })
+
+                # also include attendance-only staff if any exist outside team member table
+                extra_attendance_staff_ids = [
+                    sid for sid in attendance_detail_map.keys()
+                    if sid not in member_staff_ids
+                ]
+
+                for extra_staff_id in extra_attendance_staff_ids:
+                    extra_in_this_team = False
+                    for r in team_reports:
+                        if r.created_by_id == extra_staff_id:
+                            extra_in_this_team = True
+                            break
+
+                    if extra_in_this_team:
+                        continue
 
                 final_data.append({
                     "team": {
                         "team_id": team.id,
                         "team_name": team.name
                     },
-                    "summary": self._build_summary(team_reports, attendance_map),
+                    "summary": self._build_summary(
+                        team_reports,
+                        attendance_map=attendance_map,
+                        team_member_ids=member_staff_ids
+                    ),
                     "members": members
                 })
+
+            # if no reports and no attendance for all teams
+            has_any_data = False
+            for team_data in final_data:
+                if team_data["members"]:
+                    has_any_data = True
+                    break
+
+            if not has_any_data:
+                return Response({
+                    "success": True,
+                    "is_team_leader": True,
+                    "message": "No data found",
+                    "data": final_data
+                }, status=status.HTTP_200_OK)
 
             return Response({
                 "success": True,
                 "is_team_leader": True,
                 "message": "My team detailed summary fetched successfully",
+                "filters_used": {
+                    "search": search,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "staff_id": staff_id,
+                    "state_id": state_id,
+                    "district_id": district_id,
+                    "invoice_id": invoice_id,
+                    "customer_id": customer_id,
+                    "team_id": team_id,
+                    "attendance_status": attendance_status,
+                    "attendance_start_date": attendance_start_date,
+                    "attendance_end_date": attendance_end_date,
+                },
                 "data": final_data
             }, status=status.HTTP_200_OK)
 
