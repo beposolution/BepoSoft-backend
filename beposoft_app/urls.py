@@ -96,7 +96,9 @@ urlpatterns = [
     path('api/all/orders/', InvoiceListView.as_view(), name='all-invoices'),
     path('api/gst/orders/', GSTOrderListView.as_view(), name='gst'),
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
+    path('api/order/dashboard/summary/', OrderSummaryDashboardView.as_view(), name='order-summary'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
+    path('api/orders/family/wise/summary/', FamilyWiseOrderSummaryView.as_view(), name='family-wise-order-summary'),
     path("api/orders/date/report/<str:start_date>/<str:end_date>/", OrderDateReportView.as_view(), name="order-date-report"),
     path('api/orders/parcel/service/data/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
@@ -182,8 +184,6 @@ urlpatterns = [
     path('warehouse/update-checked-by/<str:shipped_date>/', WarehouseUpdateCheckedByView.as_view(), name='update-checked-by'),
     path('api/orders/monthly/<int:year>/<int:month>/', OrderListByMonthView.as_view(), name='orders-by-month'),
     path('api/orders/status/count/', OrderStatusCount.as_view(), name='orders-count-status'),
-
-    path('api/order/dashboard/summary/', OrderSummaryDashboardView.as_view(), name='order-summary'),
 
 
     path('api/grv/data/',GRVaddView.as_view()),

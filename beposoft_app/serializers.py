@@ -1953,12 +1953,6 @@ class CODTransferViewSerializer(serializers.ModelSerializer):
                   'receiver_bank_name','amount','description','created_at',
                   'created_end','transactionID','created_by','created_by_name']
 
-class AttendanceSummarySerializer(serializers.Serializer):
-    staff_id = serializers.IntegerField()
-    staff_name = serializers.CharField()
-    present_count = serializers.IntegerField()
-    half_day_leave_count = serializers.IntegerField()
-    absent_count = serializers.IntegerField()  
 
 
 class AttendanceDetailSerializer(serializers.ModelSerializer):
@@ -2487,16 +2481,20 @@ class SalesTeamMemberDailyReportStatusUpdateSerializer(serializers.ModelSerializ
 
 
 
-class AttendanceStaffSerializer(serializers.Serializer):
-    staff_id = serializers.IntegerField()
+class AttendanceStaffDetailSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    analysis_id = serializers.IntegerField(allow_null=True)
+    staff_id = serializers.IntegerField(allow_null=True)
     staff_name = serializers.CharField()
-    count = serializers.IntegerField()
+    status = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
 
 
 class AttendanceSummarySerializer(serializers.Serializer):
-    present = AttendanceStaffSerializer(many=True)
-    absent = AttendanceStaffSerializer(many=True)
-    half_day = AttendanceStaffSerializer(many=True)
+    present = AttendanceStaffDetailSerializer(many=True)
+    absent = AttendanceStaffDetailSerializer(many=True)
+    half_day = AttendanceStaffDetailSerializer(many=True)
 
 
 class SummarySerializer(serializers.Serializer):
