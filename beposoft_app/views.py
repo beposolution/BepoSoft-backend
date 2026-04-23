@@ -17916,8 +17916,100 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "06:00-07:00": 0,
         }
 
-    def _build_summary(self, reports, attendance_map, team_ids, start_date=None, end_date=None):
+    def _normalize_text(self, value):
+        try:
+            if not value:
+                return ""
+            return "".join(ch for ch in str(value).upper() if ch.isalnum() or ch.isspace()).strip()
+        except:
+            return ""
 
+    def _build_attendance_details(self, attendance_rows):
+        try:
+            present_list = []
+            absent_list = []
+            half_day_list = []
+
+            for row in attendance_rows:
+                try:
+                    row_data = {
+                        "id": row.id,
+                        "analysis_id": row.analysis_id if row.analysis_id else None,
+                        "staff_id": row.staff_id if row.staff_id else None,
+                        "staff_name": row.staff.name if row.staff else "",
+                        "status": row.status,
+                        "created_at": row.created_at,
+                        "updated_at": row.updated_at,
+                    }
+
+                    if row.status == "present":
+                        present_list.append(row_data)
+                    elif row.status == "absent":
+                        absent_list.append(row_data)
+                    elif row.status == "half_day":
+                        half_day_list.append(row_data)
+                except:
+                    pass
+
+            present_list.sort(key=lambda x: (x["staff_name"] or "").lower())
+            absent_list.sort(key=lambda x: (x["staff_name"] or "").lower())
+            half_day_list.sort(key=lambda x: (x["staff_name"] or "").lower())
+
+            return {
+                "present_count": len(present_list),
+                "absent_count": len(absent_list),
+                "half_day_count": len(half_day_list),
+                "attendance_details": {
+                    "present": present_list,
+                    "absent": absent_list,
+                    "half_day": half_day_list,
+                }
+            }
+        except:
+            return {
+                "present_count": 0,
+                "absent_count": 0,
+                "half_day_count": 0,
+                "attendance_details": {
+                    "present": [],
+                    "absent": [],
+                    "half_day": [],
+                }
+            }
+
+    def _row_belongs_to_team(self, row, team, staff_latest_team_map):
+        try:
+            analysis_team_id = getattr(row.analysis, "team_id", None)
+            if analysis_team_id == team.id:
+                return True
+        except:
+            pass
+
+        try:
+            if staff_latest_team_map.get(row.staff_id) == team.id:
+                return True
+        except:
+            pass
+
+        try:
+            staff_name = self._normalize_text(row.staff.name if row.staff else "")
+            team_name = self._normalize_text(team.name if team else "")
+
+            if staff_name and team_name:
+                if staff_name == team_name:
+                    return True
+
+                staff_parts = [part for part in staff_name.split() if part]
+                if staff_parts:
+                    first_name = staff_parts[0]
+                    if len(first_name) >= 3 and first_name in team_name:
+                        return True
+        except:
+            pass
+
+        return False
+
+    def _build_summary(self, reports, attendance_rows, team_ids, start_date=None, end_date=None):
         invoice_ids = set()
         bdo_ids = set()
         customers = set()
@@ -17928,10 +18020,6 @@ class FamilyDetailedSummaryView(BaseTokenView):
         active = 0
         productive = 0
 
-        present = 0
-        absent = 0
-        half_day = 0
-
         total_unbilled = 0
         billing = 0
         volume = 0
@@ -17941,7 +18029,6 @@ class FamilyDetailedSummaryView(BaseTokenView):
         new_conversions = 0
 
         for r in reports:
-
             if r.call_status == "active":
                 active += 1
             elif r.call_status == "productive":
@@ -17961,9 +18048,12 @@ class FamilyDetailedSummaryView(BaseTokenView):
             except:
                 pass
 
-            if r.invoice_id and r.invoice_id not in invoice_ids:
-                invoice_ids.add(r.invoice_id)
-                total_bill += float(r.invoice.total_amount or 0)
+            try:
+                if r.invoice_id and r.invoice_id not in invoice_ids:
+                    invoice_ids.add(r.invoice_id)
+                    total_bill += float(r.invoice.total_amount or 0)
+            except:
+                pass
 
             if r.invoice_id:
                 billing += 1
@@ -17980,6 +18070,7 @@ class FamilyDetailedSummaryView(BaseTokenView):
 
                 minutes = sec / 60
                 hour = localtime(r.created_at).hour
+
                 if hour == 9:
                     hourly_durations["09:00-10:00"] += minutes
                 elif hour == 10:
@@ -18001,15 +18092,8 @@ class FamilyDetailedSummaryView(BaseTokenView):
                 elif hour == 18:
                     hourly_durations["06:00-07:00"] += minutes
 
-            if r.created_by_id in attendance_map:
-                present += attendance_map[r.created_by_id]["present"]
-                absent += attendance_map[r.created_by_id]["absent"]
-                half_day += attendance_map[r.created_by_id]["half_day"]
-
         if team_ids:
-            daily_reports = SalesTeamDailyReport.objects.filter(
-                team_id__in=team_ids
-            )
+            daily_reports = SalesTeamDailyReport.objects.filter(team_id__in=team_ids)
 
             if start_date:
                 daily_reports = daily_reports.filter(created_at__date__gte=start_date)
@@ -18021,9 +18105,10 @@ class FamilyDetailedSummaryView(BaseTokenView):
                 new_customers += dr.new_customers or 0
                 new_conversions += dr.new_conversions or 0
 
+        attendance_summary = self._build_attendance_details(attendance_rows)
+
         total_minutes = total_seconds / 60 if total_seconds else 0
         avg = (total_minutes / total_call_count) if total_call_count else 0
-        # percent = (avg / 480) * 100 if avg else 0
         percent = (total_minutes / 480) * 100 if total_minutes else 0
 
         return {
@@ -18048,14 +18133,14 @@ class FamilyDetailedSummaryView(BaseTokenView):
             "unique_customer_count": len(customers),
             "report_count": len(reports),
 
-            "present_count": present,
-            "absent_count": absent,
-            "half_day_count": half_day,
+            "present_count": attendance_summary["present_count"],
+            "absent_count": attendance_summary["absent_count"],
+            "half_day_count": attendance_summary["half_day_count"],
             "total_team_count": len(team_ids),
+            "attendance_details": attendance_summary["attendance_details"],
         }
 
     def get(self, request, family_id):
-
         authUser, error = self.get_user_from_token(request)
         if error:
             return error
@@ -18063,24 +18148,22 @@ class FamilyDetailedSummaryView(BaseTokenView):
         staff_qs = User.objects.filter(
             family_id=family_id,
             department_id__name__in=["BDM", "BDO"]
-        )
+        ).select_related("family", "department_id")
 
         staff_ids = list(staff_qs.values_list("id", flat=True))
+
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
 
         reports = SalesTeamMemberDailyReport.objects.select_related(
             "team",
             "team__division",
             "created_by",
             "created_by__department_id",
+            "created_by__family",
             "invoice",
             "invoice__customer",
         ).filter(created_by_id__in=staff_ids)
-
-        attendance_qs = BDMOrderAnalysisStaff.objects.filter(
-            staff_id__in=staff_ids
-        )
-        start_date = request.GET.get("start_date")
-        end_date = request.GET.get("end_date")
 
         if start_date:
             reports = reports.filter(created_at__date__gte=start_date)
@@ -18088,15 +18171,33 @@ class FamilyDetailedSummaryView(BaseTokenView):
         if end_date:
             reports = reports.filter(created_at__date__lte=end_date)
 
-        attendance_map = defaultdict(lambda: {"present": 0, "absent": 0, "half_day": 0})
+        reports = list(reports)
 
-        for row in attendance_qs:
-            if row.status == "present":
-                attendance_map[row.staff_id]["present"] += 1
-            elif row.status == "absent":
-                attendance_map[row.staff_id]["absent"] += 1
-            elif row.status == "half_day":
-                attendance_map[row.staff_id]["half_day"] += 1
+        attendance_rows = BDMOrderAnalysisStaff.objects.select_related(
+            "staff",
+            "staff__family",
+            "analysis"
+        ).filter(
+            staff_id__in=staff_ids
+        )
+
+        if start_date:
+            attendance_rows = attendance_rows.filter(created_at__date__gte=start_date)
+
+        if end_date:
+            attendance_rows = attendance_rows.filter(created_at__date__lte=end_date)
+
+        attendance_rows = list(attendance_rows)
+
+        historical_team_reports = SalesTeamMemberDailyReport.objects.filter(
+            created_by_id__in=staff_ids,
+            team__isnull=False
+        ).order_by("created_by_id", "-created_at").values("created_by_id", "team_id")
+
+        staff_latest_team_map = {}
+        for item in historical_team_reports:
+            if item["created_by_id"] not in staff_latest_team_map:
+                staff_latest_team_map[item["created_by_id"]] = item["team_id"]
 
         team_map = defaultdict(list)
 
@@ -18112,9 +18213,15 @@ class FamilyDetailedSummaryView(BaseTokenView):
             team = team_reports[0].team
             team_ids.add(team.id)
 
+            team_attendance_rows = []
+
+            for row in attendance_rows:
+                if self._row_belongs_to_team(row, team, staff_latest_team_map):
+                    team_attendance_rows.append(row)
+
             summary = self._build_summary(
                 team_reports,
-                attendance_map,
+                team_attendance_rows,
                 {team.id},
                 start_date,
                 end_date
@@ -18130,7 +18237,7 @@ class FamilyDetailedSummaryView(BaseTokenView):
 
         family_summary = self._build_summary(
             all_reports,
-            attendance_map,
+            attendance_rows,
             team_ids,
             start_date,
             end_date
