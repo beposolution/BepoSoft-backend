@@ -2422,6 +2422,57 @@ class FamilyOrderSummaryView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+class FamilyWiseOrderSummaryView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            family_summary = (
+                Order.objects
+                .exclude(status='Invoice Rejected')
+                .exclude(family__name__iexact="bepocart")
+                .filter(manage_staff__department_id__name__in=["BDO", "BDM", "SD", "ASD"])
+                .values('family', 'family__name')
+                .annotate(
+                    total_bills=Count('id'),
+                    total_amount=Sum('total_amount'),
+                    invoice_created_bills=Count('id', filter=Q(status='Invoice Created'))
+                )
+                .order_by('family__name')
+            )
+
+            data = []
+            for item in family_summary:
+                data.append({
+                    "family_id": item["family"],
+                    "family_name": item["family__name"],
+                    "total_bills": item["total_bills"] or 0,
+                    "total_amount": float(item["total_amount"] or 0),
+                    "invoice_created_bills": item["invoice_created_bills"] or 0,
+                })
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Family-wise order summary fetched successfully",
+                    "data": data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching family-wise order summary",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
 class OrderDateReportView(BaseTokenView):
 
     def get(self, request, start_date, end_date):
@@ -17494,65 +17545,41 @@ class FullHierarchySummaryView(BaseTokenView):
         except:
             return 0
 
-    def _build_attendance_details(self, reports, attendance_map):
+    def _build_attendance_details(self, attendance_rows):
         try:
-            staff_ids_in_reports = set()
-
-            for r in reports:
-                if r.created_by_id:
-                    staff_ids_in_reports.add(r.created_by_id)
-
             present_list = []
             absent_list = []
             half_day_list = []
 
-            present_total = 0
-            absent_total = 0
-            half_day_total = 0
-
-            for staff_id in staff_ids_in_reports:
-                staff_data = attendance_map.get(
-                    staff_id,
-                    {
-                        "staff_name": "",
-                        "present": 0,
-                        "absent": 0,
-                        "half_day": 0,
+            for row in attendance_rows:
+                try:
+                    row_data = {
+                        "id": row.id,
+                        "analysis_id": row.analysis_id if row.analysis_id else None,
+                        "staff_id": row.staff_id if row.staff_id else None,
+                        "staff_name": row.staff.name if row.staff else "",
+                        "status": row.status,
+                        "created_at": row.created_at,
+                        "updated_at": row.updated_at,
                     }
-                )
 
-                if staff_data["present"] > 0:
-                    present_list.append({
-                        "staff_id": staff_id,
-                        "staff_name": staff_data["staff_name"],
-                        "count": staff_data["present"]
-                    })
-                    present_total += staff_data["present"]
+                    if row.status == "present":
+                        present_list.append(row_data)
+                    elif row.status == "absent":
+                        absent_list.append(row_data)
+                    elif row.status == "half_day":
+                        half_day_list.append(row_data)
+                except:
+                    pass
 
-                if staff_data["absent"] > 0:
-                    absent_list.append({
-                        "staff_id": staff_id,
-                        "staff_name": staff_data["staff_name"],
-                        "count": staff_data["absent"]
-                    })
-                    absent_total += staff_data["absent"]
-
-                if staff_data["half_day"] > 0:
-                    half_day_list.append({
-                        "staff_id": staff_id,
-                        "staff_name": staff_data["staff_name"],
-                        "count": staff_data["half_day"]
-                    })
-                    half_day_total += staff_data["half_day"]
-
-            present_list.sort(key=lambda x: x["staff_name"].lower())
-            absent_list.sort(key=lambda x: x["staff_name"].lower())
-            half_day_list.sort(key=lambda x: x["staff_name"].lower())
+            present_list.sort(key=lambda x: (x["staff_name"] or "").lower())
+            absent_list.sort(key=lambda x: (x["staff_name"] or "").lower())
+            half_day_list.sort(key=lambda x: (x["staff_name"] or "").lower())
 
             return {
-                "present_count": present_total,
-                "absent_count": absent_total,
-                "half_day_count": half_day_total,
+                "present_count": len(present_list),
+                "absent_count": len(absent_list),
+                "half_day_count": len(half_day_list),
                 "attendance_details": {
                     "present": present_list,
                     "absent": absent_list,
@@ -17571,7 +17598,7 @@ class FullHierarchySummaryView(BaseTokenView):
                 }
             }
 
-    def _build_summary(self, reports, attendance_map, team_ids):
+    def _build_summary(self, reports, attendance_rows, team_ids):
         try:
             invoice_ids = set()
             bdo_ids = set()
@@ -17616,7 +17643,7 @@ class FullHierarchySummaryView(BaseTokenView):
                     total_seconds += sec
                     total_call_count += 1
 
-            attendance_summary = self._build_attendance_details(reports, attendance_map)
+            attendance_summary = self._build_attendance_details(attendance_rows)
 
             total_minutes = total_seconds / 60 if total_seconds else 0
             avg = (total_minutes / total_call_count) if total_call_count else 0
@@ -17694,7 +17721,13 @@ class FullHierarchySummaryView(BaseTokenView):
             if end_date:
                 reports = reports.filter(created_at__date__lte=end_date)
 
-            attendance_rows = BDMOrderAnalysisStaff.objects.select_related("staff").filter(
+            reports = list(reports)
+
+            attendance_rows = BDMOrderAnalysisStaff.objects.select_related(
+                "staff",
+                "staff__family",
+                "analysis"
+            ).filter(
                 staff_id__in=staff_ids
             )
 
@@ -17704,31 +17737,28 @@ class FullHierarchySummaryView(BaseTokenView):
             if end_date:
                 attendance_rows = attendance_rows.filter(created_at__date__lte=end_date)
 
-            attendance_map = defaultdict(lambda: {
-                "staff_name": "",
-                "present": 0,
-                "absent": 0,
-                "half_day": 0
-            })
+            attendance_rows = list(attendance_rows)
+
+            family_map = {}
+            family_attendance_map = {}
 
             for row in attendance_rows:
                 try:
-                    attendance_map[row.staff_id]["staff_name"] = row.staff.name if row.staff else ""
+                    if not row.staff or not row.staff.family:
+                        continue
 
-                    if row.status == "present":
-                        attendance_map[row.staff_id]["present"] += 1
-                    elif row.status == "absent":
-                        attendance_map[row.staff_id]["absent"] += 1
-                    elif row.status == "half_day":
-                        attendance_map[row.staff_id]["half_day"] += 1
+                    fid = row.staff.family.id
+
+                    if fid not in family_attendance_map:
+                        family_attendance_map[fid] = []
+
+                    family_attendance_map[fid].append(row)
                 except:
                     pass
 
-            family_map = {}
-
             for r in reports:
                 try:
-                    if not r.team or not r.created_by.family:
+                    if not r.team or not r.created_by or not r.created_by.family:
                         continue
 
                     fid = r.created_by.family.id
@@ -17751,20 +17781,32 @@ class FullHierarchySummaryView(BaseTokenView):
             overall_reports = []
             overall_team_ids = set()
 
-            for fdata in family_map.values():
+            for fid, fdata in family_map.items():
                 try:
                     team_list = []
                     family_reports = []
                     team_ids = set()
+
+                    family_attendance_rows = family_attendance_map.get(fid, [])
 
                     for team_id, team_reports in fdata["teams"].items():
                         try:
                             team = team_reports[0].team
                             team_ids.add(team.id)
 
+                            team_staff_ids = set()
+                            for tr in team_reports:
+                                if tr.created_by_id:
+                                    team_staff_ids.add(tr.created_by_id)
+
+                            team_attendance_rows = [
+                                row for row in family_attendance_rows
+                                if row.staff_id in team_staff_ids
+                            ]
+
                             summary = self._build_summary(
                                 team_reports,
-                                attendance_map,
+                                team_attendance_rows,
                                 {team.id}
                             )
 
@@ -17780,7 +17822,7 @@ class FullHierarchySummaryView(BaseTokenView):
 
                     family_summary = self._build_summary(
                         family_reports,
-                        attendance_map,
+                        family_attendance_rows,
                         team_ids
                     )
 
@@ -17798,7 +17840,7 @@ class FullHierarchySummaryView(BaseTokenView):
 
             overall_summary = self._build_summary(
                 overall_reports,
-                attendance_map,
+                attendance_rows,
                 overall_team_ids
             )
 
