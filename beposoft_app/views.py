@@ -2104,6 +2104,100 @@ class OrderListView(BaseTokenView):
             )
 
 
+class TodayOrderListView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "")
+            status_filter = request.GET.get("status", "")
+            staff_filter = request.GET.get("staff", "")
+
+            today = timezone.localdate()
+            today_str = today.strftime("%Y-%m-%d")
+
+            orders = Order.objects.select_related(
+                "manage_staff",
+                "customer",
+                "state",
+                "family",
+                "locked_by",
+            ).prefetch_related(
+                "payment_images"
+            ).filter(
+                order_date__startswith=today_str
+            ).order_by("-id")
+
+            if search:
+                if search.isdigit():
+                    orders = orders.filter(invoice__iregex=rf"{re.escape(search)}$")
+                else:
+                    orders = orders.filter(
+                        Q(invoice__icontains=search) |
+                        Q(customer__name__icontains=search)
+                    )
+
+            if status_filter:
+                orders = orders.filter(status__iexact=status_filter)
+
+            if staff_filter:
+                orders = orders.filter(manage_staff__name__icontains=staff_filter)
+
+            invoice_counts = orders.aggregate(
+                invoice_created_count=Count(
+                    "id",
+                    filter=Q(status="Invoice Created")
+                ),
+                invoice_approved_count=Count(
+                    "id",
+                    filter=Q(status="Waiting For Confirmation")
+                )
+            )
+
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(orders, request)
+
+            serializer = OrderdetailsSerializer(paginated_orders, many=True)
+            results = serializer.data
+
+            for idx, order in enumerate(paginated_orders):
+                family = getattr(order, "family", None)
+
+                results[idx]["family_id"] = family.id if family else None
+                results[idx]["family_name"] = family.name if family else None
+
+                results[idx]["locked_by"] = order.locked_by.username if order.locked_by else None
+                results[idx]["locked_at"] = order.locked_at.isoformat() if order.locked_at else None
+
+            return paginator.get_paginated_response({
+                "invoice_created_count": invoice_counts["invoice_created_count"],
+                "invoice_approved_count": invoice_counts["invoice_approved_count"],
+                "today_date": today_str,
+                "results": results
+            })
+
+        except ObjectDoesNotExist:
+            return Response(
+                {"status": "error", "message": "Orders not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except DatabaseError:
+            return Response(
+                {"status": "error", "message": "Database error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class MyOrderListView(BaseTokenView):
     def get(self, request):
         try:
