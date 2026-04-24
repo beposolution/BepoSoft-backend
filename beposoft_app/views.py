@@ -2429,6 +2429,9 @@ class FamilyWiseOrderSummaryView(BaseTokenView):
             if error_response:
                 return error_response
 
+            today = timezone.localdate()
+            today_str = today.strftime("%Y-%m-%d")
+
             family_summary = (
                 Order.objects
                 .exclude(status='Invoice Rejected')
@@ -2437,8 +2440,23 @@ class FamilyWiseOrderSummaryView(BaseTokenView):
                 .values('family', 'family__name')
                 .annotate(
                     total_bills=Count('id'),
-                    total_amount=Sum('total_amount'),
-                    invoice_created_bills=Count('id', filter=Q(status='Invoice Created'))
+
+                    grand_total_amount=Sum('total_amount'),
+
+                    invoice_created_bills=Count(
+                        'id',
+                        filter=Q(status='Invoice Created')
+                    ),
+
+                    todays_bills=Count(
+                        'id',
+                        filter=Q(order_date__startswith=today_str)
+                    ),
+
+                    todays_total_amount=Sum(
+                        'total_amount',
+                        filter=Q(order_date__startswith=today_str)
+                    )
                 )
                 .order_by('family__name')
             )
@@ -2449,8 +2467,10 @@ class FamilyWiseOrderSummaryView(BaseTokenView):
                     "family_id": item["family"],
                     "family_name": item["family__name"],
                     "total_bills": item["total_bills"] or 0,
-                    "total_amount": float(item["total_amount"] or 0),
+                    "total_amount": float(item["grand_total_amount"] or 0),
                     "invoice_created_bills": item["invoice_created_bills"] or 0,
+                    "todays_bills": item["todays_bills"] or 0,
+                    "todays_total_amount": float(item["todays_total_amount"] or 0),
                 })
 
             return Response(
