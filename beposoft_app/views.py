@@ -7795,6 +7795,79 @@ class ProductByWarehouseView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ProductByWarehouseGETView(BaseTokenView):
+    def get(self, request, warehouse_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+
+            # Check if the warehouse exists
+            warehouse = WareHouse.objects.filter(pk=warehouse_id).first()
+            if not warehouse:
+                return Response(
+                    {"message": "Warehouse not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            products = Products.objects.filter(
+                warehouse=warehouse,
+                approval_status__in=["Approved", "Disapproved"]
+            ).order_by("-id")
+
+            # Search by product name or hsn_code
+            if search:
+                products = products.filter(
+                    Q(name__icontains=search) |
+                    Q(hsn_code__icontains=search)
+                )
+
+            if not products.exists():
+                return Response(
+                    {
+                        "message": "No products found in this warehouse with the required approval status"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Filter unique products by groupID
+            seen_group_ids = set()
+            unique_products = []
+
+            for product in products:
+                group_id = product.groupID
+
+                if group_id not in seen_group_ids:
+                    seen_group_ids.add(group_id)
+                    unique_products.append(product)
+
+            # Pagination
+            paginator = StandardPagination()
+            paginated_products = paginator.paginate_queryset(unique_products, request)
+
+            serializer = ProductSingleviewSerializres(paginated_products, many=True)
+
+            return paginator.get_paginated_response({
+                "message": "Product list successfully retrieved",
+                "data": serializer.data
+            })
+
+        except authUser.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "User does not exist"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
 class LockedStockInvoicesView(APIView):
     def get(self, request, product_id):
         try:
