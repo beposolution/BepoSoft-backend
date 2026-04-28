@@ -683,7 +683,8 @@ class Order(models.Model):
     code_charge = models.IntegerField(default=0, null=True)
     shipping_mode = models.CharField(max_length=100, null=True,blank=True)
     shipping_charge = models.IntegerField(default=0, null=True)
-
+    parcel_service = models.ForeignKey(ParcalService, on_delete=models.SET_NULL, null=True, blank=True, related_name="parcel_service_staff")
+    parcel_service_note = models.TextField(default="", blank=True, null=True)
     locked_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='locked_orders')
     locked_at = models.DateTimeField(null=True, blank=True)
     cod_amount = models.FloatField(default=0.0, null=True, blank=True)  # New field for COD amount
