@@ -1092,6 +1092,59 @@ class ListAllProducts(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 
+
+
+
+class ListAllGETProducts(BaseTokenView):
+    def get(self, request):
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            search = request.GET.get("search", "").strip()
+
+            products = Products.objects.filter(
+                approval_status__iexact="Approved",
+                stock__gt=0
+            ).select_related(
+                "product_category",
+                "created_user",
+                "warehouse",
+                "product_approved_user"
+            ).prefetch_related(
+                "images",
+                "family"
+            ).order_by("-id")
+
+            if search:
+                products = products.filter(
+                    Q(name__icontains=search) |
+                    Q(groupID__icontains=search) |
+                    Q(variantID__icontains=search) |
+                    Q(product_category__category_name__icontains=search) |
+                    Q(color__icontains=search) |
+                    Q(size__icontains=search) |
+                    Q(hsn_code__icontains=search) |
+                    Q(unit__icontains=search) |
+                    Q(purchase_type__icontains=search)
+                ).distinct()
+
+            paginator = StandardPagination()
+            result_page = paginator.paginate_queryset(products, request)
+
+            serializer = ProductSingleviewSerializres(result_page, many=True)
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"Error fetching products: {str(e)}")
+            return Response({
+                "error": "An error occurred while retrieving products. Please try again later."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
 class ProductUpdateView(BaseTokenView):
     
     def get_product(self,pk):
