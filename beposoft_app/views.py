@@ -9118,6 +9118,87 @@ class WarehouseOrderView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class WarehouseOrderViewGET(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            warehouses = request.GET.get("warehouses", "").strip()
+            receiiver_warehouse = request.GET.get("receiiver_warehouse", "").strip()
+            company = request.GET.get("company", "").strip()
+            manage_staff = request.GET.get("manage_staff", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            from_date = request.GET.get("from_date", "").strip()
+            to_date = request.GET.get("to_date", "").strip()
+
+            orders = WarehouseOrder.objects.select_related(
+                "manage_staff",
+                "warehouses",
+                "receiiver_warehouse",
+                "company",
+                "billing_address",
+            ).prefetch_related(
+                "items"
+            ).order_by("-id")
+
+            # Search by invoice
+            if search:
+                orders = orders.filter(invoice__icontains=search)
+
+            # Filter by requesting warehouse ID
+            if warehouses:
+                orders = orders.filter(warehouses_id=warehouses)
+
+            # Filter by receiver warehouse ID
+            if receiiver_warehouse:
+                orders = orders.filter(receiiver_warehouse_id=receiiver_warehouse)
+
+            # Filter by company ID
+            if company:
+                orders = orders.filter(company_id=company)
+
+            # Filter by manage staff ID
+            if manage_staff:
+                orders = orders.filter(manage_staff_id=manage_staff)
+
+            # Filter by status
+            if status_filter:
+                orders = orders.filter(status__iexact=status_filter)
+
+            # Date filter for order_date
+            # Expected format: YYYY-MM-DD
+            if from_date:
+                orders = orders.filter(order_date__gte=from_date)
+
+            if to_date:
+                orders = orders.filter(order_date__lte=to_date)
+
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(orders, request)
+
+            serializer = WarehouseOrderGetSerializer(paginated_orders, many=True)
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Warehouse orders fetched successfully",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": f"Something went wrong: {str(e)}"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
 class WarehouseOrderByWarehouseView(BaseTokenView):
 
     def get(self, request, warehouse_id):
