@@ -3801,6 +3801,82 @@ class OrderReceiptListView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class OrderReceiptListGETView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            order = request.GET.get("order", "").strip()
+            customer = request.GET.get("customer", "").strip()
+            bank = request.GET.get("bank", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            receipts = PaymentReceipt.objects.select_related(
+                "order",
+                "customer",
+                "bank",
+                "created_by"
+            ).all().order_by("-id")
+
+            # Search with invoice, payment_receipt, transactionID, amount
+            if search:
+                receipts = receipts.filter(
+                    Q(order__invoice__icontains=search) |
+                    Q(payment_receipt__icontains=search) |
+                    Q(transactionID__icontains=search) |
+                    Q(amount__icontains=search)
+                )
+
+            # Filter by order id
+            if order:
+                receipts = receipts.filter(order_id=order)
+
+            # Filter by customer id
+            if customer:
+                receipts = receipts.filter(customer_id=customer)
+
+            # Filter by bank id
+            if bank:
+                receipts = receipts.filter(bank_id=bank)
+
+            # Filter by created_by user id
+            if created_by:
+                receipts = receipts.filter(created_by_id=created_by)
+
+            # Date filter using received_at
+            if start_date:
+                receipts = receipts.filter(received_at__gte=start_date)
+
+            if end_date:
+                receipts = receipts.filter(received_at__lte=end_date)
+
+            paginator = StandardPagination()
+            paginated_receipts = paginator.paginate_queryset(receipts, request)
+
+            serializer = PaymentRecieptSerializers(paginated_receipts, many=True)
+
+            return paginator.get_paginated_response({
+                "message": "Payment receipts fetched successfully",
+                "data": serializer.data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching payment receipts",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
         
 class AdvanceReceiptDetailView(APIView):
     def get(self, request, pk):
