@@ -8925,42 +8925,47 @@ class DataLogCreateView(BaseTokenView):
 
 class DataLogListView(BaseTokenView):
     def get(self, request):
-        auth_user, error_response = self.get_user_from_token(request)
-        if error_response:
-            return error_response
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
 
-        qs = DataLog.objects.all().order_by('-created_at')
+            qs = DataLog.objects.all().order_by('-created_at')
 
-        order_id = request.GET.get('order')      # ?order=2332
-        user_id = request.GET.get('user')        # ?user=17
-        dt_from = request.GET.get('from')        # YYYY-MM-DD
-        dt_to = request.GET.get('to')            # YYYY-MM-DD
+            order_id = request.GET.get('order')      # ?order=2332
+            user_id = request.GET.get('user')        # ?user=17
+            dt_from = request.GET.get('from')        # YYYY-MM-DD
+            dt_to = request.GET.get('to')            # YYYY-MM-DD
 
-        if order_id:
-            qs = qs.filter(order_id=order_id)
-        if user_id:
-            qs = qs.filter(user_id=user_id)
-        if dt_from:
-            qs = qs.filter(created_at__date__gte=dt_from)
-        if dt_to:
-            qs = qs.filter(created_at__date__lte=dt_to)
+            if order_id:
+                qs = qs.filter(order_id=order_id)
 
-        page = int(request.GET.get('page', 1))
-        page_size = int(request.GET.get('page_size', 100))
-        start = (page - 1) * page_size
-        end = start + page_size
+            if user_id:
+                qs = qs.filter(user_id=user_id)
 
-        total_count = qs.count()  # before slicing
-        qs = qs[start:end]
+            if dt_from:
+                qs = qs.filter(created_at__date__gte=dt_from)
 
-        serializer = DataLogViewSerializer(qs, many=True)
+            if dt_to:
+                qs = qs.filter(created_at__date__lte=dt_to)
 
-        return Response({
-            "page": page,
-            "page_size": page_size,
-            "count": total_count,
-            "results": serializer.data,
-        }, status=status.HTTP_200_OK)
+            paginator = StandardPagination()
+            paginated_logs = paginator.paginate_queryset(qs, request)
+
+            serializer = DataLogViewSerializer(paginated_logs, many=True)
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching data logs",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 class DeleteOldDataLogsView(BaseTokenView):
     """
