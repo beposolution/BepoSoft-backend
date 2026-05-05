@@ -835,9 +835,6 @@ class CustomerView(BaseTokenView):
             if error_response:
                 return error_response
 
-            # customers = Customers.objects.all().order_by('-created_at') 
-            # serializer = CustomerModelSerializerLimited(customers, many=True)
-
             search = request.GET.get("search", "")
 
             customers = Customers.objects.select_related("manager","state","family").order_by('-created_at')
@@ -863,6 +860,62 @@ class CustomerView(BaseTokenView):
 
         except Exception as e:
             return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class CustomerDivisionView(BaseTokenView):
+
+    def get(self, request, family_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "")
+
+            customers = Customers.objects.select_related(
+                "manager",
+                "manager__family",
+                "state",
+                "family",
+                "customer_type"
+            ).filter(
+                manager__family_id=family_id
+            ).order_by('-created_at')
+
+            if search:
+                customers = customers.filter(
+                    Q(name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(email__icontains=search)
+                )
+
+            paginator = StandardPagination()
+            result_page = paginator.paginate_queryset(customers, request)
+
+            serializer = CustomerModelSerializerLimited(result_page, many=True)
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "User does not exist"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
     
 class CustomerUpdateView(BaseTokenView):
