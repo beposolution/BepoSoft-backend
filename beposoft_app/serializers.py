@@ -193,13 +193,14 @@ class CustomerModelSerializerView(serializers.ModelSerializer):
 
 class CustomerModelSerializerLimited(serializers.ModelSerializer):
     family=serializers.CharField(source="manager.family.name")
+    family_id = serializers.IntegerField(source="family.id", read_only=True)
     state_name = serializers.CharField(source="state.name")
     customer_type = serializers.CharField(source="customer_type.type_name", read_only=True)
 
     class Meta:
         model = Customers
         fields = ['id','name', 'email', 'created_at',
-                  'manager','family','phone',
+                  'manager','family', 'family_id', 'phone',
                   'state_name','customer_type', 'gst']          
 
 
