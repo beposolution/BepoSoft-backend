@@ -7218,8 +7218,19 @@ class StaffBasedCustomers(BaseTokenView):
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
+
+            search = request.GET.get("search", "").strip()
         
             customers = Customers.objects.filter(manager=authUser)
+
+            if search:
+                customers = customers.filter(
+                    Q(name__icontains=search) |
+                    Q(phone__icontains=search)
+                )
+
+            customers = customers.order_by("-id")
+            
             serializer = CustomerModelSerializerView(customers, many=True)
             return Response({"data": serializer.data, "message": "Customers retrieved successfully"}, status=status.HTTP_200_OK)
         
