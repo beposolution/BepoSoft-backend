@@ -7988,6 +7988,130 @@ class ProductByWarehouseView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+
+class GETProductByWarehouseView(BaseTokenView):
+    def get(self, request, warehouse_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            category_id = request.GET.get("category_id", "").strip()
+
+            warehouse = WareHouse.objects.filter(pk=warehouse_id).first()
+            if not warehouse:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Warehouse not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            base_products = Products.objects.filter(
+                warehouse=warehouse,
+                approval_status__in=["Approved", "Disapproved"]
+            ).select_related(
+                "warehouse",
+                "created_user",
+                "product_category",
+                "product_approved_user"
+            ).prefetch_related(
+                "family",
+                "images"
+            )
+
+            if category_id:
+                base_products = base_products.filter(
+                    product_category_id=category_id
+                )
+
+            if search:
+                matching_products = base_products.filter(
+                    Q(name__icontains=search)
+                )
+
+                matched_group_ids = list(
+                    matching_products.exclude(groupID__isnull=True)
+                    .exclude(groupID="")
+                    .values_list("groupID", flat=True)
+                    .distinct()
+                )
+
+                matched_single_ids = list(
+                    matching_products.filter(
+                        Q(groupID__isnull=True) | Q(groupID="")
+                    ).values_list("id", flat=True)
+                )
+
+                base_products = base_products.filter(
+                    Q(groupID__in=matched_group_ids) |
+                    Q(id__in=matched_single_ids)
+                )
+
+            products = base_products.order_by("groupID", "id")
+
+            if not products.exists():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "No products found in this warehouse"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            seen_group_ids = set()
+            unique_products = []
+
+            for product in products:
+                group_key = product.groupID if product.groupID else f"single-{product.id}"
+
+                if group_key not in seen_group_ids:
+                    seen_group_ids.add(group_key)
+                    unique_products.append(product)
+
+            paginator = StandardPagination()
+            paginated_products = paginator.paginate_queryset(unique_products, request)
+
+            serializer = ProductSingleviewSerializres(
+                paginated_products,
+                many=True,
+                context={"request": request}
+            )
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Product list successfully retrieved",
+                "warehouse_id": warehouse.id,
+                "warehouse_name": warehouse.name,
+                "search": search,
+                "category_id": category_id if category_id else None,
+                "data": serializer.data
+            })
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "User does not exist"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+
 class ProductByWarehouseGETView(BaseTokenView):
     def get(self, request, warehouse_id):
         try:
