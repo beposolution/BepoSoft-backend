@@ -258,6 +258,7 @@ urlpatterns = [
     path('api/warehouse/add/',WarehouseAddView.as_view()),
     path('api/warehouse/update/<int:pk>/',WarehouseGetView.as_view()),
     path('api/warehouse/products/<int:warehouse_id>/',ProductByWarehouseView.as_view()),
+    path('api/warehouse/products/gets/<int:warehouse_id>/',GETProductByWarehouseView.as_view()),
     path('api/warehouse/products/<int:warehouse_id>/get/',ProductByWarehouseGETView.as_view()),
     path('api/product/<int:product_id>/locked-invoices/', LockedStockInvoicesView.as_view()),
     path('api/warehouse/orders/<int:warehouse_id>/',WareHouseOrdersView.as_view()),

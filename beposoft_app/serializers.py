@@ -330,6 +330,81 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
         """Fetch images dynamically using related_name."""
         return [img.image.url for img in obj.images.all()]  
     
+
+
+
+
+
+class GETProductSingleviewSerializres(serializers.ModelSerializer):
+    variantIDs = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+    product_category_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Products
+        fields = "__all__"
+
+    def get_product_category_name(self, obj):
+        """Return category name safely, even if null."""
+        return obj.product_category.category_name if obj.product_category else None
+
+    def get_variantIDs(self, obj):
+        """
+        Return variants for the same groupID.
+        The main product is always the first product by id inside the groupID.
+        The main product should not be shown inside variantIDs.
+        """
+
+        if not obj.groupID:
+            return []
+
+        main_product = Products.objects.filter(
+            groupID=obj.groupID
+        ).order_by("id").first()
+
+        if not main_product:
+            return []
+
+        variants = Products.objects.filter(
+            groupID=obj.groupID
+        ).exclude(
+            id=main_product.id
+        ).order_by("id")
+
+        variant_list = []
+
+        for variant in variants:
+            if variant.image:
+                selected_image = variant.image.url
+            else:
+                variant_images = SingleProducts.objects.filter(product=variant.pk)
+                image_urls = [img.image.url for img in variant_images if img.image]
+                selected_image = image_urls[0] if image_urls else None
+
+            variant_list.append({
+                "id": variant.pk,
+                "groupID": variant.groupID,
+                "name": variant.name if variant.name else None,
+                "stock": variant.stock,
+                "locked_stock": variant.locked_stock,
+                "image": selected_image,
+                "color": variant.color if variant.color else None,
+                "size": variant.size if variant.size else None,
+                "selling_price": variant.selling_price,
+                "retail_price": variant.retail_price,
+                "created_user": variant.created_user.name if variant.created_user else None,
+                "approval_status": variant.approval_status,
+                "product_category_id": variant.product_category.id if variant.product_category else None,
+                "product_category_name": variant.product_category.category_name if variant.product_category else None,
+            })
+
+        return variant_list
+    
+    def get_images(self, obj):
+        """Fetch images dynamically using related_name."""
+        return [img.image.url for img in obj.images.all()]  
+    
+
     
         
 
