@@ -2725,8 +2725,27 @@ class OrderDateReportView(BaseTokenView):
             # ---- Summaries ----
             total_amount = sum(o.total_amount for o in filtered_orders)
 
-            non_rejected = [o for o in filtered_orders if o.status != "Invoice Rejected"]
+            # non_rejected = [o for o in filtered_orders if o.status != "Invoice Rejected"]
+            non_rejected = [
+                o for o in filtered_orders
+                if o.status not in [
+                    "Invoice Rejected",
+                    "Invoice Created",
+                    "Invoice Approved",
+                    "Waiting for confirmation",
+                ]
+            ]
+
             rejected = [o for o in filtered_orders if o.status == "Invoice Rejected"]
+
+            pending = [
+                o for o in filtered_orders
+                if o.status in [
+                    "Invoice Created",
+                    "Invoice Approved",
+                    "Waiting for confirmation",
+                ]
+            ]
 
             order_data = [{
                 "order_id": o.id,
@@ -2756,6 +2775,10 @@ class OrderDateReportView(BaseTokenView):
                     "rejected_orders": {
                         "count": len(rejected),
                         "amount": sum(o.total_amount for o in rejected),
+                    },
+                    "pending_orders": {
+                        "count": len(pending),
+                        "amount": sum(o.total_amount for o in pending),
                     },
                 },
                 "orders": order_data,
