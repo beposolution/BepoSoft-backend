@@ -8030,7 +8030,8 @@ class GETProductByWarehouseView(BaseTokenView):
 
             if search:
                 matching_products = base_products.filter(
-                    Q(name__icontains=search)
+                    Q(name__icontains=search) |
+                    Q(hsn_code__icontains=search)
                 )
 
                 matched_group_ids = list(
