@@ -9119,12 +9119,17 @@ class DataLogListView(BaseTokenView):
             if error_response:
                 return error_response
 
-            qs = DataLog.objects.all().order_by('-created_at')
+            qs = DataLog.objects.select_related(
+                "user",
+                "order",
+            ).all().order_by("-created_at")
 
-            order_id = request.GET.get('order')      # ?order=2332
-            user_id = request.GET.get('user')        # ?user=17
-            dt_from = request.GET.get('from')        # YYYY-MM-DD
-            dt_to = request.GET.get('to')            # YYYY-MM-DD
+            search = request.GET.get("search", "").strip()
+
+            order_id = request.GET.get("order")      # ?order=2332
+            user_id = request.GET.get("user")        # ?user=17
+            dt_from = request.GET.get("from")        # YYYY-MM-DD
+            dt_to = request.GET.get("to")            # YYYY-MM-DD
 
             if order_id:
                 qs = qs.filter(order_id=order_id)
@@ -9138,6 +9143,13 @@ class DataLogListView(BaseTokenView):
             if dt_to:
                 qs = qs.filter(created_at__date__lte=dt_to)
 
+            if search:
+                qs = qs.filter(
+                    Q(before_data__icontains=search) |
+                    Q(after_data__icontains=search) |
+                    Q(order__invoice__icontains=search)
+                )
+
             paginator = StandardPagination()
             paginated_logs = paginator.paginate_queryset(qs, request)
 
@@ -9150,9 +9162,9 @@ class DataLogListView(BaseTokenView):
                 {
                     "status": "error",
                     "message": "An error occurred while fetching data logs",
-                    "errors": str(e)
+                    "errors": str(e),
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         
 
