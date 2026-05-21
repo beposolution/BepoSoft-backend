@@ -8124,13 +8124,39 @@ class GETProductByWarehouseView(BaseTokenView):
             variant_locked_stock = 0
             single_locked_stock = 0
 
-            total_retail_amount = 0
-            variant_retail_amount = 0
-            single_retail_amount = 0
+            total_exclude_price_amount = 0
+            variant_exclude_price_amount = 0
+            single_exclude_price_amount = 0
 
             total_selling_amount = 0
             variant_selling_amount = 0
             single_selling_amount = 0
+
+            total_landing_cost_amount = 0
+            variant_landing_cost_amount = 0
+            single_landing_cost_amount = 0
+
+            total_retail_amount = 0
+            variant_retail_amount = 0
+            single_retail_amount = 0
+
+            total_damaged_stock = 0
+            variant_damaged_stock = 0
+            single_damaged_stock = 0
+
+            total_partially_damaged_stock = 0
+            variant_partially_damaged_stock = 0
+            single_partially_damaged_stock = 0
+
+            total_damaged_exclude_price_amount = 0
+            total_damaged_selling_amount = 0
+            total_damaged_landing_cost_amount = 0
+            total_damaged_retail_amount = 0
+
+            total_partially_damaged_exclude_price_amount = 0
+            total_partially_damaged_selling_amount = 0
+            total_partially_damaged_landing_cost_amount = 0
+            total_partially_damaged_retail_amount = 0
 
             variant_product_count = 0
             single_product_count = 0
@@ -8144,8 +8170,14 @@ class GETProductByWarehouseView(BaseTokenView):
                     for variant in variant_ids:
                         stock = variant.get("stock") or 0
                         locked_stock = variant.get("locked_stock") or 0
-                        retail_price = variant.get("retail_price") or 0
+
+                        exclude_price = variant.get("exclude_price") or 0
                         selling_price = variant.get("selling_price") or 0
+                        landing_cost = variant.get("landing_cost") or 0
+                        retail_price = variant.get("retail_price") or 0
+
+                        damaged_stock = variant.get("damaged_stock") or 0
+                        partially_damaged_stock = variant.get("partially_damaged_stock") or 0
 
                         total_stock += stock
                         variant_stock += stock
@@ -8153,22 +8185,62 @@ class GETProductByWarehouseView(BaseTokenView):
                         total_locked_stock += locked_stock
                         variant_locked_stock += locked_stock
 
-                        retail_amount = stock * retail_price
+                        total_damaged_stock += damaged_stock
+                        variant_damaged_stock += damaged_stock
+
+                        total_partially_damaged_stock += partially_damaged_stock
+                        variant_partially_damaged_stock += partially_damaged_stock
+
+                        exclude_price_amount = stock * exclude_price
                         selling_amount = stock * selling_price
+                        landing_cost_amount = stock * landing_cost
+                        retail_amount = stock * retail_price
+
+                        total_exclude_price_amount += exclude_price_amount
+                        variant_exclude_price_amount += exclude_price_amount
+
+                        total_selling_amount += selling_amount
+                        variant_selling_amount += selling_amount
+
+                        total_landing_cost_amount += landing_cost_amount
+                        variant_landing_cost_amount += landing_cost_amount
 
                         total_retail_amount += retail_amount
                         variant_retail_amount += retail_amount
 
-                        total_selling_amount += selling_amount
-                        variant_selling_amount += selling_amount
+                        damaged_exclude_price_amount = damaged_stock * exclude_price
+                        damaged_selling_amount = damaged_stock * selling_price
+                        damaged_landing_cost_amount = damaged_stock * landing_cost
+                        damaged_retail_amount = damaged_stock * retail_price
+
+                        total_damaged_exclude_price_amount += damaged_exclude_price_amount
+                        total_damaged_selling_amount += damaged_selling_amount
+                        total_damaged_landing_cost_amount += damaged_landing_cost_amount
+                        total_damaged_retail_amount += damaged_retail_amount
+
+                        partially_damaged_exclude_price_amount = partially_damaged_stock * exclude_price
+                        partially_damaged_selling_amount = partially_damaged_stock * selling_price
+                        partially_damaged_landing_cost_amount = partially_damaged_stock * landing_cost
+                        partially_damaged_retail_amount = partially_damaged_stock * retail_price
+
+                        total_partially_damaged_exclude_price_amount += partially_damaged_exclude_price_amount
+                        total_partially_damaged_selling_amount += partially_damaged_selling_amount
+                        total_partially_damaged_landing_cost_amount += partially_damaged_landing_cost_amount
+                        total_partially_damaged_retail_amount += partially_damaged_retail_amount
 
                 else:
                     single_product_count += 1
 
                     stock = product_data.get("stock") or 0
                     locked_stock = product_data.get("locked_stock") or 0
-                    retail_price = product_data.get("retail_price") or 0
+
+                    exclude_price = product_data.get("exclude_price") or 0
                     selling_price = product_data.get("selling_price") or 0
+                    landing_cost = product_data.get("landing_cost") or 0
+                    retail_price = product_data.get("retail_price") or 0
+
+                    damaged_stock = product_data.get("damaged_stock") or 0
+                    partially_damaged_stock = product_data.get("partially_damaged_stock") or 0
 
                     total_stock += stock
                     single_stock += stock
@@ -8176,19 +8248,54 @@ class GETProductByWarehouseView(BaseTokenView):
                     total_locked_stock += locked_stock
                     single_locked_stock += locked_stock
 
-                    retail_amount = stock * retail_price
-                    selling_amount = stock * selling_price
+                    total_damaged_stock += damaged_stock
+                    single_damaged_stock += damaged_stock
 
-                    total_retail_amount += retail_amount
-                    single_retail_amount += retail_amount
+                    total_partially_damaged_stock += partially_damaged_stock
+                    single_partially_damaged_stock += partially_damaged_stock
+
+                    exclude_price_amount = stock * exclude_price
+                    selling_amount = stock * selling_price
+                    landing_cost_amount = stock * landing_cost
+                    retail_amount = stock * retail_price
+
+                    total_exclude_price_amount += exclude_price_amount
+                    single_exclude_price_amount += exclude_price_amount
 
                     total_selling_amount += selling_amount
                     single_selling_amount += selling_amount
 
+                    total_landing_cost_amount += landing_cost_amount
+                    single_landing_cost_amount += landing_cost_amount
+
+                    total_retail_amount += retail_amount
+                    single_retail_amount += retail_amount
+
+                    damaged_exclude_price_amount = damaged_stock * exclude_price
+                    damaged_selling_amount = damaged_stock * selling_price
+                    damaged_landing_cost_amount = damaged_stock * landing_cost
+                    damaged_retail_amount = damaged_stock * retail_price
+
+                    total_damaged_exclude_price_amount += damaged_exclude_price_amount
+                    total_damaged_selling_amount += damaged_selling_amount
+                    total_damaged_landing_cost_amount += damaged_landing_cost_amount
+                    total_damaged_retail_amount += damaged_retail_amount
+
+                    partially_damaged_exclude_price_amount = partially_damaged_stock * exclude_price
+                    partially_damaged_selling_amount = partially_damaged_stock * selling_price
+                    partially_damaged_landing_cost_amount = partially_damaged_stock * landing_cost
+                    partially_damaged_retail_amount = partially_damaged_stock * retail_price
+
+                    total_partially_damaged_exclude_price_amount += partially_damaged_exclude_price_amount
+                    total_partially_damaged_selling_amount += partially_damaged_selling_amount
+                    total_partially_damaged_landing_cost_amount += partially_damaged_landing_cost_amount
+                    total_partially_damaged_retail_amount += partially_damaged_retail_amount
+
             summary = {
                 "total_products": len(unique_products),
-                "variant_products": variant_product_count,
-                "single_products": single_product_count,
+
+                "variant_product_count": variant_product_count,
+                "single_product_count": single_product_count,
 
                 "total_stock": total_stock,
                 "variant_stock": variant_stock,
@@ -8198,13 +8305,41 @@ class GETProductByWarehouseView(BaseTokenView):
                 "variant_locked_stock": variant_locked_stock,
                 "single_locked_stock": single_locked_stock,
 
+                "total_exclude_price_amount": round(total_exclude_price_amount, 2),
+                "variant_exclude_price_amount": round(variant_exclude_price_amount, 2),
+                "single_exclude_price_amount": round(single_exclude_price_amount, 2),
+
+                "total_selling_amount": round(total_selling_amount, 2),
+                "variant_selling_amount": round(variant_selling_amount, 2),
+                "single_selling_amount": round(single_selling_amount, 2),
+
+                "total_landing_cost_amount": round(total_landing_cost_amount, 2),
+                "variant_landing_cost_amount": round(variant_landing_cost_amount, 2),
+                "single_landing_cost_amount": round(single_landing_cost_amount, 2),
+
                 "total_retail_amount": round(total_retail_amount, 2),
                 "variant_retail_amount": round(variant_retail_amount, 2),
                 "single_retail_amount": round(single_retail_amount, 2),
 
-                "total_selling_amount": round(total_selling_amount, 2),
-                "variant_selling_amount": round(variant_selling_amount, 2),
-                "single_selling_amount": round(single_selling_amount, 2)
+                "damaged_stock_summary": {
+                    "total_damaged_stock": total_damaged_stock,
+                    "variant_damaged_stock": variant_damaged_stock,
+                    "single_damaged_stock": single_damaged_stock,
+                    "total_damaged_exclude_price_amount": round(total_damaged_exclude_price_amount, 2),
+                    "total_damaged_selling_amount": round(total_damaged_selling_amount, 2),
+                    "total_damaged_landing_cost_amount": round(total_damaged_landing_cost_amount, 2),
+                    "total_damaged_retail_amount": round(total_damaged_retail_amount, 2),
+                },
+
+                "partially_damaged_stock_summary": {
+                    "total_partially_damaged_stock": total_partially_damaged_stock,
+                    "variant_partially_damaged_stock": variant_partially_damaged_stock,
+                    "single_partially_damaged_stock": single_partially_damaged_stock,
+                    "total_partially_damaged_exclude_price_amount": round(total_partially_damaged_exclude_price_amount, 2),
+                    "total_partially_damaged_selling_amount": round(total_partially_damaged_selling_amount, 2),
+                    "total_partially_damaged_landing_cost_amount": round(total_partially_damaged_landing_cost_amount, 2),
+                    "total_partially_damaged_retail_amount": round(total_partially_damaged_retail_amount, 2),
+                },
             }
 
             paginator = StandardPagination()
