@@ -8096,6 +8096,117 @@ class GETProductByWarehouseView(BaseTokenView):
                     seen_group_ids.add(group_key)
                     unique_products.append(product)
 
+            # ----------------------------------------------------
+            # SUMMARY CALCULATION
+            # This uses the same serialized data structure returned
+            # by the API, so stock matches the response data.
+            #
+            # Variant product:
+            #   stock = sum of variantIDs stock
+            #
+            # Single product:
+            #   stock = product stock
+            # ----------------------------------------------------
+
+            summary_serializer = ProductSingleviewSerializres(
+                unique_products,
+                many=True,
+                context={"request": request}
+            )
+
+            summary_data = summary_serializer.data
+
+            total_stock = 0
+            variant_stock = 0
+            single_stock = 0
+
+            total_locked_stock = 0
+            variant_locked_stock = 0
+            single_locked_stock = 0
+
+            total_retail_amount = 0
+            variant_retail_amount = 0
+            single_retail_amount = 0
+
+            total_selling_amount = 0
+            variant_selling_amount = 0
+            single_selling_amount = 0
+
+            variant_product_count = 0
+            single_product_count = 0
+
+            for product_data in summary_data:
+                variant_ids = product_data.get("variantIDs", [])
+
+                if variant_ids and len(variant_ids) > 0:
+                    variant_product_count += 1
+
+                    for variant in variant_ids:
+                        stock = variant.get("stock") or 0
+                        locked_stock = variant.get("locked_stock") or 0
+                        retail_price = variant.get("retail_price") or 0
+                        selling_price = variant.get("selling_price") or 0
+
+                        total_stock += stock
+                        variant_stock += stock
+
+                        total_locked_stock += locked_stock
+                        variant_locked_stock += locked_stock
+
+                        retail_amount = stock * retail_price
+                        selling_amount = stock * selling_price
+
+                        total_retail_amount += retail_amount
+                        variant_retail_amount += retail_amount
+
+                        total_selling_amount += selling_amount
+                        variant_selling_amount += selling_amount
+
+                else:
+                    single_product_count += 1
+
+                    stock = product_data.get("stock") or 0
+                    locked_stock = product_data.get("locked_stock") or 0
+                    retail_price = product_data.get("retail_price") or 0
+                    selling_price = product_data.get("selling_price") or 0
+
+                    total_stock += stock
+                    single_stock += stock
+
+                    total_locked_stock += locked_stock
+                    single_locked_stock += locked_stock
+
+                    retail_amount = stock * retail_price
+                    selling_amount = stock * selling_price
+
+                    total_retail_amount += retail_amount
+                    single_retail_amount += retail_amount
+
+                    total_selling_amount += selling_amount
+                    single_selling_amount += selling_amount
+
+            summary = {
+                "total_products": len(unique_products),
+                "variant_products": variant_product_count,
+                "single_products": single_product_count,
+
+                "total_stock": total_stock,
+                "variant_stock": variant_stock,
+                "single_stock": single_stock,
+
+                "total_locked_stock": total_locked_stock,
+                "variant_locked_stock": variant_locked_stock,
+                "single_locked_stock": single_locked_stock,
+
+                "total_retail_amount": round(total_retail_amount, 2),
+                "variant_retail_amount": round(variant_retail_amount, 2),
+                "single_retail_amount": round(single_retail_amount, 2),
+
+                "total_selling_amount": round(total_selling_amount, 2),
+                "variant_selling_amount": round(variant_selling_amount, 2),
+                "single_selling_amount": round(single_selling_amount, 2)
+            }
+
             paginator = StandardPagination()
             paginated_products = paginator.paginate_queryset(unique_products, request)
 
@@ -8112,6 +8223,7 @@ class GETProductByWarehouseView(BaseTokenView):
                 "warehouse_name": warehouse.name,
                 "search": search,
                 "category_id": category_id if category_id else None,
+                "summary": summary,
                 "data": serializer.data
             })
 
