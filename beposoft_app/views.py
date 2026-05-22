@@ -2478,7 +2478,7 @@ class GSTOrderFilterListView(BaseTokenView):
 
             qs = qs.filter(company_id=company_id)
 
-        qs = qs.order_by("-id")
+        qs = qs.order_by("id")
 
         serializer = GSTOrderSerializer(qs, many=True)
 
