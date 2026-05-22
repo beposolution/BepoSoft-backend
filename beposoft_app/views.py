@@ -2416,6 +2416,86 @@ class GSTOrderListView(BaseTokenView):
         }, status=status.HTTP_200_OK)
 
 
+
+
+
+class GSTOrderFilterListView(BaseTokenView):
+    def get(self, request, start_date, end_date):
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invalid start_date format. Use YYYY-MM-DD."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invalid end_date format. Use YYYY-MM-DD."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = request.GET.get("company")
+
+        base_qs = Order.objects.all()
+
+        date_qs = base_qs.filter(
+            order_date__gte=start_date,
+            order_date__lte=end_date
+        )
+
+        status_qs = date_qs.exclude(
+            status__in=["Invoice Rejected", "Invoice Created"]
+        )
+
+        qs = status_qs
+
+        company_id = None
+
+        if company:
+            try:
+                company_id = int(str(company).strip())
+            except ValueError:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid company value. Company must be an ID."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            qs = qs.filter(company_id=company_id)
+
+        qs = qs.order_by("-id")
+
+        serializer = GSTOrderSerializer(qs, many=True)
+
+        return Response(
+            {
+                "status": True,
+                "count": qs.count(),
+                "start_date": start_date,
+                "end_date": end_date,
+                "date_field": "order_date",
+                "company": company_id,
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
 class OrderListByStatusView(BaseTokenView):
     def get(self, request, status_value):
         """
@@ -4513,84 +4593,122 @@ class WarehouseDetailView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                             
        
+
 class DailyGoodsView(BaseTokenView):
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
-            
-            warehouse = Warehousedata.objects.all()
-            
+
+            warehouse = Warehousedata.objects.select_related(
+                "order",
+                "order__billing_address",
+                "order__family",
+                "parcel_service",
+                "packed_by",
+                "verified_by",
+                "checked_by",
+            ).filter(
+                shipped_date__isnull=False
+            )
+
             seen_dates = set()
             response_data = []
 
             for box_detail in warehouse:
-                if (box_detail.shipped_date not in seen_dates) and (box_detail.shipped_date is not None):
-                    boxes_for_date = warehouse.filter(shipped_date=box_detail.shipped_date)
-                    total_weight = 0
-                    for box in boxes_for_date:
-                        try:
-                            total_weight += float(box.weight)
-                        except (ValueError, TypeError):
-                            continue
+                shipped_date = box_detail.shipped_date
 
-                    total_volume_weight = 0
-                    for box in boxes_for_date:
-                        try:
-                            length = float(box.length)
-                            breadth = float(box.breadth)
-                            height = float(box.height)
-                            total_volume_weight += (length * breadth * height) / 6000
-                        except (ValueError, TypeError):
-                            continue
+                if shipped_date not in seen_dates:
+                    boxes_for_date = warehouse.filter(shipped_date=shipped_date)
 
-                    total_shipping_charge = 0
-                    for box in boxes_for_date:
-                        try:
-                            total_shipping_charge += float(box.shipping_charge)
-                        except (ValueError, TypeError):
-                            continue
+                    total_weight = Decimal("0.00")
+                    total_volume_weight = Decimal("0.00")
+                    total_shipping_charge = Decimal("0.00")
+                    total_actual_weight = Decimal("0.00")
+                    total_parcel_amount = Decimal("0.00")
 
-                    total_actual_weight = 0
-                    for box in boxes_for_date:
-                        try:
-                            total_actual_weight += float(box.actual_weight)
-                        except (ValueError, TypeError):
-                            continue
+                    unique_order_ids = set()
+                    invoices = []
+                    total_order_amount = Decimal("0.00")
 
-                    total_parcel_amount = 0
                     for box in boxes_for_date:
                         try:
-                            total_parcel_amount += float(box.parcel_amount)
-                        except (ValueError, TypeError):
-                            continue
+                            total_weight += Decimal(str(box.weight or 0))
+                        except Exception:
+                            pass
+
+                        try:
+                            length = Decimal(str(box.length or 0))
+                            breadth = Decimal(str(box.breadth or 0))
+                            height = Decimal(str(box.height or 0))
+                            total_volume_weight += (length * breadth * height) / Decimal("6000")
+                        except Exception:
+                            pass
+
+                        try:
+                            total_shipping_charge += Decimal(str(box.shipping_charge or 0))
+                        except Exception:
+                            pass
+
+                        try:
+                            total_actual_weight += Decimal(str(box.actual_weight or 0))
+                        except Exception:
+                            pass
+
+                        try:
+                            total_parcel_amount += Decimal(str(box.parcel_amount or 0))
+                        except Exception:
+                            pass
+
+                        # Add invoice and order total only once per order
+                        if box.order and box.order.id not in unique_order_ids:
+                            unique_order_ids.add(box.order.id)
+
+                            order_total = Decimal(str(box.order.total_amount or 0))
+                            total_order_amount += order_total
+
+                            invoices.append({
+                                "order_id": box.order.id,
+                                "invoice": box.order.invoice,
+                                "total_amount": round(float(order_total), 2),
+                            })
 
                     total_boxes = boxes_for_date.count()
 
-                    # Serialize the boxes for the date
-                    serializer = WarehousedataSerializer(boxes_for_date, many=True)
-
-                    # Add the data for the current shipped_date
                     response_data.append({
-                        "shipped_date": box_detail.shipped_date,
+                        "shipped_date": shipped_date,
                         "total_boxes": total_boxes,
-                        "total_weight": round(total_weight, 2),
-                        "total_volume_weight": round(total_volume_weight, 2),
-                        "total_shipping_charge": round(total_shipping_charge, 2),
-                        "total_actual_weight": round(total_actual_weight, 2),
-                        "total_parcel_amount": round(total_parcel_amount, 2),
-                        # "boxes": serializer.data
+                        "total_weight": round(float(total_weight), 2),
+                        "total_volume_weight": round(float(total_volume_weight), 2),
+                        "total_shipping_charge": round(float(total_shipping_charge), 2),
+                        "total_actual_weight": round(float(total_actual_weight), 2),
+                        "total_parcel_amount": round(float(total_parcel_amount), 2),
+
+                        # New fields
+                        "total_invoice_count": len(invoices),
+                        "total_order_amount": round(float(total_order_amount), 2),
+                        "invoices": invoices,
+
+                        # Uncomment if you also need box details
+                        # "boxes": WarehousedataSerializer(boxes_for_date, many=True).data,
                     })
 
-                    seen_dates.add(box_detail.shipped_date)
+                    seen_dates.add(shipped_date)
 
-            # Sort by shipped_date descending
-            response_data.sort(key=lambda x: x['shipped_date'], reverse=True)
+            response_data.sort(key=lambda x: x["shipped_date"], reverse=True)
 
             return Response(response_data, status=status.HTTP_200_OK)
+
         except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 
 class DailyGoodsBydate(BaseTokenView):

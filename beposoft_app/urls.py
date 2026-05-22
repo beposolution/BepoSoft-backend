@@ -98,6 +98,7 @@ urlpatterns = [
     path('api/my/orders/', MyOrderListView.as_view(), name='my-orders'),
     path('api/all/orders/', InvoiceListView.as_view(), name='all-invoices'),
     path('api/gst/orders/', GSTOrderListView.as_view(), name='gst'),
+    path('api/gst/orders/report/<str:start_date>/<str:end_date>/', GSTOrderFilterListView.as_view(), name='gst-filter-report'),
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/order/dashboard/summary/', OrderSummaryDashboardView.as_view(), name='order-summary'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
