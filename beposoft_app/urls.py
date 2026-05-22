@@ -375,5 +375,7 @@ urlpatterns = [
     path('api/employee/exit/add/', EmployeeExitCreateListView.as_view(), name='employee-exit-create-list'),
     path('api/employee/exit/edit/<int:pk>/', EmployeeExitDetailView.as_view(), name='employee-exit-detail'),
 
+    path('api/beposoft/summary/', BeposoftSummaryAPIView.as_view()),
+
 ]
 

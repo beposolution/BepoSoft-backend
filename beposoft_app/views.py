@@ -20253,3 +20253,211 @@ class MyTeamDetailedSummaryView(BaseTokenView):
                 "success": False,
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+class BeposoftSummaryAPIView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            selected_date = request.GET.get("date", "").strip()
+
+            if selected_date:
+                today = parse_date(selected_date)
+                if not today:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                today = timezone.localdate()
+
+            last_30_days_start = today - timedelta(days=29)
+            current_month_start = today.replace(day=1)
+
+            bank_data = Bank.objects.all()
+            bank_serializer = FinanaceReceiptSerializer(bank_data, many=True)
+
+            def safe_date(value):
+                if not value:
+                    return None
+
+                if isinstance(value, datetime):
+                    return value.date()
+
+                if isinstance(value, date):
+                    return value
+
+                return parse_date(str(value)[:10])
+
+            def calculate_summary(start_day, end_day):
+                total_open_balance = 0
+                total_credit = 0
+                total_debit = 0
+                total_closing_balance = 0
+
+                for bank in bank_serializer.data:
+                    base_open_balance = float(bank.get("open_balance") or 0)
+
+                    payments = bank.get("payments") or []
+                    debits = bank.get("banks") or []
+
+                    previous_credit = 0
+                    period_credit = 0
+                    previous_debit = 0
+                    period_debit = 0
+
+                    for payment in payments:
+                        payment_date = safe_date(payment.get("received_at"))
+
+                        if not payment_date:
+                            continue
+
+                        amount = float(payment.get("amount") or 0)
+
+                        if payment_date < start_day:
+                            previous_credit += amount
+
+                        if start_day <= payment_date <= end_day:
+                            period_credit += amount
+
+                    for debit in debits:
+                        debit_date = safe_date(debit.get("expense_date"))
+
+                        if not debit_date:
+                            continue
+
+                        amount = float(debit.get("amount") or 0)
+
+                        if debit_date < start_day:
+                            previous_debit += amount
+
+                        if start_day <= debit_date <= end_day:
+                            period_debit += amount
+
+                    open_balance = base_open_balance + previous_credit - previous_debit
+                    closing_balance = open_balance + period_credit - period_debit
+
+                    total_open_balance += open_balance
+                    total_credit += period_credit
+                    total_debit += period_debit
+                    total_closing_balance += closing_balance
+
+                internal_transfer_amount = InternalTransfer.objects.filter(
+                    created_at__date__range=[start_day, end_day]
+                ).aggregate(
+                    total=Coalesce(Sum("amount"), Decimal("0.00"))
+                )["total"] or Decimal("0.00")
+
+                internal_transfer_amount = float(internal_transfer_amount)
+
+                without_internal_credit = total_credit - internal_transfer_amount
+                without_internal_debit = total_debit - internal_transfer_amount
+                without_internal_closing = (
+                    total_open_balance + without_internal_credit - without_internal_debit
+                )
+
+                return {
+                    "start_date": start_day,
+                    "end_date": end_day,
+                    "with_internal_transfer": {
+                        "open_balance": round(total_open_balance, 2),
+                        "credit": round(total_credit, 2),
+                        "debit": round(total_debit, 2),
+                        "closing_balance": round(total_closing_balance, 2),
+                    },
+                    "without_internal_transfer": {
+                        "open_balance": round(total_open_balance, 2),
+                        "credit": round(without_internal_credit, 2),
+                        "debit": round(without_internal_debit, 2),
+                        "closing_balance": round(without_internal_closing, 2),
+                    },
+                    "internal_transfer_amount": round(internal_transfer_amount, 2),
+                }
+
+            today_data = calculate_summary(today, today)
+            last_30_days_data = calculate_summary(last_30_days_start, today)
+            current_month_data = calculate_summary(current_month_start, today)
+
+
+            # staffs details
+            staff_queryset = User.objects.all()
+
+            total_staffs = staff_queryset.count()
+            active_staffs = staff_queryset.filter(approval_status__iexact="approved").count()
+            deactive_staffs = staff_queryset.filter(approval_status__iexact="disapproved").count()
+
+            staff_summary = {
+                "total_staffs": total_staffs,
+                "active_staffs": active_staffs,
+                "deactive_staffs": deactive_staffs,
+            }
+
+
+            # purchase summary
+
+            purchase_invoices = ProductSellerInvoice.objects.all()
+
+            total_purchase_count = purchase_invoices.count()
+
+            total_purchase_amount = Decimal("0.00")
+
+            for invoice in purchase_invoices:
+                invoice_amount = invoice.total_amount or Decimal("0.00")
+                currency_rate = invoice.currency_rate or Decimal("1.00")
+
+                total_purchase_amount += invoice_amount * currency_rate
+
+            purchase_summary = {
+                "total_count": total_purchase_count,
+                "total_amount": round(total_purchase_amount, 2),
+            }
+
+
+            # Asset summary
+
+            asset_queryset = ExpenseModel.objects.filter(asset_types__iexact="assets")
+
+            asset_total_count = asset_queryset.count()
+
+            asset_total_amount = asset_queryset.aggregate(
+                total=Coalesce(Sum("amount"), Decimal("0.00"))
+            )["total"] or Decimal("0.00")
+
+            asset_summary = {
+                "total_count": asset_total_count,
+                "total_amount": round(asset_total_amount, 2),
+            }
+
+            return Response(
+                {
+                    "status": "success",
+                    "date": today,
+                    "bank_summary": {
+                        "today_data": today_data,
+                        "last_30_days_data": last_30_days_data,
+                        "current_month_data": current_month_data,
+                    },
+                    "staff_summary": staff_summary,
+                    "purchase_summary": purchase_summary,
+                    "asset_summary": asset_summary,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
