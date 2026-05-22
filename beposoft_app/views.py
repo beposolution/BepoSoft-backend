@@ -4601,6 +4601,9 @@ class DailyGoodsView(BaseTokenView):
             if error_response:
                 return error_response
 
+            from_date = request.GET.get("from_date")
+            to_date = request.GET.get("to_date")
+
             warehouse = Warehousedata.objects.select_related(
                 "order",
                 "order__billing_address",
@@ -4613,8 +4616,37 @@ class DailyGoodsView(BaseTokenView):
                 shipped_date__isnull=False
             )
 
+            if from_date:
+                parsed_from_date = parse_date(from_date)
+                if not parsed_from_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid from_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                warehouse = warehouse.filter(shipped_date__gte=parsed_from_date)
+
+            if to_date:
+                parsed_to_date = parse_date(to_date)
+                if not parsed_to_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid to_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                warehouse = warehouse.filter(shipped_date__lte=parsed_to_date)
+
+            warehouse = warehouse.order_by("-shipped_date", "-id")
+
             seen_dates = set()
             response_data = []
+
+            # For overall top 5 products based on selected filter
+            filtered_unique_order_ids = set()
 
             for box_detail in warehouse:
                 shipped_date = box_detail.shipped_date
@@ -4661,9 +4693,9 @@ class DailyGoodsView(BaseTokenView):
                         except Exception:
                             pass
 
-                        # Add invoice and order total only once per order
                         if box.order and box.order.id not in unique_order_ids:
                             unique_order_ids.add(box.order.id)
+                            filtered_unique_order_ids.add(box.order.id)
 
                             order_total = Decimal(str(box.order.total_amount or 0))
                             total_order_amount += order_total
@@ -4673,6 +4705,70 @@ class DailyGoodsView(BaseTokenView):
                                 "invoice": box.order.invoice,
                                 "total_amount": round(float(order_total), 2),
                             })
+
+                    # ---------------------------------------------------------
+                    # DAILY-WISE TOP 5 PRODUCTS
+                    # ---------------------------------------------------------
+                    daily_product_summary = {}
+
+                    daily_order_items = OrderItem.objects.filter(
+                        order_id__in=unique_order_ids
+                    ).select_related(
+                        "product",
+                        "variant"
+                    )
+
+                    for item in daily_order_items:
+                        product = item.product
+                        variant = item.variant
+
+                        if not product:
+                            continue
+
+                        product_key = f"{product.id}_{variant.id if variant else 'single'}"
+
+                        product_name = product.name
+                        variant_name = variant.name if variant else None
+                        display_name = variant_name if variant_name else product_name
+
+                        quantity = int(item.quantity or 0)
+
+                        rate = Decimal(str(item.rate or 0))
+                        discount = Decimal(str(item.discount or 0))
+                        line_amount = (rate - discount) * Decimal(quantity)
+
+                        if product_key not in daily_product_summary:
+                            daily_product_summary[product_key] = {
+                                "product_id": product.id,
+                                "product_name": product_name,
+                                "variant_id": variant.id if variant else None,
+                                "variant_name": variant_name,
+                                "display_name": display_name,
+                                "total_quantity": 0,
+                                "total_amount": Decimal("0.00"),
+                            }
+
+                        daily_product_summary[product_key]["total_quantity"] += quantity
+                        daily_product_summary[product_key]["total_amount"] += line_amount
+
+                    daily_top_5_products = sorted(
+                        daily_product_summary.values(),
+                        key=lambda x: x["total_quantity"],
+                        reverse=True
+                    )[:5]
+
+                    daily_top_5_products = [
+                        {
+                            "product_id": product["product_id"],
+                            "product_name": product["product_name"],
+                            "variant_id": product["variant_id"],
+                            "variant_name": product["variant_name"],
+                            "display_name": product["display_name"],
+                            "total_quantity": product["total_quantity"],
+                            "total_amount": round(float(product["total_amount"]), 2),
+                        }
+                        for product in daily_top_5_products
+                    ]
 
                     total_boxes = boxes_for_date.count()
 
@@ -4684,21 +4780,90 @@ class DailyGoodsView(BaseTokenView):
                         "total_shipping_charge": round(float(total_shipping_charge), 2),
                         "total_actual_weight": round(float(total_actual_weight), 2),
                         "total_parcel_amount": round(float(total_parcel_amount), 2),
-
-                        # New fields
                         "total_invoice_count": len(invoices),
                         "total_order_amount": round(float(total_order_amount), 2),
                         "invoices": invoices,
 
-                        # Uncomment if you also need box details
-                        # "boxes": WarehousedataSerializer(boxes_for_date, many=True).data,
+                        # Daily-wise top sold products retained here
+                        "top_5_products": daily_top_5_products,
                     })
 
                     seen_dates.add(shipped_date)
 
             response_data.sort(key=lambda x: x["shipped_date"], reverse=True)
 
-            return Response(response_data, status=status.HTTP_200_OK)
+            # ---------------------------------------------------------
+            # OVERALL TOP 5 PRODUCTS BASED ON FILTER
+            # ---------------------------------------------------------
+            overall_product_summary = {}
+
+            overall_order_items = OrderItem.objects.filter(
+                order_id__in=filtered_unique_order_ids
+            ).select_related(
+                "product",
+                "variant"
+            )
+
+            for item in overall_order_items:
+                product = item.product
+                variant = item.variant
+
+                if not product:
+                    continue
+
+                product_key = f"{product.id}_{variant.id if variant else 'single'}"
+
+                product_name = product.name
+
+                quantity = int(item.quantity or 0)
+
+                rate = Decimal(str(item.rate or 0))
+                discount = Decimal(str(item.discount or 0))
+                line_amount = (rate - discount) * Decimal(quantity)
+
+                if product_key not in overall_product_summary:
+                    overall_product_summary[product_key] = {
+                        "product_id": product.id,
+                        "product_name": product_name,
+                        "total_quantity": 0,
+                        "total_amount": Decimal("0.00"),
+                    }
+
+                overall_product_summary[product_key]["total_quantity"] += quantity
+                overall_product_summary[product_key]["total_amount"] += line_amount
+
+            overall_top_5_products = sorted(
+                overall_product_summary.values(),
+                key=lambda x: x["total_quantity"],
+                reverse=True
+            )[:5]
+
+            overall_top_5_products = [
+                {
+                    "product_id": product["product_id"],
+                    "product_name": product["product_name"],
+                    "total_quantity": product["total_quantity"],
+                    "total_amount": round(float(product["total_amount"]), 2),
+                }
+                for product in overall_top_5_products
+            ]
+
+            # ---------------------------------------------------------
+            # FINAL RESPONSE
+            # First item = filter summary and overall top products
+            # Remaining items = existing daily-wise data with daily top products
+            # ---------------------------------------------------------
+            final_response = [
+                {
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "top_5_products": overall_top_5_products,
+                }
+            ]
+
+            final_response.extend(response_data)
+
+            return Response(final_response, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(
