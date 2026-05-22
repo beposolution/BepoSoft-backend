@@ -2449,7 +2449,7 @@ class GSTOrderFilterListView(BaseTokenView):
 
         company = request.GET.get("company")
 
-        base_qs = Order.objects.all()
+        base_qs = Order.objects.all("id")
 
         date_qs = base_qs.filter(
             order_date__gte=start_date,
