@@ -4728,8 +4728,6 @@ class DailyGoodsView(BaseTokenView):
                         product_key = f"{product.id}_{variant.id if variant else 'single'}"
 
                         product_name = product.name
-                        variant_name = variant.name if variant else None
-                        display_name = variant_name if variant_name else product_name
 
                         quantity = int(item.quantity or 0)
 
@@ -4741,9 +4739,6 @@ class DailyGoodsView(BaseTokenView):
                             daily_product_summary[product_key] = {
                                 "product_id": product.id,
                                 "product_name": product_name,
-                                "variant_id": variant.id if variant else None,
-                                "variant_name": variant_name,
-                                "display_name": display_name,
                                 "total_quantity": 0,
                                 "total_amount": Decimal("0.00"),
                             }
@@ -4761,9 +4756,6 @@ class DailyGoodsView(BaseTokenView):
                         {
                             "product_id": product["product_id"],
                             "product_name": product["product_name"],
-                            "variant_id": product["variant_id"],
-                            "variant_name": product["variant_name"],
-                            "display_name": product["display_name"],
                             "total_quantity": product["total_quantity"],
                             "total_amount": round(float(product["total_amount"]), 2),
                         }
