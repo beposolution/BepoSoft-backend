@@ -20461,3 +20461,257 @@ class BeposoftSummaryAPIView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+
+class ProductStockExcelExportView(BaseTokenView):
+    def get(self, request, warehouse_id, from_date, to_date):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+
+            parsed_from_date = parse_date(from_date)
+            parsed_to_date = parse_date(to_date)
+
+            if not parsed_from_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid from_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid to_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if parsed_from_date > parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "from_date cannot be greater than to_date.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            warehouse = WareHouse.objects.filter(id=warehouse_id).first()
+
+            if not warehouse:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Warehouse not found.",
+                        "results": [],
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            base_products = Products.objects.filter(
+                warehouse=warehouse,
+                approval_status__in=["Approved", "Disapproved"]
+            ).select_related(
+                "warehouse",
+                "created_user",
+                "product_category",
+                "product_approved_user"
+            ).prefetch_related(
+                "family",
+                "images"
+            )
+
+            # ----------------------------------------------------
+            # Search by product name.
+            # Same logic as warehouse product API:
+            # If search matches any product inside a group,
+            # include the full group.
+            # ----------------------------------------------------
+            if search:
+                matching_products = base_products.filter(
+                    Q(name__icontains=search)
+                )
+
+                matched_group_ids = list(
+                    matching_products
+                    .exclude(groupID__isnull=True)
+                    .exclude(groupID="")
+                    .values_list("groupID", flat=True)
+                    .distinct()
+                )
+
+                matched_single_ids = list(
+                    matching_products
+                    .filter(Q(groupID__isnull=True) | Q(groupID=""))
+                    .values_list("id", flat=True)
+                )
+
+                base_products = base_products.filter(
+                    Q(groupID__in=matched_group_ids) |
+                    Q(id__in=matched_single_ids)
+                )
+
+            base_products = base_products.order_by("groupID", "id", "name")
+
+            if not base_products.exists():
+                return Response(
+                    {
+                        "status": True,
+                        "message": "No products found.",
+                        "warehouse_id": warehouse.id,
+                        "warehouse_name": warehouse.name,
+                        "from_date": from_date,
+                        "to_date": to_date,
+                        "search": search,
+                        "date_filter_applied": False,
+                        "date_filter_note": "Date filter not applied because Products model has no created_at or updated_at field.",
+                        "count": 0,
+                        "summary": {
+                            "total_products": 0,
+                            "variant_product_count": 0,
+                            "single_product_count": 0,
+                            "total_stock": 0,
+                            "variant_stock": 0,
+                            "single_stock": 0,
+                        },
+                        "results": [],
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            # ----------------------------------------------------
+            # Create unique grouped products.
+            # This is the same grouping pattern as GETProductByWarehouseView.
+            # ----------------------------------------------------
+            seen_group_ids = set()
+            unique_products = []
+
+            for product in base_products:
+                group_key = product.groupID if product.groupID else f"single-{product.id}"
+
+                if group_key not in seen_group_ids:
+                    seen_group_ids.add(group_key)
+                    unique_products.append(product)
+
+            # ----------------------------------------------------
+            # IMPORTANT:
+            # Use ProductSingleviewSerializres to calculate summary.
+            # This keeps stock matching your warehouse product API.
+            # ----------------------------------------------------
+            summary_serializer = ProductSingleviewSerializres(
+                unique_products,
+                many=True,
+                context={"request": request}
+            )
+
+            summary_data = summary_serializer.data
+
+            total_stock = 0
+            variant_stock = 0
+            single_stock = 0
+
+            variant_product_count = 0
+            single_product_count = 0
+
+            excel_product_ids = []
+            added_product_ids = set()
+
+            for product_data in summary_data:
+                variant_ids = product_data.get("variantIDs", [])
+
+                if variant_ids and len(variant_ids) > 0:
+                    variant_product_count += 1
+
+                    for variant in variant_ids:
+                        variant_id = variant.get("id")
+                        stock = int(variant.get("stock") or 0)
+
+                        variant_stock += stock
+                        total_stock += stock
+
+                        if variant_id and variant_id not in added_product_ids:
+                            excel_product_ids.append(variant_id)
+                            added_product_ids.add(variant_id)
+
+                else:
+                    single_product_count += 1
+
+                    product_id = product_data.get("id")
+                    stock = int(product_data.get("stock") or 0)
+
+                    single_stock += stock
+                    total_stock += stock
+
+                    if product_id and product_id not in added_product_ids:
+                        excel_product_ids.append(product_id)
+                        added_product_ids.add(product_id)
+
+            # ----------------------------------------------------
+            # Fetch actual Products objects for ModelSerializer.
+            # This keeps your serializer as serializers.ModelSerializer.
+            # ----------------------------------------------------
+            products_map = {
+                product.id: product
+                for product in Products.objects.filter(id__in=excel_product_ids)
+            }
+
+            export_products = []
+
+            for product_id in excel_product_ids:
+                product = products_map.get(product_id)
+                if product:
+                    export_products.append(product)
+
+            serializer = ProductStockExcelExportSerializer(
+                export_products,
+                many=True
+            )
+
+            summary = {
+                "total_products": len(unique_products),
+                "variant_product_count": variant_product_count,
+                "single_product_count": single_product_count,
+                "total_stock": total_stock,
+                "variant_stock": variant_stock,
+                "single_stock": single_stock,
+            }
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Product stock excel export data fetched successfully.",
+                    "warehouse_id": warehouse.id,
+                    "warehouse_name": warehouse.name,
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "search": search,
+                    "date_filter_applied": False,
+                    "date_filter_note": "Date filter not applied because Products model has no created_at or updated_at field.",
+                    "count": len(unique_products),
+                    "summary": summary,
+                    "results": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "An error occurred while fetching product stock excel export data.",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
