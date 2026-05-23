@@ -377,5 +377,14 @@ urlpatterns = [
 
     path('api/beposoft/summary/', BeposoftSummaryAPIView.as_view()),
 
+
+    path("api/product/stock/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ProductStockExcelExportView.as_view()),
+
+
+
+
+
+
+
 ]
 

@@ -3310,3 +3310,16 @@ class EmplyeeExitViewSerializer(serializers.ModelSerializer):
             'exit_form_date', 'created_by', 'created_by_name', 'created_at', 'updated_at',
 
         ]
+
+
+class ProductStockExcelExportSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="name", read_only=True)
+    units = serializers.CharField(source="unit", read_only=True)
+
+    class Meta:
+        model = Products
+        fields = [
+            "product_name",
+            "units",
+            "stock",
+        ]
