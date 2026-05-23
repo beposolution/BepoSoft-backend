@@ -3323,3 +3323,138 @@ class ProductStockExcelExportSerializer(serializers.ModelSerializer):
             "units",
             "stock",
         ]
+
+
+
+
+
+class OrderItemExcelExportSerializer(serializers.ModelSerializer):
+    date = serializers.CharField(source="order.order_date", read_only=True)
+    voucher_no = serializers.CharField(source="order.invoice", read_only=True)
+    party_name = serializers.SerializerMethodField()
+    item_name = serializers.SerializerMethodField()
+    item_quantity = serializers.SerializerMethodField()
+    item_rate = serializers.SerializerMethodField()
+    unit = serializers.SerializerMethodField()
+    item_basic_amount = serializers.SerializerMethodField()
+    tax = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "date",
+            "voucher_no",
+            "party_name",
+            "item_name",
+            "item_quantity",
+            "item_rate",
+            "unit",
+            "item_basic_amount",
+            "tax",
+            "total_amount",
+        ]
+
+    def _to_decimal(self, value):
+        if value is None:
+            return Decimal("0")
+        return Decimal(str(value))
+
+    def _round_2(self, value):
+        return round(float(value), 2)
+
+    def _net_rate(self, obj):
+        rate = self._to_decimal(obj.rate)
+        discount = self._to_decimal(obj.discount)
+
+        net_rate = rate - discount
+
+        if net_rate < Decimal("0"):
+            net_rate = Decimal("0")
+
+        return net_rate
+
+    def _gross_amount(self, obj):
+        quantity = self._to_decimal(obj.quantity)
+        return self._net_rate(obj) * quantity
+
+    def _basic_amount(self, obj):
+        gross_amount = self._gross_amount(obj)
+        tax_percentage = self._to_decimal(obj.tax)
+
+        if tax_percentage <= Decimal("0"):
+            return gross_amount
+
+        basic_amount = gross_amount / (
+            Decimal("1") + (tax_percentage / Decimal("100"))
+        )
+
+        return basic_amount
+
+    def _tax_amount(self, obj):
+        gross_amount = self._gross_amount(obj)
+        basic_amount = self._basic_amount(obj)
+
+        return gross_amount - basic_amount
+
+    def get_party_name(self, obj):
+        billing_address = getattr(obj.order, "billing_address", None)
+
+        if billing_address and billing_address.name:
+            return billing_address.name
+
+        return ""
+
+    def get_item_name(self, obj):
+        if hasattr(obj, "variant") and obj.variant and obj.variant.name:
+            return obj.variant.name
+
+        if obj.product and obj.product.name:
+            return obj.product.name
+
+        return ""
+
+    def get_item_quantity(self, obj):
+        return obj.quantity or 0
+
+    def get_item_rate(self, obj):
+        return self._round_2(self._net_rate(obj))
+
+    def get_unit(self, obj):
+        if obj.product and obj.product.unit:
+            return obj.product.unit
+
+        return ""
+
+    def get_item_basic_amount(self, obj):
+        return self._round_2(self._basic_amount(obj))
+
+    def get_tax(self, obj):
+        return self._round_2(self._tax_amount(obj))
+
+    def get_total_amount(self, obj):
+        return self._round_2(self._gross_amount(obj))
+
+
+
+
+class ShippingAddressExcelExportSerializer(serializers.ModelSerializer):
+    bill_name = serializers.CharField(source="name", read_only=True)
+    state = serializers.SerializerMethodField()
+    pin_code = serializers.CharField(source="zipcode", read_only=True)
+
+    class Meta:
+        model = Shipping
+        fields = [
+            "name",
+            "bill_name",
+            "address",
+            "state",
+            "country",
+            "pin_code",
+        ]
+
+    def get_state(self, obj):
+        if obj.state:
+            return obj.state.name
+        return ""

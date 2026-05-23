@@ -379,6 +379,8 @@ urlpatterns = [
 
 
     path("api/product/stock/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ProductStockExcelExportView.as_view()),
+    path("api/order/items/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",OrderItemExcelExportView.as_view()),
+    path("api/shipping/address/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ShippingAddressExcelExportView.as_view()),
 
 
 

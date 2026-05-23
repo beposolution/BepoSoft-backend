@@ -20715,3 +20715,244 @@ class ProductStockExcelExportView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+
+
+class OrderItemExcelExportView(BaseTokenView):
+    def get(self, request, warehouse_id, from_date, to_date):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+
+            parsed_from_date = parse_date(from_date)
+            parsed_to_date = parse_date(to_date)
+
+            if not parsed_from_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid from_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid to_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if parsed_from_date > parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "from_date cannot be greater than to_date.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            warehouse = WareHouse.objects.filter(id=warehouse_id).first()
+
+            if not warehouse:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Warehouse not found.",
+                        "results": [],
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            order_items = OrderItem.objects.filter(
+                order__warehouses=warehouse,
+                order__order_date__gte=from_date,
+                order__order_date__lte=to_date,
+            ).select_related(
+                "order",
+                "order__billing_address",
+                "order__warehouses",
+                "product",
+                "variant",
+            )
+
+            # ----------------------------------------------------
+            # Search by:
+            # 1. Voucher no / invoice
+            # 2. Party name / billing address name
+            # 3. Item name / product name / variant name
+            # ----------------------------------------------------
+            if search:
+                order_items = order_items.filter(
+                    Q(order__invoice__icontains=search) |
+                    Q(order__billing_address__name__icontains=search) |
+                    Q(product__name__icontains=search) |
+                    Q(variant__name__icontains=search)
+                )
+
+            order_items = order_items.order_by(
+                "order__order_date",
+                "order__invoice",
+                "id",
+            )
+
+            serializer = OrderItemExcelExportSerializer(
+                order_items,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Order item excel export data fetched successfully.",
+                    "warehouse_id": warehouse.id,
+                    "warehouse_name": warehouse.name,
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "search": search,
+                    "count": order_items.count(),
+                    "results": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "An error occurred while fetching order item excel export data.",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class ShippingAddressExcelExportView(BaseTokenView):
+    def get(self, request, warehouse_id, from_date, to_date):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+
+            parsed_from_date = parse_date(from_date)
+            parsed_to_date = parse_date(to_date)
+
+            if not parsed_from_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid from_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid to_date format. Use YYYY-MM-DD.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if parsed_from_date > parsed_to_date:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "from_date cannot be greater than to_date.",
+                        "results": [],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            warehouse = WareHouse.objects.filter(id=warehouse_id).first()
+
+            if not warehouse:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Warehouse not found.",
+                        "results": [],
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            orders = Order.objects.filter(
+                warehouses=warehouse,
+                order_date__gte=from_date,
+                order_date__lte=to_date,
+            ).select_related(
+                "billing_address",
+                "billing_address__state",
+                "billing_address__customer",
+                "customer",
+                "warehouses",
+            )
+
+            if search:
+                orders = orders.filter(
+                    Q(billing_address__name__icontains=search) |
+                    Q(billing_address__customer__name__icontains=search) |
+                    Q(customer__name__icontains=search)
+                )
+
+            billing_address_ids = list(
+                orders.exclude(billing_address__isnull=True)
+                .values_list("billing_address_id", flat=True)
+                .distinct()
+            )
+
+            shipping_addresses = Shipping.objects.filter(
+                id__in=billing_address_ids
+            ).select_related(
+                "state",
+                "customer",
+            ).order_by(
+                "name",
+                "id",
+            )
+
+            serializer = ShippingAddressExcelExportSerializer(
+                shipping_addresses,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Shipping address excel export data fetched successfully.",
+                    "warehouse_id": warehouse.id,
+                    "warehouse_name": warehouse.name,
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "search": search,
+                    "count": shipping_addresses.count(),
+                    "results": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "An error occurred while fetching shipping address excel export data.",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
