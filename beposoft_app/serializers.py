@@ -3337,6 +3337,7 @@ class OrderItemExcelExportSerializer(serializers.ModelSerializer):
     item_rate = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
     item_basic_amount = serializers.SerializerMethodField()
+    tax_percentage = serializers.SerializerMethodField()
     tax = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
 
@@ -3351,6 +3352,7 @@ class OrderItemExcelExportSerializer(serializers.ModelSerializer):
             "item_rate",
             "unit",
             "item_basic_amount",
+                "tax_percentage",
             "tax",
             "total_amount",
         ]
@@ -3434,6 +3436,15 @@ class OrderItemExcelExportSerializer(serializers.ModelSerializer):
 
     def get_total_amount(self, obj):
         return self._round_2(self._gross_amount(obj))
+    
+    def get_tax_percentage(self, obj):
+        if obj.tax is not None:
+            return self._round_2(obj.tax)
+
+        if obj.product and obj.product.tax is not None:
+            return self._round_2(obj.product.tax)
+
+        return 0
 
 
 
