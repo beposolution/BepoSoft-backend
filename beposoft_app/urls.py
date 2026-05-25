@@ -181,7 +181,8 @@ urlpatterns = [
     
     path('api/warehouse/data/',WarehouseDataView.as_view()),
     path('api/warehouse/detail/<int:pk>/',WarehouseDetailView.as_view()),
-    path('api/warehouse/box/detail/',DailyGoodsView.as_view()),            #deliveryreport
+    path('api/warehouse/box/detail/',DailyGoodsView.as_view()),
+    path('api/pagenated/warehouse/box/detail/',PagenatedDailyGoodsView.as_view()),
     path('api/warehousedata/<str:date>/',DailyGoodsBydate.as_view()),
     path('api/warehouse/get/',WarehouseListView.as_view()),
     path('api/warehouse/get/summary/', WarehouseSummaryView.as_view()),
