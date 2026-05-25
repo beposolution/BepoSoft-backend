@@ -20729,6 +20729,8 @@ class OrderItemExcelExportView(BaseTokenView):
 
             search = request.GET.get("search", "").strip()
 
+            company_id = request.GET.get("company_id", "").strip()
+
             parsed_from_date = parse_date(from_date)
             parsed_to_date = parse_date(to_date)
 
@@ -20786,6 +20788,9 @@ class OrderItemExcelExportView(BaseTokenView):
                 "variant",
             )
 
+            if company_id:
+                order_items = order_items.filter(order__company_id=company_id)
+
             # ----------------------------------------------------
             # Search by:
             # 1. Voucher no / invoice
@@ -20820,6 +20825,7 @@ class OrderItemExcelExportView(BaseTokenView):
                     "from_date": from_date,
                     "to_date": to_date,
                     "search": search,
+                    "company_id": company_id,
                     "count": order_items.count(),
                     "results": serializer.data,
                 },
