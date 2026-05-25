@@ -3331,6 +3331,9 @@ class ProductStockExcelExportSerializer(serializers.ModelSerializer):
 class OrderItemExcelExportSerializer(serializers.ModelSerializer):
     date = serializers.CharField(source="order.order_date", read_only=True)
     voucher_no = serializers.CharField(source="order.invoice", read_only=True)
+    state = serializers.CharField(source="order.state.name", read_only=True)
+    company_id = serializers.IntegerField(source="order.company.id", read_only=True)
+    company_name = serializers.CharField(source="order.company.name", read_only=True)
     party_name = serializers.SerializerMethodField()
     item_name = serializers.SerializerMethodField()
     item_quantity = serializers.SerializerMethodField()
@@ -3345,6 +3348,9 @@ class OrderItemExcelExportSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
             "date",
+            "state",
+            "company_id",
+            "company_name",
             "voucher_no",
             "party_name",
             "item_name",
@@ -3352,7 +3358,7 @@ class OrderItemExcelExportSerializer(serializers.ModelSerializer):
             "item_rate",
             "unit",
             "item_basic_amount",
-                "tax_percentage",
+            "tax_percentage",
             "tax",
             "total_amount",
         ]
