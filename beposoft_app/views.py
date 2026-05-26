@@ -4919,7 +4919,7 @@ class PagenatedDailyGoodsView(BaseTokenView):
                 warehouse_base = warehouse_base.filter(shipped_date__lte=parsed_to_date)
 
             # ---------------------------------------------------------
-            # OVERALL TOP 5 PRODUCTS BASED ON FULL FILTER
+            # OVERALL TOP 10 PRODUCTS BASED ON FULL FILTER
             # This is same calculation logic as old code.
             # Only optimized the order id fetching.
             # ---------------------------------------------------------
@@ -4969,7 +4969,7 @@ class PagenatedDailyGoodsView(BaseTokenView):
                 overall_product_summary.values(),
                 key=lambda x: x["total_quantity"],
                 reverse=True
-            )[:5]
+            )[:10]
 
             overall_top_5_products = [
                 {
@@ -5117,7 +5117,7 @@ class PagenatedDailyGoodsView(BaseTokenView):
                         })
 
                 # ---------------------------------------------------------
-                # DAILY-WISE TOP 5 PRODUCTS
+                # DAILY-WISE TOP 10 PRODUCTS
                 # Same calculation logic.
                 # ---------------------------------------------------------
                 daily_product_summary = {}
@@ -5155,7 +5155,7 @@ class PagenatedDailyGoodsView(BaseTokenView):
                     daily_product_summary.values(),
                     key=lambda x: x["total_quantity"],
                     reverse=True
-                )[:5]
+                )[:10]
 
                 daily_top_5_products = [
                     {
