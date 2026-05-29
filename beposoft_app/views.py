@@ -5367,6 +5367,7 @@ class WarehouseSummaryView(APIView):
                             "total_parcel_amount": 0.0,
                             "total_volume": 0.0,
                             "total_weight_field": 0.0,
+                            "total_weight_field_kg": 0.0,
                             "total_actual_weight_kg": 0.0,
                             "average": 0.0,
                         }
@@ -5383,6 +5384,9 @@ class WarehouseSummaryView(APIView):
                     total_g = data["total_actual_weight_g"]
                     data["total_actual_weight_kg"] = round(
                         total_g / 1000 if total_g > 0 else 0, 3
+                    )
+                    data["total_weight_field_kg"] = round(
+                        data["total_weight_field"] / 1000 if data["total_weight_field"] > 0 else 0, 3
                     )
                     data["total_actual_weight_g"] = round(data["total_actual_weight_g"], 2)
                     data["total_parcel_amount"] = round(data["total_parcel_amount"], 2)
@@ -5409,6 +5413,7 @@ class WarehouseSummaryView(APIView):
                 "total_parcel_amount": 0.0,
                 "total_volume": 0.0,
                 "total_weight_field": 0.0,
+                "total_weight_field_kg": 0.0,
                 "total_actual_weight_kg": 0.0,
                 "average": 0.0,
             }
