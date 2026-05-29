@@ -20722,9 +20722,76 @@ class BeposoftSummaryAPIView(BaseTokenView):
                     "internal_transfer_amount": round(internal_transfer_amount, 2),
                 }
 
+            
+            def calculate_bill_amount_summary(start_day, end_day):
+                shipped_order_ids = Warehousedata.objects.filter(
+                    shipped_date__range=[start_day, end_day]
+                ).values_list("order_id", flat=True).distinct()
+
+                orders_queryset = Order.objects.filter(id__in=shipped_order_ids)
+
+                total_bill_amount = orders_queryset.aggregate(
+                    total=Coalesce(
+                        Sum("total_amount"),
+                        Value(0.0),
+                        output_field=FloatField()
+                    )
+                )["total"] or 0.0
+
+                return {
+                    "start_date": start_day,
+                    "end_date": end_day,
+                    "total_order_count": orders_queryset.count(),
+                    "total_amount": round(float(total_bill_amount), 2),
+                }
+
+
             today_data = calculate_summary(today, today)
             last_30_days_data = calculate_summary(last_30_days_start, today)
             current_month_data = calculate_summary(current_month_start, today)
+
+            
+            # warehouse summary - bill amount
+            start_date_param = request.GET.get("start_date", "").strip()
+            end_date_param = request.GET.get("end_date", "").strip()
+
+            custom_start_date = None
+            custom_end_date = None
+
+            if start_date_param and end_date_param:
+                custom_start_date = parse_date(start_date_param)
+                custom_end_date = parse_date(end_date_param)
+
+                if not custom_start_date or not custom_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if custom_start_date > custom_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "start_date cannot be greater than end_date."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+
+            bill_today_data = calculate_bill_amount_summary(today, today)
+            bill_last_30_days_data = calculate_bill_amount_summary(last_30_days_start, today)
+            bill_current_month_data = calculate_bill_amount_summary(current_month_start, today)
+
+            bill_custom_range_data = None
+            if custom_start_date and custom_end_date:
+                bill_custom_range_data = calculate_bill_amount_summary(
+                    custom_start_date,
+                    custom_end_date
+                )
+
 
 
             # staffs details
@@ -20784,6 +20851,12 @@ class BeposoftSummaryAPIView(BaseTokenView):
                         "today_data": today_data,
                         "last_30_days_data": last_30_days_data,
                         "current_month_data": current_month_data,
+                    },
+                    "bill_amount_summary": {
+                        "today_data": bill_today_data,
+                        "last_30_days_data": bill_last_30_days_data,
+                        "current_month_data": bill_current_month_data,
+                        "custom_range_data": bill_custom_range_data,
                     },
                     "staff_summary": staff_summary,
                     "purchase_summary": purchase_summary,
