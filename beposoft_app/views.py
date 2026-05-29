@@ -5329,7 +5329,16 @@ class WarehouseSummaryView(APIView):
                 total_volume = sum(get_volume(w) for w in qs)
 
                 # MATCH UI total average (sum of each row average)
-                average = sum(get_item_average(w) for w in qs)
+                # average = sum(get_item_average(w) for w in qs)
+                total_weight_field_kg = (
+                    total_weight_field / 1000 if total_weight_field > 0 else 0
+                )
+
+                average = (
+                    total_parcel_amount / total_weight_field_kg
+                    if total_weight_field_kg > 0
+                    else 0
+                )
 
                 total_actual_weight_kg = (
                     total_actual_weight_g / 1000 if total_actual_weight_g > 0 else 0
