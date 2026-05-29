@@ -5387,7 +5387,7 @@ class WarehouseSummaryView(APIView):
                     result[name]["total_parcel_amount"] += safe_float(w.parcel_amount)
                     result[name]["total_volume"] += get_volume(w)
                     result[name]["total_weight_field"] += safe_float(w.actual_weight)
-                    result[name]["average"] += get_item_average(w)
+                    # result[name]["average"] += get_item_average(w)
 
                 for service_name, data in result.items():
                     total_g = data["total_actual_weight_g"]
@@ -5401,7 +5401,13 @@ class WarehouseSummaryView(APIView):
                     data["total_parcel_amount"] = round(data["total_parcel_amount"], 2)
                     data["total_volume"] = round(data["total_volume"], 2)
                     data["total_weight_field"] = round(data["total_weight_field"], 2)
-                    data["average"] = round(data["average"], 2)
+                    # data["average"] = round(data["average"], 2)
+                    data["average"] = round(
+                        data["total_parcel_amount"] / data["total_weight_field_kg"]
+                        if data["total_weight_field_kg"] > 0
+                        else 0,
+                        2
+                    )
 
                 return result
 
