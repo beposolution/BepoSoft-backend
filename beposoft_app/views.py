@@ -5342,7 +5342,16 @@ class WarehouseSummaryView(APIView):
             def get_summary(qs):
                 total_boxes = qs.count()
 
-                total_orders = qs.values('order_id').distinct().count()
+                order_ids = qs.values_list('order_id', flat=True).distinct()
+
+                total_orders = len(order_ids)
+
+                total_order_amount = (
+                    Order.objects
+                    .filter(id__in=order_ids)
+                    .aggregate(total=Sum('total_amount'))
+                    ['total'] or 0
+                )
 
                 # MATCH UI
                 total_actual_weight_g = sum(safe_float(w.weight) for w in qs)
@@ -5373,6 +5382,7 @@ class WarehouseSummaryView(APIView):
                 return {
                     "total_boxes": total_boxes,
                     "total_orders": total_orders, 
+                    "total_order_amount": round(total_order_amount, 2),
                     "total_actual_weight_g": round(total_actual_weight_g, 2),
                     "total_actual_weight_kg": round(total_actual_weight_kg, 3),
                     "total_parcel_amount": round(total_parcel_amount, 2),
