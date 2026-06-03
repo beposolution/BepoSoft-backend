@@ -96,6 +96,7 @@ urlpatterns = [
     path('api/order/create/', CreateOrder.as_view(), name='create-order'),
     path("api/reports/state/wise/bdo/", FamilyStateBDOReport.as_view()),
     path('api/orders/', OrderListView.as_view(), name='orders'),
+    path("api/orders/all/", OrderListWithoutPaginationView.as_view(), name="orders-all-without-pagination"),
     path('api/orders/today/', TodayOrderListView.as_view(), name='today-order-list'),
     path('api/my/orders/', MyOrderListView.as_view(), name='my-orders'),
     path('api/all/orders/', InvoiceListView.as_view(), name='all-invoices'),
