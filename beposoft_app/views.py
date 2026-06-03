@@ -883,6 +883,55 @@ class CustomerView(BaseTokenView):
 
 
 
+class CustomerWithoutPaginationView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "")
+
+            customers = Customers.objects.select_related(
+                "manager",
+                "state",
+                "family"
+            ).order_by("-created_at")
+
+            if search:
+                customers = customers.filter(
+                    Q(name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(email__icontains=search)
+                )
+
+            serializer = CustomerModelSerializerLimited(customers, many=True)
+
+            return Response({
+                "count": customers.count(),
+                "results": serializer.data,
+                "message": "Customers retrieved successfully"
+            }, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+            
+
 class CustomerDivisionView(BaseTokenView):
 
     def get(self, request, family_id):

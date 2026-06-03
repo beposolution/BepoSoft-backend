@@ -19,6 +19,7 @@ urlpatterns = [
     
     path('api/add/customer/', UserCustomerAddingView.as_view(), name='add-customer'),
     path('api/customers/', CustomerView.as_view(), name='customer-list'),
+    path("api/customers/all/", CustomerWithoutPaginationView.as_view(), name="customers-all-without-pagination"),
     path('api/customers/division/<int:family_id>/', CustomerDivisionView.as_view(), name='customers-by-family'),
     path('api/staff/customers/', StaffBasedCustomers.as_view(), name='customer-list'),
     path('api/customer/update/<int:pk>/', CustomerUpdateView.as_view(), name='customer-update'),
