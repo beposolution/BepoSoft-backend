@@ -9,6 +9,8 @@ urlpatterns = [
     path('api/login/', UserLoginAPIView.as_view(), name='user-login'),
     path('api/login/<str:token>/', TokenLoginAPIView.as_view(), name='token_login'),
 
+    path('api/auth/status/', AuthStatusCheckView.as_view(), name='auth-status-check'),
+
 
     path('api/profile/',UserProfileData.as_view(),name="UserProfileData"),
 

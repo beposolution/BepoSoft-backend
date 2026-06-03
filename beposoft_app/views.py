@@ -208,7 +208,27 @@ class BaseTokenView(APIView):
         except Exception as e:
             return None, Response({"status": "error", "message": "An error occurred while decoding the token", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
-        
+
+
+# user/staff profile and auth status check
+
+class AuthStatusCheckView(BaseTokenView):
+    def get(self, request):
+        user, error_response = self.get_user_from_token(request)
+
+        if error_response:
+            return Response({
+                "status": "logout",
+                "message": "Your account has been disapproved."
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response({
+            "status": "active",
+            "message": "User is active",
+            "approval_status": user.approval_status
+        }, status=status.HTTP_200_OK)
+
+
 
 class UserProfileData(BaseTokenView):
     def get(self, request):
@@ -5322,6 +5342,8 @@ class WarehouseSummaryView(APIView):
             def get_summary(qs):
                 total_boxes = qs.count()
 
+                total_orders = qs.values('order_id').distinct().count()
+
                 # MATCH UI
                 total_actual_weight_g = sum(safe_float(w.weight) for w in qs)
                 total_weight_field = sum(safe_float(w.actual_weight) for w in qs)
@@ -5350,6 +5372,7 @@ class WarehouseSummaryView(APIView):
 
                 return {
                     "total_boxes": total_boxes,
+                    "total_orders": total_orders, 
                     "total_actual_weight_g": round(total_actual_weight_g, 2),
                     "total_actual_weight_kg": round(total_actual_weight_kg, 3),
                     "total_parcel_amount": round(total_parcel_amount, 2),
@@ -5372,6 +5395,7 @@ class WarehouseSummaryView(APIView):
                     if name not in result:
                         result[name] = {
                             "total_boxes": 0,
+                            "total_orders": set(),
                             "total_actual_weight_g": 0.0,
                             "total_parcel_amount": 0.0,
                             "total_volume": 0.0,
@@ -5383,6 +5407,7 @@ class WarehouseSummaryView(APIView):
 
                     # MATCH UI
                     result[name]["total_boxes"] += 1
+                    result[name]["total_orders"].add(w.order_id)
                     result[name]["total_actual_weight_g"] += safe_float(w.weight)
                     result[name]["total_parcel_amount"] += safe_float(w.parcel_amount)
                     result[name]["total_volume"] += get_volume(w)
@@ -5390,6 +5415,7 @@ class WarehouseSummaryView(APIView):
                     # result[name]["average"] += get_item_average(w)
 
                 for service_name, data in result.items():
+                    data["total_orders"] = len(data["total_orders"])
                     total_g = data["total_actual_weight_g"]
                     data["total_actual_weight_kg"] = round(
                         total_g / 1000 if total_g > 0 else 0, 3
@@ -5424,6 +5450,7 @@ class WarehouseSummaryView(APIView):
 
             default_service_data = {
                 "total_boxes": 0,
+                "total_orders": 0,
                 "total_actual_weight_g": 0.0,
                 "total_parcel_amount": 0.0,
                 "total_volume": 0.0,
