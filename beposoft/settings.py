@@ -12,6 +12,12 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 #git addd dit hfdtdtdtrrgsrtstsegcsrs
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -176,6 +182,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 SMS_ALERT_API_KEY ="5dd7cd37e7239"  # Replace with your actual API Key
 SMS_ALERT_SENDER_ID = 1707162624534280862
 
+
+
+# Shopify API Configuration
+SHOPIFY_ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
+SHOPIFY_STORE_URL = os.getenv("SHOPIFY_STORE_URL")
+SHOPIFY_API_VERSION = "2025-01"
 
 # AWS S3 Configuration
 
