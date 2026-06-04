@@ -3682,7 +3682,66 @@ class Cart(BaseTokenView):
         return Response({"status": "success", "message": "Product added to cart"}, status=status.HTTP_201_CREATED)
 
 
-    
+
+
+class CartFromExcel(BaseTokenView):
+    PRODUCT_TYPE_SINGLE = 'single'
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            product = get_object_or_404(Products, pk=request.data.get("product"))
+            quantity = request.data.get("quantity")
+
+            excel_price = request.data.get("price")
+
+            if excel_price not in [None, "", 0, "0"]:
+                price = Decimal(str(excel_price))
+            else:
+                if authUser.designation in ['BDM', 'BDO']:
+                    price = product.selling_price
+                else:
+                    price = product.retail_price
+
+            return self.add_product_in_cart(product, quantity, authUser, price)
+
+        except KeyError as e:
+            return Response(
+                {"status": "error", "message": f"Missing field: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": "An error occurred", "errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def add_product_in_cart(self, product, quantity, user, price):
+        existing_cart_item = BeposoftCart.objects.filter(
+            product=product,
+            user=user
+        ).first()
+
+        if existing_cart_item:
+            return Response(
+                {"status": "error", "message": "Product already exists in the cart"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        BeposoftCart.objects.create(
+            product=product,
+            user=user,
+            quantity=quantity,
+            price=price
+        )
+
+        return Response(
+            {"status": "success", "message": "Product added to cart"},
+            status=status.HTTP_201_CREATED
+        )
 
 
 
@@ -21573,4 +21632,4 @@ class ShippingAddressExcelExportView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            
+      
