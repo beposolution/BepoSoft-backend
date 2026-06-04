@@ -388,7 +388,7 @@ urlpatterns = [
     path("api/shipping/address/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ShippingAddressExcelExportView.as_view()),
 
 
-    path("api/shopify/orders/latest/", ShopifyLatestOrdersView.as_view()),
+# fgh
 
 
 ]
