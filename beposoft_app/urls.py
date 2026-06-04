@@ -141,6 +141,7 @@ urlpatterns = [
 
     path('api/staff/customers/',StaffCustomersView.as_view(),name="staff-customers"),
     path('api/cart/product/', Cart.as_view(), name='add-product-cart'),
+    path('api/cart/product/excel/', CartFromExcel.as_view(), name='add-product-cart-from-excel'),
     path('api/cart/products/',StaffcartStoredProductsView.as_view()),
     path('api/cart/update/<int:pk>/',StaffDeleteCartProduct.as_view()),
     path('api/cart/delete/all/',StaffDeleteCartProductAll.as_view()),
@@ -388,7 +389,6 @@ urlpatterns = [
     path("api/shipping/address/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ShippingAddressExcelExportView.as_view()),
 
 
-# fgh
 
 
 ]
