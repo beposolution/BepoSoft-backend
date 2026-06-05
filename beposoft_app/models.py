@@ -193,8 +193,10 @@ class User(models.Model):
     blood_group = models.CharField(max_length=10, choices=BLOOD_GROUP_CHOICES, null=True, blank=True)
     education = models.CharField(max_length=100, null=True, blank=True)
     salrary_slip = models.FileField(upload_to="salary_slips/", null=True, blank=True)
-    aadhar_no = models.CharField(max_length=12, unique=True, null=True, blank=True)
-    pan_no = models.CharField(max_length=10, unique=True, null=True, blank=True)
+    aadhar_no = models.CharField(max_length=12, null=True, blank=True)
+    aadhar_image = models.ImageField(upload_to="staff_aadhar/", null=True, blank=True)
+    pan_no = models.CharField(max_length=10, null=True, blank=True)
+    pan_image = models.ImageField(upload_to="staff_pan/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
