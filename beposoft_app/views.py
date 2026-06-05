@@ -18513,6 +18513,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
             grand_totals = {
                 "team_unbilled": 0,
+                "new_leads": 0,
                 "total_unbilled": 0,
                 "unbilled_to_billed": 0,
                 "new_customer": 0,
@@ -18560,6 +18561,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                         "district_id": item.district.id if item.district else None,
                         "district_name": item.district.name if item.district else None,
                         "total_unbilled": 0,
+                        "new_leads": 0,
                         "unbilled_to_billed": 0,
                         "new_customer": 0,
                         "new_conversion": 0,
@@ -18570,6 +18572,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     }
 
                 bucket = grouped[team_key]["members"][member_key]["states"][state_key]
+                bucket["new_leads"] += item.new_leads or 0
                 bucket["total_unbilled"] += item.unbilled or 0
                 bucket["unbilled_to_billed"] += item.billed or 0
                 bucket["new_customer"] += item.new_customers or 0
@@ -18606,6 +18609,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                         "district_id": item.district.id if item.district else None,
                         "district_name": item.district.name if item.district else None,
                         "total_unbilled": 0,
+                        "new_leads": 0,
                         "unbilled_to_billed": 0,
                         "new_customer": 0,
                         "new_conversion": 0,
@@ -18663,6 +18667,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     for _, state_value in member_value["states"].items():
                         member_entry["states"].append(state_value)
 
+                        grand_totals["new_leads"] += state_value["new_leads"]
                         grand_totals["total_unbilled"] += state_value["total_unbilled"]
                         grand_totals["unbilled_to_billed"] += state_value["unbilled_to_billed"]
                         grand_totals["new_customer"] += state_value["new_customer"]
