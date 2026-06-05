@@ -70,7 +70,7 @@ class UserSerializer(serializers.ModelSerializer):
             'family_id', 'family_name','country_code_name',
             'staff_id', 'place', 'emergency_contact_name', 'emergency_contact_number',
             'experience', 'exp_letter', 'previous_company', 'blood_group',
-            'education', 'salrary_slip', 'aadhar_no', 'pan_no'
+            'education', 'salrary_slip', 'aadhar_no', 'pan_no', 'aadhar_image', 'pan_image'
         ]
 
     def validate(self, data):
