@@ -18763,6 +18763,333 @@ class SalesTeamSummaryReportView(BaseTokenView):
 
 
 
+class SalesTeamCDReportView(BaseTokenView):
+    """
+    Report format:
+    Team -> Staff -> CD, New Leads, Bill, Volume
+    No hourly duration.
+    No state-wise grouping.
+    """
+
+    def parse_call_duration(self, value):
+        if not value:
+            return 0
+
+        try:
+            value = str(value).strip().lower()
+
+            if value.isdigit():
+                return int(value)
+
+            try:
+                return int(float(value))
+            except:
+                pass
+
+            if re.match(r'^\d{1,2}:\d{1,2}:\d{1,2}$', value):
+                h, m, s = map(int, value.split(':'))
+                return h * 3600 + m * 60 + s
+
+            if re.match(r'^\d{1,2}:\d{1,2}$', value):
+                m, s = map(int, value.split(':'))
+                return m * 60 + s
+
+            hours = re.search(r'(\d+)\s*h(?:our)?s?', value)
+            minutes = re.search(r'(\d+)\s*m(?:in)?s?', value)
+            seconds = re.search(r'(\d+)\s*s(?:ec)?s?', value)
+
+            total = 0
+
+            if hours:
+                total += int(hours.group(1)) * 3600
+
+            if minutes:
+                total += int(minutes.group(1)) * 60
+
+            if seconds:
+                total += int(seconds.group(1))
+
+            return total
+
+        except:
+            return 0
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            status_filter = request.GET.get("status", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            team_id = request.GET.get("team", "").strip()
+            created_by_id = request.GET.get("created_by", "").strip()
+            family_id = request.GET.get("family", "").strip()
+            search = request.GET.get("search", "").strip()
+
+            valid_statuses = [
+                choice[0] for choice in SalesTeamMemberDailyReport.STATUS_CHOICES
+            ]
+
+            if status_filter and status_filter not in valid_statuses:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": f"Invalid status. Allowed values are: {', '.join(valid_statuses)}"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            parsed_start_date = None
+            parsed_end_date = None
+
+            if start_date:
+                parsed_start_date = parse_date(start_date)
+                if not parsed_start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if end_date:
+                parsed_end_date = parse_date(end_date)
+                if not parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            team_daily_qs = SalesTeamDailyReport.objects.select_related(
+                "team",
+                "created_by",
+                "created_by__family",
+            ).all()
+
+            member_daily_qs = SalesTeamMemberDailyReport.objects.select_related(
+                "team",
+                "created_by",
+                "created_by__family",
+                "invoice",
+            ).all()
+
+            if team_id:
+                team_daily_qs = team_daily_qs.filter(team_id=team_id)
+                member_daily_qs = member_daily_qs.filter(team_id=team_id)
+
+            if created_by_id:
+                team_daily_qs = team_daily_qs.filter(created_by_id=created_by_id)
+                member_daily_qs = member_daily_qs.filter(created_by_id=created_by_id)
+
+            if family_id:
+                team_daily_qs = team_daily_qs.filter(created_by__family_id=family_id)
+                member_daily_qs = member_daily_qs.filter(created_by__family_id=family_id)
+
+            if parsed_start_date:
+                team_daily_qs = team_daily_qs.filter(created_at__date__gte=parsed_start_date)
+                member_daily_qs = member_daily_qs.filter(created_at__date__gte=parsed_start_date)
+
+            if parsed_end_date:
+                team_daily_qs = team_daily_qs.filter(created_at__date__lte=parsed_end_date)
+                member_daily_qs = member_daily_qs.filter(created_at__date__lte=parsed_end_date)
+
+            if status_filter:
+                member_daily_qs = member_daily_qs.filter(status=status_filter)
+
+            if search:
+                team_daily_qs = team_daily_qs.filter(
+                    Q(created_by__name__icontains=search) |
+                    Q(team__name__icontains=search) |
+                    Q(created_by__family__name__icontains=search)
+                )
+
+                member_daily_qs = member_daily_qs.filter(
+                    Q(customer_name__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(created_by__name__icontains=search) |
+                    Q(team__name__icontains=search) |
+                    Q(created_by__family__name__icontains=search)
+                )
+
+            grouped = {}
+
+            grand_totals = {
+                "cd": 0,
+                "new_leads": 0,
+                "bill": 0,
+                "volume": 0,
+            }
+
+            for item in team_daily_qs:
+                team_key = item.team.id if item.team else 0
+                team_name = item.team.name if item.team else "No Team"
+
+                member_key = item.created_by.id
+
+                if team_key not in grouped:
+                    grouped[team_key] = {
+                        "team_id": item.team.id if item.team else None,
+                        "team_name": team_name,
+                        "members": {}
+                    }
+
+                if member_key not in grouped[team_key]["members"]:
+                    grouped[team_key]["members"][member_key] = {
+                        "created_by_id": item.created_by.id,
+                        "created_by_name": item.created_by.name,
+                        "family_id": item.created_by.family.id if item.created_by.family else None,
+                        "family_name": item.created_by.family.name if item.created_by.family else None,
+                        "cd": 0,
+                        "new_leads": 0,
+                        "bill": 0,
+                        "volume": 0,
+                    }
+
+                grouped[team_key]["members"][member_key]["new_leads"] += item.new_leads or 0
+
+            for item in member_daily_qs:
+                team_key = item.team.id if item.team else 0
+                team_name = item.team.name if item.team else "No Team"
+
+                member_key = item.created_by.id
+
+                if team_key not in grouped:
+                    grouped[team_key] = {
+                        "team_id": item.team.id if item.team else None,
+                        "team_name": team_name,
+                        "members": {}
+                    }
+
+                if member_key not in grouped[team_key]["members"]:
+                    grouped[team_key]["members"][member_key] = {
+                        "created_by_id": item.created_by.id,
+                        "created_by_name": item.created_by.name,
+                        "family_id": item.created_by.family.id if item.created_by.family else None,
+                        "family_name": item.created_by.family.name if item.created_by.family else None,
+                        "cd": 0,
+                        "new_leads": 0,
+                        "bill": 0,
+                        "volume": 0,
+                    }
+
+                duration_seconds = self.parse_call_duration(item.call_duration)
+                duration_minutes = round(duration_seconds / 60, 2)
+
+                grouped[team_key]["members"][member_key]["cd"] += duration_minutes
+
+                if item.invoice_id:
+                    grouped[team_key]["members"][member_key]["bill"] += 1
+
+                    try:
+                        grouped[team_key]["members"][member_key]["volume"] += float(
+                            item.invoice.total_amount or 0
+                        )
+                    except:
+                        pass
+
+            response_data = []
+            sl_no = 1
+
+            for team_key, team_value in grouped.items():
+                team_total = {
+                    "cd": 0,
+                    "new_leads": 0,
+                    "bill": 0,
+                    "volume": 0,
+                }
+
+                members = []
+
+                for member_key, member_value in team_value["members"].items():
+                    member_value["cd"] = round(member_value["cd"], 2)
+                    member_value["volume"] = round(member_value["volume"], 2)
+
+                    team_total["cd"] += member_value["cd"]
+                    team_total["new_leads"] += member_value["new_leads"]
+                    team_total["bill"] += member_value["bill"]
+                    team_total["volume"] += member_value["volume"]
+
+                    members.append(member_value)
+
+                team_total["cd"] = round(team_total["cd"], 2)
+                team_total["volume"] = round(team_total["volume"], 2)
+
+                grand_totals["cd"] += team_total["cd"]
+                grand_totals["new_leads"] += team_total["new_leads"]
+                grand_totals["bill"] += team_total["bill"]
+                grand_totals["volume"] += team_total["volume"]
+
+                response_data.append({
+                    "sl_no": sl_no,
+                    "team_id": team_value["team_id"],
+                    "team_name": team_value["team_name"],
+                    "members": members,
+                    "team_total": team_total,
+                })
+
+                sl_no += 1
+
+            grand_totals["cd"] = round(grand_totals["cd"], 2)
+            grand_totals["volume"] = round(grand_totals["volume"], 2)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Sales team CD report fetched successfully",
+                    "filters": {
+                        "status": status_filter,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "team": team_id,
+                        "created_by": created_by_id,
+                        "family": family_id,
+                        "search": search,
+                    },
+                    "data": response_data,
+                    "totals": grand_totals,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except DatabaseError as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred while fetching CD report",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching CD report",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
 class SalesTeamMemberDailyReportStatusUpdateView(BaseTokenView):
     """
     PATCH -> update only status field

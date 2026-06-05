@@ -355,6 +355,7 @@ urlpatterns = [
     path('api/sales/team/division/daily/report/all/<int:family_id>/', SalesTeamMemberDailyReportByFamilyView.as_view(), name='sales-team-member-daily-report-by-family'),
     path('api/sales/team/<int:team_id>/members/list/', SalesTeamMembersByTeamView.as_view(), name='sales-team-members-by-team'),
     path('api/sales/team/summary/report/', SalesTeamSummaryReportView.as_view(), name='sales-team-summary-report'),
+    path("api/sales/team/cd/report/", SalesTeamCDReportView.as_view(), name="sales-team-cd-report"),
     path('api/sales/team/member/daily/report/status/<int:pk>/', SalesTeamMemberDailyReportStatusUpdateView.as_view(), name='sales-team-member-daily-report-status-update'),
     path("api/family/analysis/summary/", FamilyAnalysisSummaryView.as_view(), name="family-analysis-summary"),
     path("api/family/analysis/staff/summary/<int:family_id>/", FamilyStaffAnalysisSummaryView.as_view(), name="family-staff-analysis-summary"),
