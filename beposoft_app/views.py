@@ -18650,6 +18650,17 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     "team_id": team_value["team_id"],
                     "team_name": team_value["team_name"],
                     "team_unbilled": team_value["team_unbilled"],
+                    "team_totals": {
+                        "new_leads": 0,
+                        "total_unbilled": 0,
+                        "unbilled_to_billed": 0,
+                        "new_customer": 0,
+                        "new_conversion": 0,
+                        "billing": 0,
+                        "volume": 0,
+                        "total_call_duration": 0,
+                        "hourly_durations": self.get_empty_slot_dict(),
+                    },
                     "members": []
                 }
 
@@ -18667,6 +18678,22 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     for _, state_value in member_value["states"].items():
                         member_entry["states"].append(state_value)
 
+                        # TEAM TOTALS
+                        team_entry["team_totals"]["new_leads"] += state_value["new_leads"]
+                        team_entry["team_totals"]["total_unbilled"] += state_value["total_unbilled"]
+                        team_entry["team_totals"]["unbilled_to_billed"] += state_value["unbilled_to_billed"]
+                        team_entry["team_totals"]["new_customer"] += state_value["new_customer"]
+                        team_entry["team_totals"]["new_conversion"] += state_value["new_conversion"]
+                        team_entry["team_totals"]["billing"] += state_value["billing"]
+                        team_entry["team_totals"]["volume"] += state_value["volume"]
+                        team_entry["team_totals"]["total_call_duration"] += state_value["total_call_duration"]
+
+                        for slot in self.HOURLY_SLOTS:
+                            team_entry["team_totals"]["hourly_durations"][slot] += (
+                                state_value["hourly_durations"][slot]
+                            )
+
+                        # GRAND TOTALS
                         grand_totals["new_leads"] += state_value["new_leads"]
                         grand_totals["total_unbilled"] += state_value["total_unbilled"]
                         grand_totals["unbilled_to_billed"] += state_value["unbilled_to_billed"]
