@@ -18766,9 +18766,7 @@ class SalesTeamSummaryReportView(BaseTokenView):
 class SalesTeamCDReportView(BaseTokenView):
     """
     Report format:
-    Team -> Staff -> CD, New Leads, Bill, Volume
-    No hourly duration.
-    No state-wise grouping.
+    Team -> Staff -> AC, PC, ACD, AVG CD, New Deals, Bill Count, Volume
     """
 
     def parse_call_duration(self, value):
@@ -18802,10 +18800,8 @@ class SalesTeamCDReportView(BaseTokenView):
 
             if hours:
                 total += int(hours.group(1)) * 3600
-
             if minutes:
                 total += int(minutes.group(1)) * 60
-
             if seconds:
                 total += int(seconds.group(1))
 
@@ -18813,6 +18809,26 @@ class SalesTeamCDReportView(BaseTokenView):
 
         except:
             return 0
+
+    def get_default_member(self, user):
+        return {
+            "created_by_id": user.id,
+            "created_by_name": user.name,
+            "family_id": user.family.id if user.family else None,
+            "family_name": user.family.name if user.family else None,
+
+            "AC": 0,
+            "PC": 0,
+            "ACD": 0,
+            "AVG_CD": 0,
+
+            "new_deals": 0,
+            "bill_count": 0,
+            "volume": 0,
+
+            "_total_call_duration_seconds": 0,
+            "_call_count": 0,
+        }
 
     def get(self, request):
         try:
@@ -18841,37 +18857,24 @@ class SalesTeamCDReportView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            parsed_start_date = None
-            parsed_end_date = None
+            parsed_start_date = parse_date(start_date) if start_date else None
+            parsed_end_date = parse_date(end_date) if end_date else None
 
-            if start_date:
-                parsed_start_date = parse_date(start_date)
-                if not parsed_start_date:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid start_date format. Use YYYY-MM-DD"
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            if start_date and not parsed_start_date:
+                return Response(
+                    {"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            if end_date:
-                parsed_end_date = parse_date(end_date)
-                if not parsed_end_date:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid end_date format. Use YYYY-MM-DD"
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            if end_date and not parsed_end_date:
+                return Response(
+                    {"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             if parsed_start_date and parsed_end_date and parsed_start_date > parsed_end_date:
                 return Response(
-                    {
-                        "status": "error",
-                        "message": "start_date cannot be greater than end_date"
-                    },
+                    {"status": "error", "message": "start_date cannot be greater than end_date"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -18930,16 +18933,20 @@ class SalesTeamCDReportView(BaseTokenView):
             grouped = {}
 
             grand_totals = {
-                "cd": 0,
-                "new_leads": 0,
-                "bill": 0,
+                "AC": 0,
+                "PC": 0,
+                "ACD": 0,
+                "AVG_CD": 0,
+                "new_deals": 0,
+                "bill_count": 0,
                 "volume": 0,
+                "_total_call_duration_seconds": 0,
+                "_call_count": 0,
             }
 
             for item in team_daily_qs:
                 team_key = item.team.id if item.team else 0
                 team_name = item.team.name if item.team else "No Team"
-
                 member_key = item.created_by.id
 
                 if team_key not in grouped:
@@ -18950,23 +18957,13 @@ class SalesTeamCDReportView(BaseTokenView):
                     }
 
                 if member_key not in grouped[team_key]["members"]:
-                    grouped[team_key]["members"][member_key] = {
-                        "created_by_id": item.created_by.id,
-                        "created_by_name": item.created_by.name,
-                        "family_id": item.created_by.family.id if item.created_by.family else None,
-                        "family_name": item.created_by.family.name if item.created_by.family else None,
-                        "cd": 0,
-                        "new_leads": 0,
-                        "bill": 0,
-                        "volume": 0,
-                    }
+                    grouped[team_key]["members"][member_key] = self.get_default_member(item.created_by)
 
-                grouped[team_key]["members"][member_key]["new_leads"] += item.new_leads or 0
+                grouped[team_key]["members"][member_key]["new_deals"] += item.new_leads or 0
 
             for item in member_daily_qs:
                 team_key = item.team.id if item.team else 0
                 team_name = item.team.name if item.team else "No Team"
-
                 member_key = item.created_by.id
 
                 if team_key not in grouped:
@@ -18977,29 +18974,28 @@ class SalesTeamCDReportView(BaseTokenView):
                     }
 
                 if member_key not in grouped[team_key]["members"]:
-                    grouped[team_key]["members"][member_key] = {
-                        "created_by_id": item.created_by.id,
-                        "created_by_name": item.created_by.name,
-                        "family_id": item.created_by.family.id if item.created_by.family else None,
-                        "family_name": item.created_by.family.name if item.created_by.family else None,
-                        "cd": 0,
-                        "new_leads": 0,
-                        "bill": 0,
-                        "volume": 0,
-                    }
+                    grouped[team_key]["members"][member_key] = self.get_default_member(item.created_by)
+
+                member = grouped[team_key]["members"][member_key]
 
                 duration_seconds = self.parse_call_duration(item.call_duration)
                 duration_minutes = round(duration_seconds / 60, 2)
 
-                grouped[team_key]["members"][member_key]["cd"] += duration_minutes
+                member["ACD"] += duration_minutes
+                member["_total_call_duration_seconds"] += duration_seconds
+                member["_call_count"] += 1
+
+                if item.call_status == "active":
+                    member["AC"] += 1
+
+                if item.call_status == "productive":
+                    member["PC"] += 1
 
                 if item.invoice_id:
-                    grouped[team_key]["members"][member_key]["bill"] += 1
+                    member["bill_count"] += 1
 
                     try:
-                        grouped[team_key]["members"][member_key]["volume"] += float(
-                            item.invoice.total_amount or 0
-                        )
+                        member["volume"] += float(item.invoice.total_amount or 0)
                     except:
                         pass
 
@@ -19008,32 +19004,63 @@ class SalesTeamCDReportView(BaseTokenView):
 
             for team_key, team_value in grouped.items():
                 team_total = {
-                    "cd": 0,
-                    "new_leads": 0,
-                    "bill": 0,
+                    "AC": 0,
+                    "PC": 0,
+                    "ACD": 0,
+                    "AVG_CD": 0,
+                    "new_deals": 0,
+                    "bill_count": 0,
                     "volume": 0,
+                    "_total_call_duration_seconds": 0,
+                    "_call_count": 0,
                 }
 
                 members = []
 
                 for member_key, member_value in team_value["members"].items():
-                    member_value["cd"] = round(member_value["cd"], 2)
+                    if member_value["_call_count"] > 0:
+                        member_value["AVG_CD"] = round(
+                            (member_value["_total_call_duration_seconds"] / member_value["_call_count"]) / 60,
+                            2
+                        )
+
+                    member_value["ACD"] = round(member_value["ACD"], 2)
                     member_value["volume"] = round(member_value["volume"], 2)
 
-                    team_total["cd"] += member_value["cd"]
-                    team_total["new_leads"] += member_value["new_leads"]
-                    team_total["bill"] += member_value["bill"]
+                    team_total["AC"] += member_value["AC"]
+                    team_total["PC"] += member_value["PC"]
+                    team_total["ACD"] += member_value["ACD"]
+                    team_total["new_deals"] += member_value["new_deals"]
+                    team_total["bill_count"] += member_value["bill_count"]
                     team_total["volume"] += member_value["volume"]
+                    team_total["_total_call_duration_seconds"] += member_value["_total_call_duration_seconds"]
+                    team_total["_call_count"] += member_value["_call_count"]
+
+                    member_value.pop("_total_call_duration_seconds", None)
+                    member_value.pop("_call_count", None)
 
                     members.append(member_value)
 
-                team_total["cd"] = round(team_total["cd"], 2)
+                if team_total["_call_count"] > 0:
+                    team_total["AVG_CD"] = round(
+                        (team_total["_total_call_duration_seconds"] / team_total["_call_count"]) / 60,
+                        2
+                    )
+
+                team_total["ACD"] = round(team_total["ACD"], 2)
                 team_total["volume"] = round(team_total["volume"], 2)
 
-                grand_totals["cd"] += team_total["cd"]
-                grand_totals["new_leads"] += team_total["new_leads"]
-                grand_totals["bill"] += team_total["bill"]
+                grand_totals["AC"] += team_total["AC"]
+                grand_totals["PC"] += team_total["PC"]
+                grand_totals["ACD"] += team_total["ACD"]
+                grand_totals["new_deals"] += team_total["new_deals"]
+                grand_totals["bill_count"] += team_total["bill_count"]
                 grand_totals["volume"] += team_total["volume"]
+                grand_totals["_total_call_duration_seconds"] += team_total["_total_call_duration_seconds"]
+                grand_totals["_call_count"] += team_total["_call_count"]
+
+                team_total.pop("_total_call_duration_seconds", None)
+                team_total.pop("_call_count", None)
 
                 response_data.append({
                     "sl_no": sl_no,
@@ -19045,8 +19072,17 @@ class SalesTeamCDReportView(BaseTokenView):
 
                 sl_no += 1
 
-            grand_totals["cd"] = round(grand_totals["cd"], 2)
+            if grand_totals["_call_count"] > 0:
+                grand_totals["AVG_CD"] = round(
+                    (grand_totals["_total_call_duration_seconds"] / grand_totals["_call_count"]) / 60,
+                    2
+                )
+
+            grand_totals["ACD"] = round(grand_totals["ACD"], 2)
             grand_totals["volume"] = round(grand_totals["volume"], 2)
+
+            grand_totals.pop("_total_call_duration_seconds", None)
+            grand_totals.pop("_call_count", None)
 
             return Response(
                 {
