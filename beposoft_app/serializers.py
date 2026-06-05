@@ -2392,6 +2392,7 @@ class SalesTeamDailyReportSerializer(serializers.ModelSerializer):
             'state_name',
             'district',
             'district_name',
+            'new_leads',
             'unbilled',
             'billed',
             'new_customers',

@@ -1819,6 +1819,7 @@ class SalesTeamDailyReport(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_sales_team_reports")
     state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="sales_team_daily_reports")
     district = models.ForeignKey(Districts, on_delete=models.CASCADE, related_name="sales_team_daily_reports")
+    new_leads = models.IntegerField(null=True, blank=True, default=0)
     unbilled = models.IntegerField(default=0)
     billed = models.IntegerField(default=0)
     new_customers = models.IntegerField(default=0)
