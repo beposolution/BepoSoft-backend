@@ -177,7 +177,10 @@ class User(models.Model):
     place = models.CharField(max_length=100, null=True, blank=True)
     emergency_contact_name = models.CharField(max_length=100, null=True, blank=True)
     emergency_contact_number = models.CharField(max_length=10, null=True, blank=True)
+    emergency_contact_name1 = models.CharField(max_length=100, null=True, blank=True)
+    emergency_contact_number1 = models.CharField(max_length=10, null=True, blank=True)
     experience = models.PositiveBigIntegerField(null=True, blank=True, help_text="Experience in months")
+    yr_experience = models.CharField(max_length=100, null=True, blank=True, help_text="Experience in years and months format (e.g., '2 years 3 months')")
     exp_letter = models.FileField(upload_to="experience_letters/", null=True, blank=True)
     previous_company = models.CharField(max_length=100, null=True, blank=True)
     BLOOD_GROUP_CHOICES = [

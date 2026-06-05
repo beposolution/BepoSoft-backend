@@ -65,9 +65,9 @@ class UserSerializer(serializers.ModelSerializer):
             'employment_status', 'designation', 'grade', 'address',
             'state', 'country', 'join_date', 'confirmation_date',
             'termination_date', 'supervisor_id', 'department_id',
-            'warehouse_id', 'country_code', 'signatur_up',
+            'warehouse_id', 'country_code', 'signatur_up', 'emergency_contact_name1', 'emergency_contact_number1',
             'approval_status', 'family', 'created_at', 'updated_at',
-            'family_id', 'family_name','country_code_name',
+            'family_id', 'family_name','country_code_name', 'yr_experience',
             'staff_id', 'place', 'emergency_contact_name', 'emergency_contact_number',
             'experience', 'exp_letter', 'previous_company', 'blood_group',
             'education', 'salrary_slip', 'aadhar_no', 'pan_no', 'aadhar_image', 'pan_image'
