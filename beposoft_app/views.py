@@ -18509,24 +18509,80 @@ class SalesTeamSummaryReportView(BaseTokenView):
                     Q(team__name__icontains=search)
                 )
 
+            # grouped = {}
+
+            # grand_totals = {
+            #     "team_unbilled": 0,
+            #     "new_leads": 0,
+            #     "total_unbilled": 0,
+            #     "unbilled_to_billed": 0,
+            #     "new_customer": 0,
+            #     "new_conversion": 0,
+            #     "billing": 0,
+            #     "volume": 0,
+            #     "total_call_duration": 0,
+            #     "hourly_durations": self.get_empty_slot_dict(),
+            #     "call_duration_average_minutes": 0,
+            #     "call_duration_average_percentage": 0,
+            # }
+
+            # total_duration_entries = 0
+
+            # for item in team_daily_qs:
             grouped = {}
 
             grand_totals = {
-                "team_unbilled": 0,
-                "new_leads": 0,
-                "total_unbilled": 0,
-                "unbilled_to_billed": 0,
-                "new_customer": 0,
-                "new_conversion": 0,
-                "billing": 0,
+                "AC": 0,
+                "PC": 0,
+                "ACD": 0,
+                "AVG_CD": 0,
+                "new_deals": 0,
+                "bill_count": 0,
                 "volume": 0,
-                "total_call_duration": 0,
-                "hourly_durations": self.get_empty_slot_dict(),
-                "call_duration_average_minutes": 0,
-                "call_duration_average_percentage": 0,
+                "_total_call_duration_seconds": 0,
+                "_call_count": 0,
             }
 
-            total_duration_entries = 0
+            # Add all sales team members first with zero values
+            team_members_qs = SalesTeamMember.objects.select_related(
+                "team",
+                "user",
+                "user__family",
+            ).all()
+
+            if team_id:
+                team_members_qs = team_members_qs.filter(team_id=team_id)
+
+            if created_by_id:
+                team_members_qs = team_members_qs.filter(user_id=created_by_id)
+
+            if family_id:
+                team_members_qs = team_members_qs.filter(user__family_id=family_id)
+
+            if search:
+                team_members_qs = team_members_qs.filter(
+                    Q(user__name__icontains=search) |
+                    Q(team__name__icontains=search) |
+                    Q(user__family__name__icontains=search)
+                )
+
+            for tm in team_members_qs:
+                if not tm.user:
+                    continue
+
+                team_key = tm.team.id if tm.team else 0
+                team_name = tm.team.name if tm.team else "No Team"
+                member_key = tm.user.id
+
+                if team_key not in grouped:
+                    grouped[team_key] = {
+                        "team_id": tm.team.id if tm.team else None,
+                        "team_name": team_name,
+                        "members": {}
+                    }
+
+                if member_key not in grouped[team_key]["members"]:
+                    grouped[team_key]["members"][member_key] = self.get_default_member(tm.user)
 
             for item in team_daily_qs:
                 team_key = item.team.id if item.team else 0
