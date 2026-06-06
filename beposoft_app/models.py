@@ -2124,6 +2124,7 @@ class EmployeeExit(models.Model):
     reason = models.TextField(null=True, blank=True)
     reason_type = models.CharField(max_length=20, choices=REASON_CHOICES, default='resignation')
     exit_reason_note = models.TextField(null=True, blank=True)
+    feedback = models.TextField(null=True, blank=True)
     asset_responsibility = models.TextField(null=True, blank=True)
     handover_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="handover_exits")
     handover_date = models.DateField(null=True, blank=True)
