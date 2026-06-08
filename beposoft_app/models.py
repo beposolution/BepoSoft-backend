@@ -2166,3 +2166,36 @@ class EmployeeExit(models.Model):
     def __str__(self):
         return f"{self.employee.name} - {self.exit_date} - {self.reason_type}"
 
+
+
+class EmployeeLeave(models.Model):
+    LEAVE_TYPE_CHOICES = [
+        ('sick_leave', 'Sick Leave'),
+        ('casual_leave', 'Casual Leave'),
+        ('earned_leave', 'Earned Leave'),
+        ('maternity_leave', 'Maternity Leave'),
+        ('paternity_leave', 'Paternity Leave'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="employee_leaves")
+    leave_type = models.CharField(max_length=20, choices=LEAVE_TYPE_CHOICES)
+    no_of_days = models.IntegerField(null=True, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField(null=True, blank=True)
+    approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    manager_note = models.TextField(null=True, blank=True)
+    manager = models.ForeignKey(Supervisor, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "employee_leave"
+
+    def __str__(self):
+        return f"{self.employee.name} - {self.leave_type} ({self.start_date} to {self.end_date}) - {self.approval_status}"
+
