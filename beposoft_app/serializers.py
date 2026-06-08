@@ -3297,7 +3297,7 @@ class EmplyeeExitViewSerializer(serializers.ModelSerializer):
         model = EmployeeExit
         fields = [
             'id', 'employee', 'employee_name', 'employee_id', 'employee_department',
-            'employee_designation', 'employee_date_of_joining', 'exit_date',
+            'employee_designation', 'employee_date_of_joining', 'exit_date', 'feedback',
             'reason_type', 'exit_reason_note', 'asset_responsibility', 'handover_to',
             'handover_to_name', 'handover_date', 'logistics_clearance', 'logistics_clearance_date',
             'logistics_clearance_by', 'logistics_clearance_by_name', 'logistics_clearance_note',
