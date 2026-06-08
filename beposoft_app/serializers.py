@@ -3476,3 +3476,47 @@ class ShippingAddressExcelExportSerializer(serializers.ModelSerializer):
         if obj.state:
             return obj.state.name
         return ""
+    
+
+
+class EmployeeLeavePostPutSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeLeave
+        fields = [
+            "id",
+            "leave_type",
+            "no_of_days",
+            "start_date",
+            "end_date",
+            "reason",
+            "approval_status",
+            "manager_note",
+            "manager",
+        ]
+        read_only_fields = ["id"]
+
+
+class EmployeeLeaveGetSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.name", read_only=True)
+    employee_id = serializers.CharField(source="employee.employee_id", read_only=True)
+    manager_name = serializers.CharField(source="manager.name", read_only=True)
+
+    class Meta:
+        model = EmployeeLeave
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "employee_id",
+            "leave_type",
+            "no_of_days",
+            "start_date",
+            "end_date",
+            "reason",
+            "approval_status",
+            "manager",
+            "manager_name",
+            "manager_note",
+            "created_at",
+            "updated_at",
+        ]

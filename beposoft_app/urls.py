@@ -390,6 +390,10 @@ urlpatterns = [
     path("api/shipping/address/excel/export/<int:warehouse_id>/<str:from_date>/<str:to_date>/",ShippingAddressExcelExportView.as_view()),
 
 
+    path("api/employee/leaves/", EmployeeLeaveOwnView.as_view()),
+    path("api/employee/leaves/all/", EmployeeLeaveAllView.as_view()),
+    path("api/employee/leaves/manager/<int:manager_id>/", EmployeeLeaveByManagerView.as_view()),
+    path("api/employee/leaves/edit/<int:id>/", EmployeeLeaveDetailView.as_view()),
 
 
 ]

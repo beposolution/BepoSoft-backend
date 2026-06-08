@@ -22133,4 +22133,180 @@ class ShippingAddressExcelExportView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+# employee leave API
+
+
+class EmployeeLeaveOwnView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            leaves = EmployeeLeave.objects.filter(employee=user).order_by("-id")
+            serializer = EmployeeLeaveGetSerializer(leaves, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Employee leave list fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to fetch employee leave list",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = EmployeeLeavePostPutSerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save(employee=user)
+
+                return Response({
+                    "status": "success",
+                    "message": "Employee leave created successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to create employee leave",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EmployeeLeaveAllView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            leaves = EmployeeLeave.objects.all().order_by("-id")
+            serializer = EmployeeLeaveGetSerializer(leaves, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "All employee leave list fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to fetch all employee leave list",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EmployeeLeaveByManagerView(BaseTokenView):
+
+    def get(self, request, manager_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            leaves = EmployeeLeave.objects.filter(manager_id=manager_id).order_by("-id")
+            serializer = EmployeeLeaveGetSerializer(leaves, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Manager employee leave list fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to fetch manager employee leave list",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EmployeeLeaveDetailView(BaseTokenView):
+
+    def get(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            leave = get_object_or_404(EmployeeLeave, id=id)
+            serializer = EmployeeLeaveGetSerializer(leave)
+
+            return Response({
+                "status": "success",
+                "message": "Employee leave details fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to fetch employee leave details",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            leave = get_object_or_404(EmployeeLeave, id=id)
+
+            serializer = EmployeeLeavePostPutSerializer(
+                leave,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response({
+                    "status": "success",
+                    "message": "Employee leave updated successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "Failed to update employee leave",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
