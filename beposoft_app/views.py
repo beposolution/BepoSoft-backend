@@ -132,7 +132,8 @@ class UserLoginAPIView(APIView):
                         'id': customer.pk,
                         "token": token,
                         'name': customer.name,
-                        "active": customer.department_id.name
+                        "active": customer.department_id.name,
+                        "manager": customer.is_manager,
                     }
 
                     warehouse = getattr(customer, 'warehouse_id', None)
