@@ -3520,3 +3520,87 @@ class EmployeeLeaveGetSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+# staff attendance related serializers for BDM order analysis
+
+
+class StaffAttendanceTeamWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffAttendanceTeam
+        fields = [
+            "id",
+            "team_name",
+            "team_leader",
+        ]
+
+
+class StaffAttendanceTeamReadSerializer(serializers.ModelSerializer):
+    team_leader_name = serializers.CharField(source="team_leader.name", read_only=True)
+
+    class Meta:
+        model = StaffAttendanceTeam
+        fields = [
+            "id",
+            "team_name",
+            "team_leader",
+            "team_leader_name",
+            "created_at",
+            "updated_at",
+        ]
+
+
+
+class StaffAttendanceTeamMembersWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffAttendanceTeamMembers
+        fields = [
+            "id",
+            "team",
+            "member",
+        ]
+
+
+class StaffAttendanceTeamMembersReadSerializer(serializers.ModelSerializer):
+    team_name = serializers.CharField(source="team.team_name", read_only=True)
+    member_name = serializers.CharField(source="member.name", read_only=True)
+
+    class Meta:
+        model = StaffAttendanceTeamMembers
+        fields = [
+            "id",
+            "team",
+            "team_name",
+            "member",
+            "member_name",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class StaffAttendanceWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffAttendance
+        fields = [
+            "id",
+            "staff",
+            "attendance_date",
+            "status",
+        ]
+
+
+class StaffAttendanceReadSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source="staff.name", read_only=True)
+
+    class Meta:
+        model = StaffAttendance
+        fields = [
+            "id",
+            "staff",
+            "staff_name",
+            "attendance_date",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
