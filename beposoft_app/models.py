@@ -200,6 +200,7 @@ class User(models.Model):
     aadhar_image = models.ImageField(upload_to="staff_aadhar/", null=True, blank=True)
     pan_no = models.CharField(max_length=10, null=True, blank=True)
     pan_image = models.ImageField(upload_to="staff_pan/", null=True, blank=True)
+    is_manager = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
