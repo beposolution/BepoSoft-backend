@@ -22312,6 +22312,50 @@ class EmployeeLeaveDetailView(BaseTokenView):
       
 
 
+# manager GET
+
+class ManagerUsersView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+
+            managers = User.objects.filter(
+                is_manager=True,
+                approval_status="approved"
+            ).order_by("-id")
+
+            if search:
+                managers = managers.filter(
+                    Q(name__icontains=search) |
+                    Q(username__icontains=search) |
+                    Q(email__icontains=search) |
+                    Q(phone__icontains=search) |
+                    Q(staff_id__icontains=search) |
+                    Q(designation__icontains=search)
+                )
+
+            serializer = UserUpdateSerilizers(managers, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Manager users fetched successfully",
+                "search": search,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching manager users",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
 # ============================================================
 # staff daily attendance API
 # Staff Attendance Team Views
