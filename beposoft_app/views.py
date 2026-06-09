@@ -22953,3 +22953,76 @@ class MyTeamStaffAttendanceView(BaseTokenView):
                 "message": "An error occurred while fetching logged-in user's team attendance",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class StaffAttendanceTeamWiseCountView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            team_id = request.GET.get("team")
+
+            teams = StaffAttendanceTeam.objects.prefetch_related(
+                "team_members__member"
+            ).select_related(
+                "team_leader"
+            ).all().order_by("-id")
+
+            if team_id:
+                teams = teams.filter(id=team_id)
+
+            data = []
+
+            for team in teams:
+                member_ids = team.team_members.values_list("member_id", flat=True)
+
+                attendance_qs = StaffAttendance.objects.filter(
+                    staff_id__in=member_ids
+                )
+
+                if start_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+
+                if end_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+
+                present_count = attendance_qs.filter(status="present").count()
+                absent_count = attendance_qs.filter(status="absent").count()
+                half_day_count = attendance_qs.filter(status="half_day").count()
+                total_count = attendance_qs.count()
+
+                data.append({
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id if team.team_leader else None,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": team.team_members.count(),
+                    "present_count": present_count,
+                    "absent_count": absent_count,
+                    "half_day_count": half_day_count,
+                    "total_count": total_count,
+                })
+
+            return Response({
+                "status": "success",
+                "message": "Team-wise staff attendance count fetched successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "team": team_id,
+                },
+                "data": data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching team-wise attendance count",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
