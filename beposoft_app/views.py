@@ -22793,3 +22793,119 @@ class StaffAttendanceDetailView(BaseTokenView):
                 "message": "An error occurred while updating staff attendance",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MyTeamStaffAttendanceView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            member_id = request.GET.get("member")
+
+            teams = StaffAttendanceTeam.objects.prefetch_related(
+                "team_members__member"
+            ).select_related(
+                "team_leader"
+            ).filter(
+                team_leader=authUser
+            ).order_by("-id")
+
+            if not teams.exists():
+                return Response({
+                    "status": "error",
+                    "message": "Logged-in user has no attendance team",
+                    "data": []
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            paginator = StandardPagination()
+            paginated_teams = paginator.paginate_queryset(teams, request)
+
+            data = []
+
+            for team in paginated_teams:
+                team_members = team.team_members.all()
+
+                if member_id:
+                    team_members = team_members.filter(member_id=member_id)
+
+                member_ids = [tm.member.id for tm in team_members]
+
+                attendance_qs = StaffAttendance.objects.select_related(
+                    "staff"
+                ).filter(
+                    staff_id__in=member_ids
+                )
+
+                if start_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+
+                if end_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+
+                attendance_qs = attendance_qs.order_by("-attendance_date", "-id")
+
+                date_wise_data = {}
+
+                for attendance in attendance_qs:
+                    date_key = attendance.attendance_date.strftime("%Y-%m-%d")
+
+                    if date_key not in date_wise_data:
+                        date_wise_data[date_key] = {
+                            "attendance_date": date_key,
+                            "present_count": 0,
+                            "absent_count": 0,
+                            "half_day_count": 0,
+                            "total_count": 0,
+                            "attendance": []
+                        }
+
+                    if attendance.status == "present":
+                        date_wise_data[date_key]["present_count"] += 1
+                    elif attendance.status == "absent":
+                        date_wise_data[date_key]["absent_count"] += 1
+                    elif attendance.status == "half_day":
+                        date_wise_data[date_key]["half_day_count"] += 1
+
+                    date_wise_data[date_key]["total_count"] += 1
+
+                    date_wise_data[date_key]["attendance"].append({
+                        "id": attendance.id,
+                        "staff": attendance.staff.id,
+                        "staff_name": attendance.staff.name if attendance.staff else None,
+                        "attendance_date": date_key,
+                        "status": attendance.status,
+                        "created_at": attendance.created_at,
+                        "updated_at": attendance.updated_at,
+                    })
+
+                data.append({
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id if team.team_leader else None,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": len(member_ids),
+                    "date_wise_attendance": list(date_wise_data.values())
+                })
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Logged-in user's team attendance fetched successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "member": member_id
+                },
+                "data": data
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching logged-in user's team attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

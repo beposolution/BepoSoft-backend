@@ -402,6 +402,7 @@ urlpatterns = [
     path("api/staff/attendance/team/members/edit/<int:pk>/", StaffAttendanceTeamMembersDetailView.as_view()),
     path("api/staff/attendance/", StaffAttendanceView.as_view()),
     path("api/staff/attendance/edit/<int:pk>/", StaffAttendanceDetailView.as_view()),
+    path("api/staff/attendance/my/team/", MyTeamStaffAttendanceView.as_view()),
 
 ]
 
