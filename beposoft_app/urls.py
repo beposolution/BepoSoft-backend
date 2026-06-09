@@ -396,5 +396,12 @@ urlpatterns = [
     path("api/employee/leaves/edit/<int:id>/", EmployeeLeaveDetailView.as_view()),
 
 
+    path("api/staff/attendance/teams/", StaffAttendanceTeamView.as_view()),
+    path("api/staff/attendance/teams/edit/<int:pk>/", StaffAttendanceTeamDetailView.as_view()),
+    path("api/staff/attendance/team/members/", StaffAttendanceTeamMembersView.as_view()),
+    path("api/staff/attendance/team/members/edit/<int:pk>/", StaffAttendanceTeamMembersDetailView.as_view()),
+    path("api/staff/attendance/", StaffAttendanceView.as_view()),
+    path("api/staff/attendance/edit/<int:pk>/", StaffAttendanceDetailView.as_view()),
+
 ]
 

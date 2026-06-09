@@ -22310,3 +22310,486 @@ class EmployeeLeaveDetailView(BaseTokenView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
+
+
+# ============================================================
+# staff daily attendance API
+# Staff Attendance Team Views
+# ============================================================
+
+class StaffAttendanceTeamView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            teams = StaffAttendanceTeam.objects.select_related(
+                "team_leader"
+            ).all().order_by("-id")
+
+            serializer = StaffAttendanceTeamReadSerializer(teams, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance teams fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance teams",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = StaffAttendanceTeamWriteSerializer(data=request.data)
+
+            if serializer.is_valid():
+                team = serializer.save()
+                response_serializer = StaffAttendanceTeamReadSerializer(team)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance team created successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while creating staff attendance team",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaffAttendanceTeamDetailView(BaseTokenView):
+
+    def get_team(self, pk):
+        return get_object_or_404(StaffAttendanceTeam, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team = self.get_team(pk)
+            serializer = StaffAttendanceTeamReadSerializer(team)
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance team fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance team",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team = self.get_team(pk)
+
+            serializer = StaffAttendanceTeamWriteSerializer(
+                team,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                team = serializer.save()
+                response_serializer = StaffAttendanceTeamReadSerializer(team)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance team updated successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while updating staff attendance team",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class StaffAttendanceTeamMembersView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            teams = StaffAttendanceTeam.objects.prefetch_related(
+                "team_members__member"
+            ).all().order_by("-id")
+
+            data = []
+
+            for team in teams:
+                members = team.team_members.all()
+
+                data.append({
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": members.count(),
+                    "members": StaffAttendanceTeamMembersReadSerializer(
+                        members,
+                        many=True
+                    ).data
+                })
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance team members fetched team-wise successfully",
+                "data": data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance team members team-wise",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = StaffAttendanceTeamMembersWriteSerializer(data=request.data)
+
+            if serializer.is_valid():
+                member = serializer.save()
+                response_serializer = StaffAttendanceTeamMembersReadSerializer(member)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance team member created successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while creating staff attendance team member",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaffAttendanceTeamMembersDetailView(BaseTokenView):
+
+    def get_member(self, pk):
+        return get_object_or_404(StaffAttendanceTeamMembers, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            member = self.get_member(pk)
+            serializer = StaffAttendanceTeamMembersReadSerializer(member)
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance team member fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance team member",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            member = self.get_member(pk)
+
+            serializer = StaffAttendanceTeamMembersWriteSerializer(
+                member,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                member = serializer.save()
+                response_serializer = StaffAttendanceTeamMembersReadSerializer(member)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance team member updated successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while updating staff attendance team member",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class StaffAttendanceView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            team_id = request.GET.get("team")
+            member_id = request.GET.get("member")
+
+            teams = StaffAttendanceTeam.objects.prefetch_related(
+                "team_members__member"
+            ).select_related(
+                "team_leader"
+            ).all().order_by("-id")
+
+            if team_id:
+                teams = teams.filter(id=team_id)
+
+            paginator = StandardPagination()
+            paginated_teams = paginator.paginate_queryset(teams, request)
+
+            data = []
+
+            for team in paginated_teams:
+                team_members = team.team_members.all()
+
+                if member_id:
+                    team_members = team_members.filter(member_id=member_id)
+
+                member_ids = [tm.member.id for tm in team_members]
+
+                attendance_qs = StaffAttendance.objects.select_related(
+                    "staff"
+                ).filter(
+                    staff_id__in=member_ids
+                )
+
+                if start_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+
+                if end_date:
+                    attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+
+                attendance_qs = attendance_qs.order_by("-attendance_date", "-id")
+
+                date_wise_data = {}
+
+                for attendance in attendance_qs:
+                    date_key = attendance.attendance_date.strftime("%Y-%m-%d")
+
+                    if date_key not in date_wise_data:
+                        date_wise_data[date_key] = {
+                            "attendance_date": date_key,
+                            "present_count": 0,
+                            "absent_count": 0,
+                            "half_day_count": 0,
+                            "total_count": 0,
+                            "attendance": []
+                        }
+
+                    if attendance.status == "present":
+                        date_wise_data[date_key]["present_count"] += 1
+                    elif attendance.status == "absent":
+                        date_wise_data[date_key]["absent_count"] += 1
+                    elif attendance.status == "half_day":
+                        date_wise_data[date_key]["half_day_count"] += 1
+
+                    date_wise_data[date_key]["total_count"] += 1
+
+                    date_wise_data[date_key]["attendance"].append({
+                        "id": attendance.id,
+                        "staff": attendance.staff.id,
+                        "staff_name": attendance.staff.name if attendance.staff else None,
+                        "attendance_date": date_key,
+                        "status": attendance.status,
+                        "created_at": attendance.created_at,
+                        "updated_at": attendance.updated_at,
+                    })
+
+                data.append({
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id if team.team_leader else None,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": len(member_ids),
+                    "date_wise_attendance": list(date_wise_data.values())
+                })
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Staff attendance fetched team-wise and date-wise successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "team": team_id,
+                    "member": member_id,
+                },
+                "data": data
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = StaffAttendanceWriteSerializer(data=request.data)
+
+            if serializer.is_valid():
+                attendance = serializer.save()
+                response_serializer = StaffAttendanceReadSerializer(attendance)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance created successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while creating staff attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaffAttendanceDetailView(BaseTokenView):
+
+    def get_attendance(self, pk):
+        return get_object_or_404(StaffAttendance, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            attendance = self.get_attendance(pk)
+            serializer = StaffAttendanceReadSerializer(attendance)
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching staff attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            attendance = self.get_attendance(pk)
+
+            serializer = StaffAttendanceWriteSerializer(
+                attendance,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                attendance = serializer.save()
+                response_serializer = StaffAttendanceReadSerializer(attendance)
+
+                return Response({
+                    "status": "success",
+                    "message": "Staff attendance updated successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while updating staff attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

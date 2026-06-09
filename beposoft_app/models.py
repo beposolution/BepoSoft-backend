@@ -2199,3 +2199,53 @@ class EmployeeLeave(models.Model):
     def __str__(self):
         return f"{self.employee.name} - {self.leave_type} ({self.start_date} to {self.end_date}) - {self.approval_status}"
 
+
+
+# Employee attendance and order analysis models for BDMs
+
+class StaffAttendanceTeam(models.Model):
+    team_name = models.CharField(max_length=100)
+    team_leader = models.ForeignKey(User, on_delete=models.CASCADE, related_name="attendance_team_leader")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_attendance_team"
+
+    def __str__(self):
+        return self.team_name
+    
+
+
+class StaffAttendanceTeamMembers(models.Model):
+    team = models.ForeignKey(StaffAttendanceTeam, on_delete=models.CASCADE, related_name="team_members")
+    member = models.ForeignKey(User, on_delete=models.CASCADE, related_name="attendance_team_membership")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_attendance_team_members"
+
+    def __str__(self):
+        return f"{self.member.name} - {self.team.team_name}"
+    
+
+
+class StaffAttendance(models.Model):
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('half_day', 'Half Day'),
+    ]
+    staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="staff_attendance")
+    attendance_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "staff_attendance"
+        unique_together = ('staff', 'attendance_date')
+
+    def __str__(self):
+        return f"{self.staff.name} - {self.attendance_date} - {self.status}"
