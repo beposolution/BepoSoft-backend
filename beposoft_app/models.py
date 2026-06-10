@@ -415,6 +415,7 @@ class Products(models.Model):
     selling_price=models.FloatField(default=0.0,null=True)
     landing_cost=models.FloatField(null=True)
     retail_price=models.FloatField(null=True)
+    final_price=models.FloatField(null=True, blank=True)
     stock = models.IntegerField(default=0)
     locked_stock = models.IntegerField(default=0)
     color = models.CharField(max_length=100, null=True, blank=True)
