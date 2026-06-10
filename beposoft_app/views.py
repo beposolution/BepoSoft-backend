@@ -22999,6 +22999,9 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
             end_date = request.GET.get("end_date")
             team_id = request.GET.get("team")
 
+            data = []
+
+            # Normal attendance teams
             teams = StaffAttendanceTeam.objects.prefetch_related(
                 "team_members__member"
             ).select_related(
@@ -23008,25 +23011,29 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
             if team_id:
                 teams = teams.filter(id=team_id)
 
-            data = []
-
             for team in teams:
-                member_ids = team.team_members.values_list("member_id", flat=True)
+                member_ids = list(
+                    team.team_members.values_list("member_id", flat=True)
+                )
 
                 attendance_qs = StaffAttendance.objects.filter(
                     staff_id__in=member_ids
                 )
 
                 if start_date:
-                    attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+                    attendance_qs = attendance_qs.filter(
+                        attendance_date__gte=start_date
+                    )
 
                 if end_date:
-                    attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+                    attendance_qs = attendance_qs.filter(
+                        attendance_date__lte=end_date
+                    )
 
                 present_count = attendance_qs.filter(status="present").count()
                 absent_count = attendance_qs.filter(status="absent").count()
                 half_day_count = attendance_qs.filter(status="half_day").count()
-                total_count = attendance_qs.count()
+                total_count = present_count + absent_count + half_day_count
 
                 data.append({
                     "team_id": team.id,
@@ -23040,6 +23047,47 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     "total_count": total_count,
                 })
 
+            # SALES DEPARTMENT from BDMOrderAnalysisStaff
+            # Only show this when no specific normal attendance team is selected
+            if not team_id:
+                bdm_qs = BDMOrderAnalysisStaff.objects.all()
+
+                if start_date:
+                    bdm_qs = bdm_qs.filter(
+                        created_at__date__gte=start_date
+                    )
+
+                if end_date:
+                    bdm_qs = bdm_qs.filter(
+                        created_at__date__lte=end_date
+                    )
+
+                sales_present = bdm_qs.filter(status="present").count()
+                sales_absent = bdm_qs.filter(status="absent").count()
+                sales_half_day = bdm_qs.filter(status="half_day").count()
+                sales_total = sales_present + sales_absent + sales_half_day
+
+                data.append({
+                    "team_id": None,
+                    "team_name": "SALES DEPARTMENT",
+                    "team_leader": None,
+                    "team_leader_name": None,
+                    "members_count": bdm_qs.values("staff_id").distinct().count(),
+                    "present_count": sales_present,
+                    "absent_count": sales_absent,
+                    "half_day_count": sales_half_day,
+                    "total_count": sales_total,
+                })
+
+            summary = {
+                "total_teams": len(data),
+                "total_members": sum(item["members_count"] for item in data),
+                "total_present": sum(item["present_count"] for item in data),
+                "total_absent": sum(item["absent_count"] for item in data),
+                "total_half_day": sum(item["half_day_count"] for item in data),
+                "grand_total": sum(item["total_count"] for item in data),
+            }
+
             return Response({
                 "status": "success",
                 "message": "Team-wise staff attendance count fetched successfully",
@@ -23048,6 +23096,7 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     "end_date": end_date,
                     "team": team_id,
                 },
+                "summary": summary,
                 "data": data
             }, status=status.HTTP_200_OK)
 
