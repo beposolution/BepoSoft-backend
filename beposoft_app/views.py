@@ -8162,6 +8162,7 @@ def GenerateInvoice(request, pk):
         item.final_price = final_price
         item.total = total
         item.tax_amount = tax_amount
+        item.exclude_price = exclude_price
 
         total_amount += total
         total_tax_amount += tax_amount * quantity
