@@ -22340,7 +22340,7 @@ class ManagerUsersView(BaseTokenView):
                     Q(designation__icontains=search)
                 )
 
-            serializer = UserUpdateSerilizers(managers, many=True)
+            serializer = UserManagerSerilizers(managers, many=True)
 
             return Response({
                 "status": "success",
@@ -23060,3 +23060,48 @@ class StaffAttendanceTeamMembersByTeamView(BaseTokenView):
                 "message": "An error occurred while fetching team members",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class MyAttendanceTeamDetailsView(BaseTokenView):
+    def get(self, request):
+        user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        teams = StaffAttendanceTeam.objects.filter(
+            Q(team_leader=user) |
+            Q(team_members__member=user)
+        ).distinct().order_by("-id")
+
+        data = []
+
+        for team in teams:
+            members_qs = StaffAttendanceTeamMembers.objects.filter(team=team).select_related("member")
+
+            data.append({
+                "team_id": team.id,
+                "team_name": team.team_name,
+                "team_leader": team.team_leader.id,
+                "team_leader_name": team.team_leader.name,
+                "is_team_leader": team.team_leader_id == user.id,
+                "members_count": members_qs.count(),
+                "members": [
+                    {
+                        "id": m.id,
+                        "member": m.member.id,
+                        "member_name": m.member.name,
+                    }
+                    for m in members_qs
+                ],
+                "created_at": team.created_at,
+                "updated_at": team.updated_at,
+            })
+
+        return Response({
+            "status": "success",
+            "message": "Logged-in user team details fetched successfully",
+            "user_id": user.id,
+            "count": len(data),
+            "data": data
+        }, status=status.HTTP_200_OK)

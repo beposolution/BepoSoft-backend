@@ -100,6 +100,21 @@ class UserUpdateSerilizers(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = "__all__"
+
+
+class UserManagerSerilizers(serializers.ModelSerializer):
+    family_name = serializers.CharField(source='family.name', read_only=True)
+    supervisor_name=serializers.CharField(source='supervisor_id.name',read_only=True)
+    department_name=serializers.CharField(source='department_id.name',read_only=True)
+   
+    class Meta:
+        model = User
+        fields = [
+            'family_name', 'supervisor_name', 'department_name',
+            'id', 'name', 'username', 'email', 'phone',
+            'supervisor_id', 'department_id', 'is_manager',
+            'warehouse_id', 'family', 'approval_status', 'staff_id'
+        ]
    
 
 class StaffSerializer(serializers.ModelSerializer):
