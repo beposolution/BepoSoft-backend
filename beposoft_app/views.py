@@ -23027,3 +23027,36 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                 "message": "An error occurred while fetching team-wise attendance count",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class StaffAttendanceTeamMembersByTeamView(BaseTokenView):
+    def get(self, request, team_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team = get_object_or_404(StaffAttendanceTeam, id=team_id)
+
+            members = StaffAttendanceTeamMembers.objects.filter(
+                team=team
+            ).select_related("team", "member").order_by("-id")
+
+            serializer = StaffAttendanceTeamMemberSerializer(members, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Team members fetched successfully",
+                "team_id": team.id,
+                "team_name": team.team_name,
+                "members_count": members.count(),
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching team members",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

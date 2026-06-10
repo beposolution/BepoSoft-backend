@@ -3604,3 +3604,21 @@ class StaffAttendanceReadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+class StaffAttendanceTeamMemberSerializer(serializers.ModelSerializer):
+    member_name = serializers.CharField(source="member.name", read_only=True)
+    team_name = serializers.CharField(source="team.team_name", read_only=True)
+
+    class Meta:
+        model = StaffAttendanceTeamMembers
+        fields = [
+            "id",
+            "team",
+            "team_name",
+            "member",
+            "member_name",
+            "created_at",
+            "updated_at",
+        ]
