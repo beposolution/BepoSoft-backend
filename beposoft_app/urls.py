@@ -406,5 +406,6 @@ urlpatterns = [
     path("api/staff/attendance/my/team/", MyTeamStaffAttendanceView.as_view()),
     path("api/staff/attendance/team/wise/count/", StaffAttendanceTeamWiseCountView.as_view()),
     path("api/staff/attendance/team/<int:team_id>/members/", StaffAttendanceTeamMembersByTeamView.as_view()),
+    path("api/staff/attendance/my/team/details/", MyAttendanceTeamDetailsView.as_view()),
 ]
 
