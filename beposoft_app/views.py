@@ -22748,6 +22748,18 @@ class StaffAttendanceView(BaseTokenView):
             if error_response:
                 return error_response
 
+            staff = request.data.get("staff")
+            attendance_date = request.data.get("attendance_date")
+
+            if StaffAttendance.objects.filter(
+                staff_id=staff,
+                attendance_date=attendance_date
+            ).exists():
+                return Response({
+                    "status": "error",
+                    "message": "Attendance already added for this staff on this date"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             serializer = StaffAttendanceWriteSerializer(data=request.data)
 
             if serializer.is_valid():
