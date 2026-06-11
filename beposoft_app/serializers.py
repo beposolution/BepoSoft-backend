@@ -3601,6 +3601,7 @@ class StaffAttendanceWriteSerializer(serializers.ModelSerializer):
             "id",
             "staff",
             "attendance_date",
+            "attendance_time",
             "status",
         ]
 
@@ -3615,6 +3616,7 @@ class StaffAttendanceReadSerializer(serializers.ModelSerializer):
             "staff",
             "staff_name",
             "attendance_date",
+            "attendance_time",
             "status",
             "created_at",
             "updated_at",

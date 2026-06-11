@@ -2241,6 +2241,7 @@ class StaffAttendance(models.Model):
     ]
     staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="staff_attendance")
     attendance_date = models.DateField()
+    attendance_time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
