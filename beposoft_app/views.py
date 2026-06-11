@@ -18883,6 +18883,8 @@ class SalesTeamCDReportView(BaseTokenView):
             "AVG_CD": 0,
 
             "new_deals": 0,
+            "md": 0,
+            "sd": 0,
             "bill_count": 0,
             "volume": 0,
 
@@ -18998,6 +19000,8 @@ class SalesTeamCDReportView(BaseTokenView):
                 "ACD": 0,
                 "AVG_CD": 0,
                 "new_deals": 0,
+                "md": 0,
+                "sd": 0,
                 "bill_count": 0,
                 "volume": 0,
                 "_total_call_duration_seconds": 0,
@@ -19055,7 +19059,13 @@ class SalesTeamCDReportView(BaseTokenView):
                 if member_key not in grouped[team_key]["members"]:
                     grouped[team_key]["members"][member_key] = self.get_default_member(item.created_by)
 
-                grouped[team_key]["members"][member_key]["new_deals"] += item.new_leads or 0
+                # grouped[team_key]["members"][member_key]["new_deals"] += item.new_leads or 0
+
+                member = grouped[team_key]["members"][member_key]
+
+                member["new_deals"] += item.new_leads or 0
+                member["md"] += item.md or 0
+                member["sd"] += item.sd or 0
 
             for item in member_daily_qs:
                 team_key = item.team.id if item.team else 0
@@ -19105,6 +19115,8 @@ class SalesTeamCDReportView(BaseTokenView):
                     "ACD": 0,
                     "AVG_CD": 0,
                     "new_deals": 0,
+                    "md": 0,
+                    "sd": 0,
                     "bill_count": 0,
                     "volume": 0,
                     "_total_call_duration_seconds": 0,
@@ -19114,11 +19126,6 @@ class SalesTeamCDReportView(BaseTokenView):
                 members = []
 
                 for member_key, member_value in team_value["members"].items():
-                    # if member_value["_call_count"] > 0:
-                    #     member_value["AVG_CD"] = round(
-                    #         (member_value["_total_call_duration_seconds"] / member_value["_call_count"]) / 60,
-                    #         2
-                    #     )
                     member_value["AVG_CD"] = round(
                         (member_value["_total_call_duration_seconds"] / 60) / 7,
                         2
@@ -19131,6 +19138,8 @@ class SalesTeamCDReportView(BaseTokenView):
                     team_total["PC"] += member_value["PC"]
                     team_total["ACD"] += member_value["ACD"]
                     team_total["new_deals"] += member_value["new_deals"]
+                    team_total["md"] += member_value["md"]
+                    team_total["sd"] += member_value["sd"]
                     team_total["bill_count"] += member_value["bill_count"]
                     team_total["volume"] += member_value["volume"]
                     team_total["_total_call_duration_seconds"] += member_value["_total_call_duration_seconds"]
@@ -19141,11 +19150,6 @@ class SalesTeamCDReportView(BaseTokenView):
 
                     members.append(member_value)
 
-                # if team_total["_call_count"] > 0:
-                #     team_total["AVG_CD"] = round(
-                #         (team_total["_total_call_duration_seconds"] / team_total["_call_count"]) / 60,
-                #         2
-                #     )
                 team_total["AVG_CD"] = round(
                     (team_total["_total_call_duration_seconds"] / 60) / 7,
                     2
@@ -19158,6 +19162,8 @@ class SalesTeamCDReportView(BaseTokenView):
                 grand_totals["PC"] += team_total["PC"]
                 grand_totals["ACD"] += team_total["ACD"]
                 grand_totals["new_deals"] += team_total["new_deals"]
+                grand_totals["md"] += team_total["md"]
+                grand_totals["sd"] += team_total["sd"]
                 grand_totals["bill_count"] += team_total["bill_count"]
                 grand_totals["volume"] += team_total["volume"]
                 grand_totals["_total_call_duration_seconds"] += team_total["_total_call_duration_seconds"]
@@ -19176,11 +19182,6 @@ class SalesTeamCDReportView(BaseTokenView):
 
                 sl_no += 1
 
-            # if grand_totals["_call_count"] > 0:
-            #     grand_totals["AVG_CD"] = round(
-            #         (grand_totals["_total_call_duration_seconds"] / grand_totals["_call_count"]) / 60,
-            #         2
-            #     )
             grand_totals["AVG_CD"] = round(
                 (grand_totals["_total_call_duration_seconds"] / 60) / 7,
                 2
