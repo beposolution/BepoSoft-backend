@@ -22955,6 +22955,7 @@ class MyTeamStaffAttendanceView(BaseTokenView):
                         "staff_name": attendance.staff.name if attendance.staff else None,
                         "attendance_date": date_key,
                         "status": attendance.status,
+                        "attendance_time": attendance.attendance_time,
                         "created_at": attendance.created_at,
                         "updated_at": attendance.updated_at,
                     })
