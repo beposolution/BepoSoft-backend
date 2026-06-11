@@ -2946,6 +2946,7 @@ class BDMOrderAnalysisStaffSerializer(serializers.ModelSerializer):
             'id',
             'staff',
             'staff_name',
+            'attendance_time',
             'status',
             'created_at',
             'updated_at',
@@ -2968,7 +2969,6 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
             'created_by',
             'created_by_name',
             'attendance_date',
-            'attendance_time',
             'present_count',
             'absent_count',
             'half_day_count',
@@ -2998,7 +2998,6 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attendance_date = attrs.get('attendance_date')
-        attendance_time = attrs.get('attendance_time')
         created_by = self.context.get('created_by')
         staff_entries = self.initial_data.get('staff_entries', [])
 
@@ -3012,14 +3011,16 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
                 "staff_entries": "At least one staff entry is required."
             })
 
-        if not attendance_time:
-            raise serializers.ValidationError({
-                "attendance_time": "attendance_time is required."
-            })
-
         staff_ids = []
         for item in staff_entries:
             staff_id = item.get('staff')
+            attendance_time = item.get('attendance_time')
+
+            if not attendance_time:
+                raise serializers.ValidationError({
+                    "staff_entries": "Each staff entry must contain attendance_time."
+                })
+            
             if not staff_id:
                 raise serializers.ValidationError({
                     "staff_entries": "Each staff entry must contain staff."
@@ -3063,6 +3064,7 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
             BDMOrderAnalysisStaff.objects.create(
                 analysis=analysis,
                 staff=item['staff'],
+                attendance_time=item.get('attendance_time'),
                 status=item['status']
             )
 
@@ -3076,10 +3078,6 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
             'attendance_date',
             instance.attendance_date
         )
-        instance.attendance_time = validated_data.get(
-            'attendance_time',
-            instance.attendance_time
-        )   
         instance.save()
 
         if staff_entries_data is not None:
@@ -3089,6 +3087,7 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
                 BDMOrderAnalysisStaff.objects.create(
                     analysis=instance,
                     staff=item['staff'],
+                    attendance_time=item.get('attendance_time'),
                     status=item['status']
                 )
 

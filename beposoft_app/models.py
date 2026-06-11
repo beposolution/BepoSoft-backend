@@ -1949,7 +1949,6 @@ class SalesAnalysis(models.Model):
 class BDMOrderAnalysisData(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bdm_order_analysis")
     attendance_date = models.DateField(null=True, blank=True)
-    attendance_time = models.TimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1970,6 +1969,7 @@ class BDMOrderAnalysisStaff(models.Model):
     analysis = models.ForeignKey(BDMOrderAnalysisData, on_delete=models.CASCADE, related_name='staff_entries')
     staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bdm_order_analysis_staff')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    attendance_time = models.TimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
