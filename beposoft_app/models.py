@@ -2192,7 +2192,7 @@ class EmployeeLeave(models.Model):
     reason = models.TextField(null=True, blank=True)
     approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     manager_note = models.TextField(null=True, blank=True)
-    manager = models.ForeignKey(Supervisor, on_delete=models.CASCADE, null=True, blank=True)
+    manager = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
