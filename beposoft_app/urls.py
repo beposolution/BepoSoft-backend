@@ -395,6 +395,7 @@ urlpatterns = [
     path("api/employee/leaves/all/", EmployeeLeaveAllView.as_view()),
     path("api/employee/leaves/manager/<int:manager_id>/", EmployeeLeaveByManagerView.as_view()),
     path("api/employee/leaves/edit/<int:id>/", EmployeeLeaveDetailView.as_view()),
+    path("api/employee/leaves/manager/", ManagerLeaveApplicationsView.as_view()),
 
 
     path("api/staff/attendance/teams/", StaffAttendanceTeamView.as_view()),

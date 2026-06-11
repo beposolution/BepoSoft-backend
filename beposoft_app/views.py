@@ -22313,6 +22313,55 @@ class EmployeeLeaveDetailView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
 
+class ManagerLeaveApplicationsView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            leaves = EmployeeLeave.objects.filter(
+                manager=authUser
+            ).select_related(
+                "employee",
+                "manager"
+            ).order_by("-created_at")
+
+            data = []
+
+            for leave in leaves:
+                data.append({
+                    "id": leave.id,
+                    "employee": leave.employee.id,
+                    "employee_name": leave.employee.name,
+                    "leave_type": leave.leave_type,
+                    "no_of_days": leave.no_of_days,
+                    "start_date": leave.start_date,
+                    "end_date": leave.end_date,
+                    "reason": leave.reason,
+                    "approval_status": leave.approval_status,
+                    "manager_note": leave.manager_note,
+                    "manager": leave.manager.id if leave.manager else None,
+                    "manager_name": leave.manager.name if leave.manager else None,
+                    "created_at": leave.created_at,
+                    "updated_at": leave.updated_at,
+                })
+
+            return Response({
+                "status": "success",
+                "message": "Manager leave applications fetched successfully",
+                "manager_id": authUser.id,
+                "count": leaves.count(),
+                "data": data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching leave applications",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 # manager GET
 
