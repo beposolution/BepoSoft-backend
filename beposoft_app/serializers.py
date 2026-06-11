@@ -2968,6 +2968,7 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
             'created_by',
             'created_by_name',
             'attendance_date',
+            'attendance_time',
             'present_count',
             'absent_count',
             'half_day_count',
@@ -2997,6 +2998,7 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attendance_date = attrs.get('attendance_date')
+        attendance_time = attrs.get('attendance_time')
         created_by = self.context.get('created_by')
         staff_entries = self.initial_data.get('staff_entries', [])
 
@@ -3008,6 +3010,11 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
         if not staff_entries or not isinstance(staff_entries, list):
             raise serializers.ValidationError({
                 "staff_entries": "At least one staff entry is required."
+            })
+
+        if not attendance_time:
+            raise serializers.ValidationError({
+                "attendance_time": "attendance_time is required."
             })
 
         staff_ids = []
@@ -3065,7 +3072,14 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         staff_entries_data = validated_data.pop('staff_entries', None)
 
-        instance.attendance_date = validated_data.get('attendance_date', instance.attendance_date)
+        instance.attendance_date = validated_data.get(
+            'attendance_date',
+            instance.attendance_date
+        )
+        instance.attendance_time = validated_data.get(
+            'attendance_time',
+            instance.attendance_time
+        )   
         instance.save()
 
         if staff_entries_data is not None:
