@@ -3016,10 +3016,6 @@ class BDMOrderAnalysisDataSerializer(serializers.ModelSerializer):
             staff_id = item.get('staff')
             attendance_time = item.get('attendance_time')
 
-            if not attendance_time:
-                raise serializers.ValidationError({
-                    "staff_entries": "Each staff entry must contain attendance_time."
-                })
             
             if not staff_id:
                 raise serializers.ValidationError({
