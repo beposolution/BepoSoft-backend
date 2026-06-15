@@ -7156,56 +7156,125 @@ class CreditBillsView(BaseTokenView):
         
 
 class CODSalesReportView(BaseTokenView):
-    
+
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
-                return error_response  
-            orders = Order.objects.filter(payment_status="COD").order_by('-order_date')
-            
+                return error_response
+
+            orders = Order.objects.filter(payment_status="COD")
+
+            # -------------------------
+            # Query params
+            # -------------------------
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+            status_filter = request.query_params.get("status")
+            staff = request.query_params.get("staff")
+            family = request.query_params.get("family")
+            state = request.query_params.get("state")
+            customer = request.query_params.get("customer")
+            company = request.query_params.get("company")
+            parcel_service = request.query_params.get("parcel_service")
+            cod_status = request.query_params.get("cod_status")
+            payment_method = request.query_params.get("payment_method")
+            invoice = request.query_params.get("invoice")
+            search = request.query_params.get("search")
+
+            # -------------------------
+            # Date range filter
+            # order_date is CharField, so this works properly only if format is YYYY-MM-DD
+            # -------------------------
+            if start_date:
+                orders = orders.filter(order_date__gte=start_date)
+
+            if end_date:
+                orders = orders.filter(order_date__lte=end_date)
+
+            # -------------------------
+            # Other filters
+            # -------------------------
+            if status_filter:
+                orders = orders.filter(status=status_filter)
+
+            if staff:
+                orders = orders.filter(manage_staff_id=staff)
+
+            if family:
+                orders = orders.filter(family_id=family)
+
+            if state:
+                orders = orders.filter(state_id=state)
+
+            if customer:
+                orders = orders.filter(customer_id=customer)
+
+            if company:
+                orders = orders.filter(company_id=company)
+
+            if parcel_service:
+                orders = orders.filter(parcel_service_id=parcel_service)
+
+            if cod_status:
+                orders = orders.filter(cod_status=cod_status)
+
+            if payment_method:
+                orders = orders.filter(payment_method=payment_method)
+
+            if invoice:
+                orders = orders.filter(invoice__icontains=invoice)
+
+            if search:
+                orders = orders.filter(
+                    invoice__icontains=search
+                ) | orders.filter(
+                    customer__name__icontains=search
+                ) | orders.filter(
+                    manage_staff__name__icontains=search
+                )
+
+            orders = orders.order_by("-order_date")
+
             grouped_orders = defaultdict(list)
+
             for order in orders:
                 grouped_orders[order.order_date].append(order)
-            
-            # Prepare the response data
+
             response_data = []
+
             for date, orders_list in grouped_orders.items():
                 date_data = []
+
                 for order in orders_list:
-                    # Get total paid amount for the current order
                     total_paid_amount = PaymentReceipt.objects.filter(order=order).aggregate(
-                    total_paid=Sum(Cast('amount', FloatField()))
-                    )['total_paid'] or 0.0
-                    
-                    # Convert total_paid_amount to float if it's a string
+                        total_paid=Sum(Cast("amount", FloatField()))
+                    )["total_paid"] or 0.0
+
                     total_paid_amount = float(total_paid_amount)
-                    
-                    # Calculate the balance amount (order_total_amount - total_paid_amount)
-                    order_total_amount = float(order.total_amount)  # Assuming 'total_amount' is a field on the Order model
+                    order_total_amount = float(order.total_amount or 0)
                     balance_amount = order_total_amount - total_paid_amount
-                    
-                    # Serialize the order and add total paid and balance amount
+
                     serializer = OrderDetailSerializer(order)
                     order_data = serializer.data
-                    order_data['total_paid_amount'] = total_paid_amount
-                    order_data['balance_amount'] = balance_amount
-                    
+
+                    order_data["total_paid_amount"] = total_paid_amount
+                    order_data["balance_amount"] = balance_amount
+
                     date_data.append(order_data)
-                
+
                 response_data.append({
                     "date": date,
                     "orders": date_data
                 })
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-        
-        except Order.DoesNotExist:
-            return Response({"error": "No orders found with 'credit' payment status."}, status=status.HTTP_404_NOT_FOUND)
-        
+
         except Exception as e:
-            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class CODBillsView(BaseTokenView):
