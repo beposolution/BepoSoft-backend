@@ -1268,11 +1268,13 @@ class WarehouseDetailSerializer(serializers.ModelSerializer):
 
 
 class WarehouseDataSerializer(serializers.ModelSerializer):
+    parcel_service_name = serializers.CharField(source="parcel_service.name", read_only=True)
 
     class Meta:
         model = Warehousedata
         fields = [
-            "box", "tracking_id"
+            "box", "tracking_id",
+            "parcel_service", "parcel_service_name"
         ]
         
 
@@ -1548,13 +1550,14 @@ class GRVSerializer(serializers.ModelSerializer):
     # rack_products = serializers.SerializerMethodField()
     # product_id = serializers.SerializerMethodField()
     rack_products = serializers.JSONField(source='product_id.rack_details', read_only=True)
+    parcel_service_name = serializers.SerializerMethodField()
     
     class Meta:
         model=GRVModel
         fields=['order','id','product','family',
                 'returnreason','price','quantity',
                 'remark','note','status','customer', 'shipping_customer',
-                'invoice','staff',"order_date",'date',
+                'invoice','staff',"order_date",'date', 'parcel_service_name',
                 'time','updated_at','product_id','cod_amount',
                 'rack_details','rack_products','selected_racks']
         
@@ -1577,6 +1580,12 @@ class GRVSerializer(serializers.ModelSerializer):
                 pass  # Leave the time as-is if parsing fails
         return representation  
         # Customize the output format of the time field
+
+    def get_parcel_service_name(self, obj):
+        warehouse_data = obj.order.warehouse.first()
+        if warehouse_data and warehouse_data.parcel_service:
+            return warehouse_data.parcel_service.name
+        return None
            
 
 # class GRVModelSerializer(serializers.ModelSerializer):
