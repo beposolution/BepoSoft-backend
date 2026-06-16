@@ -3006,6 +3006,7 @@ class OrderDateReportView(BaseTokenView):
                 "staff_name": o.manage_staff.name if o.manage_staff else None,
                 "amount": o.total_amount,
                 "status": o.status,
+                "cod_status": o.cod_status,
                 "family_id": o.family.id if o.family else None,
                 "family_name": o.family.name if o.family else None,
                 "order_date": o.order_date,
