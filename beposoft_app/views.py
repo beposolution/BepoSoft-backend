@@ -2951,14 +2951,20 @@ class OrderDateReportView(BaseTokenView):
             # Optional family_id from frontend
             family_id = request.GET.get("family_id")
 
+            # FULL_COD / PARTIAL_COD
+            cod_status = request.GET.get("cod_status")
+
             # Prepare list manually since order_date is CharField
             filtered_orders = []
 
             queryset = Order.objects.all().select_related("manage_staff", "family")
 
-            # Apply family filter if provided
+            # Apply family filter if provided and cod status
             if family_id:
                 queryset = queryset.filter(family_id=family_id)
+
+            if cod_status:
+                queryset = queryset.filter(cod_status=cod_status)
 
             # Iterate and filter by converting order_date string to date
             for o in queryset:
