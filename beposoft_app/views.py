@@ -23356,7 +23356,6 @@ class MyAttendanceTeamDetailsView(BaseTokenView):
 
 
 # comparison GET api's
-
 class OrderComparisonReportView(BaseTokenView):
     def get(self, request):
         try:
@@ -23368,7 +23367,14 @@ class OrderComparisonReportView(BaseTokenView):
             range1_end = request.GET.get("range1_end")
             range2_start = request.GET.get("range2_start")
             range2_end = request.GET.get("range2_end")
-            report_type = request.GET.get("report_type", "").strip()
+
+            report_type_raw = request.GET.get("report_type", "").strip()
+
+            report_types = [
+                item.strip()
+                for item in report_type_raw.split(",")
+                if item.strip()
+            ]
 
             allowed_report_types = [
                 "status_wise",
@@ -23386,16 +23392,22 @@ class OrderComparisonReportView(BaseTokenView):
                     "message": "range1_start, range1_end, range2_start, range2_end are required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if not report_type:
+            if not report_types:
                 return Response({
                     "status": "error",
                     "message": "report_type is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if report_type not in allowed_report_types:
+            invalid_types = [
+                item for item in report_types
+                if item not in allowed_report_types
+            ]
+
+            if invalid_types:
                 return Response({
                     "status": "error",
                     "message": "Invalid report_type",
+                    "invalid_report_types": invalid_types,
                     "allowed_report_types": allowed_report_types
                 }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -23472,9 +23484,20 @@ class OrderComparisonReportView(BaseTokenView):
 
                 return qs
 
-            def get_report_data(qs):
-                if report_type == "status_wise":
-                    return list(
+            def summary(qs):
+                qs = apply_common_filters(qs)
+
+                total_amount = qs.aggregate(
+                    total=Coalesce(Sum("total_amount"), 0.0)
+                )["total"]
+
+                data = {
+                    "order_count": qs.count(),
+                    "total_amount": round(float(total_amount or 0), 2),
+                }
+
+                if "status_wise" in report_types:
+                    data["status_wise"] = list(
                         qs.values("status")
                         .annotate(
                             order_count=Count("id"),
@@ -23483,8 +23506,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("status")
                     )
 
-                if report_type == "payment_wise":
-                    return list(
+                if "payment_wise" in report_types:
+                    data["payment_wise"] = list(
                         qs.values("payment_status")
                         .annotate(
                             order_count=Count("id"),
@@ -23493,8 +23516,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("payment_status")
                     )
 
-                if report_type == "cod_status_wise":
-                    return list(
+                if "cod_status_wise" in report_types:
+                    data["cod_status_wise"] = list(
                         qs.values("cod_status")
                         .annotate(
                             order_count=Count("id"),
@@ -23503,8 +23526,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("cod_status")
                     )
 
-                if report_type == "family_wise":
-                    return list(
+                if "family_wise" in report_types:
+                    data["family_wise"] = list(
                         qs.values("family_id", "family__name")
                         .annotate(
                             order_count=Count("id"),
@@ -23513,8 +23536,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("family__name")
                     )
 
-                if report_type == "staff_wise":
-                    return list(
+                if "staff_wise" in report_types:
+                    data["staff_wise"] = list(
                         qs.values("manage_staff_id", "manage_staff__name")
                         .annotate(
                             order_count=Count("id"),
@@ -23523,8 +23546,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("manage_staff__name")
                     )
 
-                if report_type == "state_wise":
-                    return list(
+                if "state_wise" in report_types:
+                    data["state_wise"] = list(
                         qs.values("state_id", "state__name")
                         .annotate(
                             order_count=Count("id"),
@@ -23533,8 +23556,8 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("state__name")
                     )
 
-                if report_type == "parcel_service_wise":
-                    return list(
+                if "parcel_service_wise" in report_types:
+                    data["parcel_service_wise"] = list(
                         qs.values("parcel_service_id", "parcel_service__name")
                         .annotate(
                             order_count=Count("id"),
@@ -23543,20 +23566,7 @@ class OrderComparisonReportView(BaseTokenView):
                         .order_by("parcel_service__name")
                     )
 
-                return []
-
-            def summary(qs):
-                qs = apply_common_filters(qs)
-
-                total_amount = qs.aggregate(
-                    total=Coalesce(Sum("total_amount"), 0.0)
-                )["total"]
-
-                return {
-                    "order_count": qs.count(),
-                    "total_amount": round(float(total_amount or 0), 2),
-                    report_type: get_report_data(qs),
-                }
+                return data
 
             range1_qs = Order.objects.select_related(
                 "customer",
@@ -23566,7 +23576,10 @@ class OrderComparisonReportView(BaseTokenView):
                 "company",
                 "warehouses",
                 "parcel_service"
-            ).filter(order_date__gte=range1_start, order_date__lte=range1_end)
+            ).filter(
+                order_date__gte=range1_start,
+                order_date__lte=range1_end
+            )
 
             range2_qs = Order.objects.select_related(
                 "customer",
@@ -23576,7 +23589,10 @@ class OrderComparisonReportView(BaseTokenView):
                 "company",
                 "warehouses",
                 "parcel_service"
-            ).filter(order_date__gte=range2_start, order_date__lte=range2_end)
+            ).filter(
+                order_date__gte=range2_start,
+                order_date__lte=range2_end
+            )
 
             range1_data = summary(range1_qs)
             range2_data = summary(range2_qs)
@@ -23586,11 +23602,17 @@ class OrderComparisonReportView(BaseTokenView):
 
             amount_percentage = 0
             if range1_data["total_amount"] > 0:
-                amount_percentage = round((amount_difference / range1_data["total_amount"]) * 100, 2)
+                amount_percentage = round(
+                    (amount_difference / range1_data["total_amount"]) * 100,
+                    2
+                )
 
             order_count_percentage = 0
             if range1_data["order_count"] > 0:
-                order_count_percentage = round((order_count_difference / range1_data["order_count"]) * 100, 2)
+                order_count_percentage = round(
+                    (order_count_difference / range1_data["order_count"]) * 100,
+                    2
+                )
 
             return Response({
                 "status": "success",
@@ -23600,7 +23622,7 @@ class OrderComparisonReportView(BaseTokenView):
                     "range1_end": range1_end,
                     "range2_start": range2_start,
                     "range2_end": range2_end,
-                    "report_type": report_type,
+                    "report_type": report_types,
                     "search": request.GET.get("search"),
                     "status": request.GET.get("status"),
                     "payment_status": request.GET.get("payment_status"),
@@ -23623,7 +23645,13 @@ class OrderComparisonReportView(BaseTokenView):
                     "order_count_percentage": order_count_percentage,
                     "amount_difference": round(amount_difference, 2),
                     "amount_percentage": amount_percentage,
-                    "result": "increase" if amount_difference > 0 else "decrease" if amount_difference < 0 else "same"
+                    "result": (
+                        "increase"
+                        if amount_difference > 0
+                        else "decrease"
+                        if amount_difference < 0
+                        else "same"
+                    )
                 }
             }, status=status.HTTP_200_OK)
 
