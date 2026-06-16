@@ -23368,11 +23368,35 @@ class OrderComparisonReportView(BaseTokenView):
             range1_end = request.GET.get("range1_end")
             range2_start = request.GET.get("range2_start")
             range2_end = request.GET.get("range2_end")
+            report_type = request.GET.get("report_type", "").strip()
+
+            allowed_report_types = [
+                "status_wise",
+                "payment_wise",
+                "cod_status_wise",
+                "family_wise",
+                "staff_wise",
+                "state_wise",
+                "parcel_service_wise",
+            ]
 
             if not all([range1_start, range1_end, range2_start, range2_end]):
                 return Response({
                     "status": "error",
                     "message": "range1_start, range1_end, range2_start, range2_end are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not report_type:
+                return Response({
+                    "status": "error",
+                    "message": "report_type is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if report_type not in allowed_report_types:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid report_type",
+                    "allowed_report_types": allowed_report_types
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             for d in [range1_start, range1_end, range2_start, range2_end]:
@@ -23448,6 +23472,79 @@ class OrderComparisonReportView(BaseTokenView):
 
                 return qs
 
+            def get_report_data(qs):
+                if report_type == "status_wise":
+                    return list(
+                        qs.values("status")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("status")
+                    )
+
+                if report_type == "payment_wise":
+                    return list(
+                        qs.values("payment_status")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("payment_status")
+                    )
+
+                if report_type == "cod_status_wise":
+                    return list(
+                        qs.values("cod_status")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("cod_status")
+                    )
+
+                if report_type == "family_wise":
+                    return list(
+                        qs.values("family_id", "family__name")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("family__name")
+                    )
+
+                if report_type == "staff_wise":
+                    return list(
+                        qs.values("manage_staff_id", "manage_staff__name")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("manage_staff__name")
+                    )
+
+                if report_type == "state_wise":
+                    return list(
+                        qs.values("state_id", "state__name")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("state__name")
+                    )
+
+                if report_type == "parcel_service_wise":
+                    return list(
+                        qs.values("parcel_service_id", "parcel_service__name")
+                        .annotate(
+                            order_count=Count("id"),
+                            total_amount=Coalesce(Sum("total_amount"), 0.0)
+                        )
+                        .order_by("parcel_service__name")
+                    )
+
+                return []
+
             def summary(qs):
                 qs = apply_common_filters(qs)
 
@@ -23455,87 +23552,30 @@ class OrderComparisonReportView(BaseTokenView):
                     total=Coalesce(Sum("total_amount"), 0.0)
                 )["total"]
 
-                status_wise = list(
-                    qs.values("status")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("status")
-                )
-
-                payment_wise = list(
-                    qs.values("payment_status")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("payment_status")
-                )
-
-                cod_status_wise = list(
-                    qs.values("cod_status")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("cod_status")
-                )
-
-                family_wise = list(
-                    qs.values("family_id", "family__name")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("family__name")
-                )
-
-                staff_wise = list(
-                    qs.values("manage_staff_id", "manage_staff__name")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("manage_staff__name")
-                )
-
-                state_wise = list(
-                    qs.values("state_id", "state__name")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("state__name")
-                )
-
-                parcel_service_wise = list(
-                    qs.values("parcel_service_id", "parcel_service__name")
-                    .annotate(
-                        order_count=Count("id"),
-                        total_amount=Coalesce(Sum("total_amount"), 0.0)
-                    )
-                    .order_by("parcel_service__name")
-                )
-
                 return {
                     "order_count": qs.count(),
                     "total_amount": round(float(total_amount or 0), 2),
-                    "status_wise": status_wise,
-                    "payment_wise": payment_wise,
-                    "family_wise": family_wise,
-                    "staff_wise": staff_wise,
-                    "state_wise": state_wise,
-                    "parcel_service_wise": parcel_service_wise,
-                    "cod_status_wise": cod_status_wise,
+                    report_type: get_report_data(qs),
                 }
 
             range1_qs = Order.objects.select_related(
-                "customer", "manage_staff", "family", "state", "company", "warehouses", "parcel_service"
+                "customer",
+                "manage_staff",
+                "family",
+                "state",
+                "company",
+                "warehouses",
+                "parcel_service"
             ).filter(order_date__gte=range1_start, order_date__lte=range1_end)
 
             range2_qs = Order.objects.select_related(
-                "customer", "manage_staff", "family", "state", "company", "warehouses", "parcel_service"
+                "customer",
+                "manage_staff",
+                "family",
+                "state",
+                "company",
+                "warehouses",
+                "parcel_service"
             ).filter(order_date__gte=range2_start, order_date__lte=range2_end)
 
             range1_data = summary(range1_qs)
@@ -23560,6 +23600,7 @@ class OrderComparisonReportView(BaseTokenView):
                     "range1_end": range1_end,
                     "range2_start": range2_start,
                     "range2_end": range2_end,
+                    "report_type": report_type,
                     "search": request.GET.get("search"),
                     "status": request.GET.get("status"),
                     "payment_status": request.GET.get("payment_status"),
