@@ -23352,3 +23352,228 @@ class MyAttendanceTeamDetailsView(BaseTokenView):
             "count": len(data),
             "data": data
         }, status=status.HTTP_200_OK)
+
+
+
+# comparison GET api's
+
+class OrderComparisonReportView(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            range1_start = request.GET.get("range1_start")
+            range1_end = request.GET.get("range1_end")
+            range2_start = request.GET.get("range2_start")
+            range2_end = request.GET.get("range2_end")
+
+            if not all([range1_start, range1_end, range2_start, range2_end]):
+                return Response({
+                    "status": "error",
+                    "message": "range1_start, range1_end, range2_start, range2_end are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            for d in [range1_start, range1_end, range2_start, range2_end]:
+                if not parse_date(d):
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            def apply_common_filters(qs):
+                search = request.GET.get("search", "").strip()
+                status_filter = request.GET.get("status", "").strip()
+                payment_status = request.GET.get("payment_status", "").strip()
+                family = request.GET.get("family", "").strip()
+                manage_staff = request.GET.get("manage_staff", "").strip()
+                customer = request.GET.get("customer", "").strip()
+                state = request.GET.get("state", "").strip()
+                company = request.GET.get("company", "").strip()
+                warehouse = request.GET.get("warehouse", "").strip()
+                parcel_service = request.GET.get("parcel_service", "").strip()
+                shipping_mode = request.GET.get("shipping_mode", "").strip()
+                min_amount = request.GET.get("min_amount", "").strip()
+                max_amount = request.GET.get("max_amount", "").strip()
+
+                if search:
+                    qs = qs.filter(
+                        Q(invoice__icontains=search) |
+                        Q(customer__name__icontains=search) |
+                        Q(manage_staff__name__icontains=search) |
+                        Q(family__name__icontains=search) |
+                        Q(state__name__icontains=search)
+                    )
+
+                if status_filter and status_filter.lower() not in ["all", "all status"]:
+                    qs = qs.filter(status__iexact=status_filter)
+
+                if payment_status:
+                    qs = qs.filter(payment_status__iexact=payment_status)
+
+                if family:
+                    qs = qs.filter(family_id=family)
+
+                if manage_staff:
+                    qs = qs.filter(manage_staff_id=manage_staff)
+
+                if customer:
+                    qs = qs.filter(customer_id=customer)
+
+                if state:
+                    qs = qs.filter(state_id=state)
+
+                if company:
+                    qs = qs.filter(company_id=company)
+
+                if warehouse:
+                    qs = qs.filter(warehouses_id=warehouse)
+
+                if parcel_service:
+                    qs = qs.filter(parcel_service_id=parcel_service)
+
+                if shipping_mode:
+                    qs = qs.filter(shipping_mode__iexact=shipping_mode)
+
+                if min_amount:
+                    qs = qs.filter(total_amount__gte=min_amount)
+
+                if max_amount:
+                    qs = qs.filter(total_amount__lte=max_amount)
+
+                return qs
+
+            def summary(qs):
+                qs = apply_common_filters(qs)
+
+                total_amount = qs.aggregate(
+                    total=Coalesce(Sum("total_amount"), 0.0)
+                )["total"]
+
+                status_wise = list(
+                    qs.values("status")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("status")
+                )
+
+                payment_wise = list(
+                    qs.values("payment_status")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("payment_status")
+                )
+
+                family_wise = list(
+                    qs.values("family_id", "family__name")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("family__name")
+                )
+
+                staff_wise = list(
+                    qs.values("manage_staff_id", "manage_staff__name")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("manage_staff__name")
+                )
+
+                state_wise = list(
+                    qs.values("state_id", "state__name")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("state__name")
+                )
+
+                parcel_service_wise = list(
+                    qs.values("parcel_service_id", "parcel_service__name")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("parcel_service__name")
+                )
+
+                return {
+                    "order_count": qs.count(),
+                    "total_amount": round(float(total_amount or 0), 2),
+                    "status_wise": status_wise,
+                    "payment_wise": payment_wise,
+                    "family_wise": family_wise,
+                    "staff_wise": staff_wise,
+                    "state_wise": state_wise,
+                    "parcel_service_wise": parcel_service_wise,
+                }
+
+            range1_qs = Order.objects.select_related(
+                "customer", "manage_staff", "family", "state", "company", "warehouses", "parcel_service"
+            ).filter(order_date__gte=range1_start, order_date__lte=range1_end)
+
+            range2_qs = Order.objects.select_related(
+                "customer", "manage_staff", "family", "state", "company", "warehouses", "parcel_service"
+            ).filter(order_date__gte=range2_start, order_date__lte=range2_end)
+
+            range1_data = summary(range1_qs)
+            range2_data = summary(range2_qs)
+
+            amount_difference = range2_data["total_amount"] - range1_data["total_amount"]
+            order_count_difference = range2_data["order_count"] - range1_data["order_count"]
+
+            amount_percentage = 0
+            if range1_data["total_amount"] > 0:
+                amount_percentage = round((amount_difference / range1_data["total_amount"]) * 100, 2)
+
+            order_count_percentage = 0
+            if range1_data["order_count"] > 0:
+                order_count_percentage = round((order_count_difference / range1_data["order_count"]) * 100, 2)
+
+            return Response({
+                "status": "success",
+                "message": "Order comparison report fetched successfully",
+                "filters": {
+                    "range1_start": range1_start,
+                    "range1_end": range1_end,
+                    "range2_start": range2_start,
+                    "range2_end": range2_end,
+                    "search": request.GET.get("search"),
+                    "status": request.GET.get("status"),
+                    "payment_status": request.GET.get("payment_status"),
+                    "family": request.GET.get("family"),
+                    "manage_staff": request.GET.get("manage_staff"),
+                    "customer": request.GET.get("customer"),
+                    "state": request.GET.get("state"),
+                    "company": request.GET.get("company"),
+                    "warehouse": request.GET.get("warehouse"),
+                    "parcel_service": request.GET.get("parcel_service"),
+                    "shipping_mode": request.GET.get("shipping_mode"),
+                    "min_amount": request.GET.get("min_amount"),
+                    "max_amount": request.GET.get("max_amount"),
+                },
+                "range1": range1_data,
+                "range2": range2_data,
+                "comparison": {
+                    "order_count_difference": order_count_difference,
+                    "order_count_percentage": order_count_percentage,
+                    "amount_difference": round(amount_difference, 2),
+                    "amount_percentage": amount_percentage,
+                    "result": "increase" if amount_difference > 0 else "decrease" if amount_difference < 0 else "same"
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching order comparison report",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
