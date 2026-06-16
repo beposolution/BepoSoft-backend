@@ -23396,6 +23396,7 @@ class OrderComparisonReportView(BaseTokenView):
                 shipping_mode = request.GET.get("shipping_mode", "").strip()
                 min_amount = request.GET.get("min_amount", "").strip()
                 max_amount = request.GET.get("max_amount", "").strip()
+                cod_status = request.GET.get("cod_status", "").strip()
 
                 if search:
                     qs = qs.filter(
@@ -23442,6 +23443,9 @@ class OrderComparisonReportView(BaseTokenView):
                 if max_amount:
                     qs = qs.filter(total_amount__lte=max_amount)
 
+                if cod_status:
+                    qs = qs.filter(cod_status__iexact=cod_status)
+
                 return qs
 
             def summary(qs):
@@ -23467,6 +23471,15 @@ class OrderComparisonReportView(BaseTokenView):
                         total_amount=Coalesce(Sum("total_amount"), 0.0)
                     )
                     .order_by("payment_status")
+                )
+
+                cod_status_wise = list(
+                    qs.values("cod_status")
+                    .annotate(
+                        order_count=Count("id"),
+                        total_amount=Coalesce(Sum("total_amount"), 0.0)
+                    )
+                    .order_by("cod_status")
                 )
 
                 family_wise = list(
@@ -23514,6 +23527,7 @@ class OrderComparisonReportView(BaseTokenView):
                     "staff_wise": staff_wise,
                     "state_wise": state_wise,
                     "parcel_service_wise": parcel_service_wise,
+                    "cod_status_wise": cod_status_wise,
                 }
 
             range1_qs = Order.objects.select_related(
@@ -23559,6 +23573,7 @@ class OrderComparisonReportView(BaseTokenView):
                     "shipping_mode": request.GET.get("shipping_mode"),
                     "min_amount": request.GET.get("min_amount"),
                     "max_amount": request.GET.get("max_amount"),
+                    "cod_status": request.GET.get("cod_status"),
                 },
                 "range1": range1_data,
                 "range2": range2_data,
