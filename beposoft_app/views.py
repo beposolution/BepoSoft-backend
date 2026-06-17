@@ -23697,15 +23697,52 @@ class OrderComparisonReportView(BaseTokenView):
                 if item.strip()
             ]
 
-            allowed_report_types = [
-                "status_wise",
-                "payment_wise",
-                "cod_status_wise",
-                "family_wise",
-                "staff_wise",
-                "state_wise",
-                "parcel_service_wise",
-            ]
+            group_config = {
+                "status_wise": {
+                    "fields": ["status"],
+                    "name_key": "status",
+                    "id_key": None,
+                    "order_by": ["status"],
+                },
+                "payment_wise": {
+                    "fields": ["payment_status"],
+                    "name_key": "payment_status",
+                    "id_key": None,
+                    "order_by": ["payment_status"],
+                },
+                "cod_status_wise": {
+                    "fields": ["cod_status"],
+                    "name_key": "cod_status",
+                    "id_key": None,
+                    "order_by": ["cod_status"],
+                },
+                "family_wise": {
+                    "fields": ["family_id", "family__name"],
+                    "name_key": "family__name",
+                    "id_key": "family_id",
+                    "order_by": ["family__name"],
+                },
+                "staff_wise": {
+                    "fields": ["manage_staff_id", "manage_staff__name"],
+                    "name_key": "manage_staff__name",
+                    "id_key": "manage_staff_id",
+                    "order_by": ["manage_staff__name"],
+                },
+                "state_wise": {
+                    "fields": ["state_id", "state__name"],
+                    "name_key": "state__name",
+                    "id_key": "state_id",
+                    "order_by": ["state__name"],
+                },
+                "parcel_service_wise": {
+                    "fields": ["parcel_service_id", "parcel_service__name"],
+                    "name_key": "parcel_service__name",
+                    "id_key": "parcel_service_id",
+                    "order_by": ["parcel_service__name"],
+                },
+            }
+
+            allowed_report_types = list(group_config.keys())
 
             if not all([range1_start, range1_end, range2_start, range2_end]):
                 return Response({
@@ -23738,6 +23775,21 @@ class OrderComparisonReportView(BaseTokenView):
                         "status": "error",
                         "message": "Invalid date format. Use YYYY-MM-DD"
                     }, status=status.HTTP_400_BAD_REQUEST)
+
+            def to_float(value):
+                try:
+                    return round(float(value or 0), 2)
+                except Exception:
+                    return 0.0
+
+            def percentage_difference(diff_value, base_value):
+                base_value = float(base_value or 0)
+                diff_value = float(diff_value or 0)
+
+                if base_value <= 0:
+                    return 0
+
+                return round((diff_value / base_value) * 100, 2)
 
             def apply_common_filters(qs):
                 search = request.GET.get("search", "").strip()
@@ -23814,80 +23866,118 @@ class OrderComparisonReportView(BaseTokenView):
 
                 data = {
                     "order_count": qs.count(),
-                    "total_amount": round(float(total_amount or 0), 2),
+                    "total_amount": to_float(total_amount),
                 }
 
-                if "status_wise" in report_types:
-                    data["status_wise"] = list(
-                        qs.values("status")
+                for report_type in report_types:
+                    config = group_config[report_type]
+
+                    rows = list(
+                        qs.values(*config["fields"])
                         .annotate(
                             order_count=Count("id"),
                             total_amount=Coalesce(Sum("total_amount"), 0.0)
                         )
-                        .order_by("status")
+                        .order_by(*config["order_by"])
                     )
 
-                if "payment_wise" in report_types:
-                    data["payment_wise"] = list(
-                        qs.values("payment_status")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("payment_status")
-                    )
+                    formatted_rows = []
 
-                if "cod_status_wise" in report_types:
-                    data["cod_status_wise"] = list(
-                        qs.values("cod_status")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("cod_status")
-                    )
+                    for item in rows:
+                        formatted_item = dict(item)
+                        formatted_item["name"] = item.get(config["name_key"]) or "N/A"
+                        formatted_item["order_count"] = int(item.get("order_count") or 0)
+                        formatted_item["total_amount"] = to_float(item.get("total_amount"))
 
-                if "family_wise" in report_types:
-                    data["family_wise"] = list(
-                        qs.values("family_id", "family__name")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("family__name")
-                    )
+                        formatted_rows.append(formatted_item)
 
-                if "staff_wise" in report_types:
-                    data["staff_wise"] = list(
-                        qs.values("manage_staff_id", "manage_staff__name")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("manage_staff__name")
-                    )
-
-                if "state_wise" in report_types:
-                    data["state_wise"] = list(
-                        qs.values("state_id", "state__name")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("state__name")
-                    )
-
-                if "parcel_service_wise" in report_types:
-                    data["parcel_service_wise"] = list(
-                        qs.values("parcel_service_id", "parcel_service__name")
-                        .annotate(
-                            order_count=Count("id"),
-                            total_amount=Coalesce(Sum("total_amount"), 0.0)
-                        )
-                        .order_by("parcel_service__name")
-                    )
+                    data[report_type] = formatted_rows
 
                 return data
+
+            def build_comparison_table(report_type, left_rows, right_rows):
+                config = group_config[report_type]
+                id_key = config["id_key"]
+                name_key = config["name_key"]
+
+                merged = {}
+
+                def get_key(item):
+                    if id_key and item.get(id_key) is not None:
+                        return f"id_{item.get(id_key)}"
+
+                    return f"name_{item.get('name') or item.get(name_key) or 'N/A'}"
+
+                def get_name(item):
+                    return item.get("name") or item.get(name_key) or "N/A"
+
+                for item in left_rows:
+                    row_key = get_key(item)
+
+                    merged[row_key] = {
+                        "name": get_name(item),
+                        "range1_orders": int(item.get("order_count") or 0),
+                        "range1_amount": to_float(item.get("total_amount")),
+                        "range2_orders": 0,
+                        "range2_amount": 0.0,
+                    }
+
+                for item in right_rows:
+                    row_key = get_key(item)
+
+                    if row_key not in merged:
+                        merged[row_key] = {
+                            "name": get_name(item),
+                            "range1_orders": 0,
+                            "range1_amount": 0.0,
+                            "range2_orders": int(item.get("order_count") or 0),
+                            "range2_amount": to_float(item.get("total_amount")),
+                        }
+                    else:
+                        merged[row_key]["range2_orders"] = int(item.get("order_count") or 0)
+                        merged[row_key]["range2_amount"] = to_float(item.get("total_amount"))
+
+                rows = list(merged.values())
+
+                for row in rows:
+                    row["order_difference"] = row["range2_orders"] - row["range1_orders"]
+                    row["amount_difference"] = to_float(row["range2_amount"] - row["range1_amount"])
+                    row["order_percentage"] = percentage_difference(
+                        row["order_difference"],
+                        row["range1_orders"]
+                    )
+                    row["amount_percentage"] = percentage_difference(
+                        row["amount_difference"],
+                        row["range1_amount"]
+                    )
+
+                rows = sorted(rows, key=lambda x: str(x["name"]).lower())
+
+                total = {
+                    "name": "TOTAL",
+                    "range1_orders": sum(row["range1_orders"] for row in rows),
+                    "range1_amount": to_float(sum(row["range1_amount"] for row in rows)),
+                    "range2_orders": sum(row["range2_orders"] for row in rows),
+                    "range2_amount": to_float(sum(row["range2_amount"] for row in rows)),
+                }
+
+                total["order_difference"] = total["range2_orders"] - total["range1_orders"]
+                total["amount_difference"] = to_float(
+                    total["range2_amount"] - total["range1_amount"]
+                )
+                total["order_percentage"] = percentage_difference(
+                    total["order_difference"],
+                    total["range1_orders"]
+                )
+                total["amount_percentage"] = percentage_difference(
+                    total["amount_difference"],
+                    total["range1_amount"]
+                )
+
+                return {
+                    "rows": rows,
+                    "total": total,
+                }
 
             range1_qs = Order.objects.select_related(
                 "customer",
@@ -23918,22 +24008,39 @@ class OrderComparisonReportView(BaseTokenView):
             range1_data = summary(range1_qs)
             range2_data = summary(range2_qs)
 
+            comparison_tables = {}
+
+            for report_type in report_types:
+                table_data = build_comparison_table(
+                    report_type,
+                    range1_data.get(report_type, []),
+                    range2_data.get(report_type, [])
+                )
+
+                comparison_tables[report_type] = table_data
+
+                range1_data[f"{report_type}_total"] = {
+                    "order_count": table_data["total"]["range1_orders"],
+                    "total_amount": table_data["total"]["range1_amount"],
+                }
+
+                range2_data[f"{report_type}_total"] = {
+                    "order_count": table_data["total"]["range2_orders"],
+                    "total_amount": table_data["total"]["range2_amount"],
+                }
+
             amount_difference = range2_data["total_amount"] - range1_data["total_amount"]
             order_count_difference = range2_data["order_count"] - range1_data["order_count"]
 
-            amount_percentage = 0
-            if range1_data["total_amount"] > 0:
-                amount_percentage = round(
-                    (amount_difference / range1_data["total_amount"]) * 100,
-                    2
-                )
+            amount_percentage = percentage_difference(
+                amount_difference,
+                range1_data["total_amount"]
+            )
 
-            order_count_percentage = 0
-            if range1_data["order_count"] > 0:
-                order_count_percentage = round(
-                    (order_count_difference / range1_data["order_count"]) * 100,
-                    2
-                )
+            order_count_percentage = percentage_difference(
+                order_count_difference,
+                range1_data["order_count"]
+            )
 
             return Response({
                 "status": "success",
@@ -23961,6 +24068,10 @@ class OrderComparisonReportView(BaseTokenView):
                 },
                 "range1": range1_data,
                 "range2": range2_data,
+
+                # use this directly in frontend tables
+                "comparison_tables": comparison_tables,
+
                 "comparison": {
                     "order_count_difference": order_count_difference,
                     "order_count_percentage": order_count_percentage,
