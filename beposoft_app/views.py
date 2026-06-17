@@ -23872,15 +23872,25 @@ class OrderComparisonReportView(BaseTokenView):
                 for report_type in report_types:
                     config = group_config[report_type]
 
+                    grouped_qs = qs
+
+                    if report_type == "cod_status_wise":
+                        grouped_qs = grouped_qs.filter(
+                            payment_status__iexact="COD"
+                        ).exclude(
+                            cod_status__isnull=True
+                        ).exclude(
+                            cod_status=""
+                        )
+
                     rows = list(
-                        qs.values(*config["fields"])
+                        grouped_qs.values(*config["fields"])
                         .annotate(
                             order_count=Count("id"),
                             total_amount=Coalesce(Sum("total_amount"), 0.0)
                         )
                         .order_by(*config["order_by"])
                     )
-
                     formatted_rows = []
 
                     for item in rows:
