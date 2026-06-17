@@ -2713,6 +2713,7 @@ class OrderListByStatusView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 class FamilyOrderSummaryView(BaseTokenView):
     def get(self, request):
         try:
@@ -2720,14 +2721,54 @@ class FamilyOrderSummaryView(BaseTokenView):
             if error_response:
                 return error_response
 
-            # Dates in IST (order_date is a string "YYYY-MM-DD")
+            # Dates in IST
             today = timezone.localdate()
             month_start = today.replace(day=1)
 
             today_str = today.strftime("%Y-%m-%d")
             month_start_str = month_start.strftime("%Y-%m-%d")
 
-            # Base queryset (exclude Invoice Rejected)
+            money_field = DecimalField(max_digits=12, decimal_places=2)
+
+            def empty_return_summary():
+                return {
+                    "today": {
+                        "cod_return": {
+                            "invoice_count": 0,
+                            "total": 0.0,
+                        },
+                        "cash_return": {
+                            "invoice_count": 0,
+                            "total": 0.0,
+                        },
+                    },
+                    "month": {
+                        "cod_return": {
+                            "invoice_count": 0,
+                            "total": 0.0,
+                        },
+                        "cash_return": {
+                            "invoice_count": 0,
+                            "total": 0.0,
+                        },
+                    },
+                }
+
+            def empty_payment_status_summary():
+                return {
+                    "today": {
+                        "paid": {"count": 0, "total": 0.0},
+                        "COD": {"count": 0, "total": 0.0},
+                        "credit": {"count": 0, "total": 0.0},
+                    },
+                    "month": {
+                        "paid": {"count": 0, "total": 0.0},
+                        "COD": {"count": 0, "total": 0.0},
+                        "credit": {"count": 0, "total": 0.0},
+                    },
+                }
+
+            # Base queryset, exclude Invoice Rejected
             base_qs = Order.objects.filter(~Q(status="Invoice Rejected"))
 
             # -------- per-family: TODAY --------
@@ -2736,21 +2777,44 @@ class FamilyOrderSummaryView(BaseTokenView):
                 .annotate(
                     today_count=Count("id", filter=Q(order_date=today_str)),
                     today_total_amount=Coalesce(
-                        Sum("total_amount", filter=Q(order_date=today_str)), Value(0.0), output_field=FloatField()
+                        Sum("total_amount", filter=Q(order_date=today_str)),
+                        Value(0.0),
+                        output_field=FloatField()
                     ),
 
-                    t_paid_count=Count("id", filter=Q(order_date=today_str, payment_status="paid")),
-                    t_paid_total=Coalesce(Sum("total_amount", filter=Q(order_date=today_str, payment_status="paid")), Value(0.0), output_field=FloatField()),
+                    t_paid_count=Count(
+                        "id",
+                        filter=Q(order_date=today_str, payment_status="paid")
+                    ),
+                    t_paid_total=Coalesce(
+                        Sum("total_amount", filter=Q(order_date=today_str, payment_status="paid")),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
 
-                    t_cod_count=Count("id", filter=Q(order_date=today_str, payment_status="COD")),
-                    t_cod_total=Coalesce(Sum("total_amount", filter=Q(order_date=today_str, payment_status="COD")), Value(0.0), output_field=FloatField()),
+                    t_cod_count=Count(
+                        "id",
+                        filter=Q(order_date=today_str, payment_status="COD")
+                    ),
+                    t_cod_total=Coalesce(
+                        Sum("total_amount", filter=Q(order_date=today_str, payment_status="COD")),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
 
-                    t_credit_count=Count("id", filter=Q(order_date=today_str, payment_status="credit")),
-                    t_credit_total=Coalesce(Sum("total_amount", filter=Q(order_date=today_str, payment_status="credit")), Value(0.0), output_field=FloatField()),
+                    t_credit_count=Count(
+                        "id",
+                        filter=Q(order_date=today_str, payment_status="credit")
+                    ),
+                    t_credit_total=Coalesce(
+                        Sum("total_amount", filter=Q(order_date=today_str, payment_status="credit")),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
                 )
             )
 
-            # -------- per-family: MONTH (1st -> today) --------
+            # -------- per-family: MONTH --------
             mq = (
                 base_qs.values("family_id", "family__name")
                 .annotate(
@@ -2759,23 +2823,160 @@ class FamilyOrderSummaryView(BaseTokenView):
                         filter=Q(order_date__gte=month_start_str, order_date__lte=today_str),
                     ),
                     month_total_amount=Coalesce(
-                        Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str)),
-                        Value(0.0), output_field=FloatField()
+                        Sum(
+                            "total_amount",
+                            filter=Q(order_date__gte=month_start_str, order_date__lte=today_str)
+                        ),
+                        Value(0.0),
+                        output_field=FloatField()
                     ),
 
-                    m_paid_count=Count("id", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="paid")),
-                    m_paid_total=Coalesce(Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="paid")), Value(0.0), output_field=FloatField()),
+                    m_paid_count=Count(
+                        "id",
+                        filter=Q(
+                            order_date__gte=month_start_str,
+                            order_date__lte=today_str,
+                            payment_status="paid"
+                        )
+                    ),
+                    m_paid_total=Coalesce(
+                        Sum(
+                            "total_amount",
+                            filter=Q(
+                                order_date__gte=month_start_str,
+                                order_date__lte=today_str,
+                                payment_status="paid"
+                            )
+                        ),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
 
-                    m_cod_count=Count("id", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="COD")),
-                    m_cod_total=Coalesce(Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="COD")), Value(0.0), output_field=FloatField()),
+                    m_cod_count=Count(
+                        "id",
+                        filter=Q(
+                            order_date__gte=month_start_str,
+                            order_date__lte=today_str,
+                            payment_status="COD"
+                        )
+                    ),
+                    m_cod_total=Coalesce(
+                        Sum(
+                            "total_amount",
+                            filter=Q(
+                                order_date__gte=month_start_str,
+                                order_date__lte=today_str,
+                                payment_status="COD"
+                            )
+                        ),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
 
-                    m_credit_count=Count("id", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="credit")),
-                    m_credit_total=Coalesce(Sum("total_amount", filter=Q(order_date__gte=month_start_str, order_date__lte=today_str, payment_status="credit")), Value(0.0), output_field=FloatField()),
+                    m_credit_count=Count(
+                        "id",
+                        filter=Q(
+                            order_date__gte=month_start_str,
+                            order_date__lte=today_str,
+                            payment_status="credit"
+                        )
+                    ),
+                    m_credit_total=Coalesce(
+                        Sum(
+                            "total_amount",
+                            filter=Q(
+                                order_date__gte=month_start_str,
+                                order_date__lte=today_str,
+                                payment_status="credit"
+                            )
+                        ),
+                        Value(0.0),
+                        output_field=FloatField()
+                    ),
                 )
             )
 
-            # Merge today + month rows by family_id
+            # -------- GRV return summary: TODAY + MONTH --------
+            grv_q = (
+                GRVModel.objects
+                .exclude(order__status="Invoice Rejected")
+                .values("order__family_id", "order__family__name")
+                .annotate(
+                    # TODAY COD RETURN
+                    t_cod_return_invoice_count=Count(
+                        "order_id",
+                        filter=Q(date=today, remark="cod_return"),
+                        distinct=True
+                    ),
+                    t_cod_return_total=Coalesce(
+                        Sum("cod_amount", filter=Q(date=today, remark="cod_return")),
+                        Value(Decimal("0.00")),
+                        output_field=money_field
+                    ),
+
+                    # TODAY CASH / NORMAL RETURN
+                    t_cash_return_invoice_count=Count(
+                        "order_id",
+                        filter=Q(date=today, remark="return"),
+                        distinct=True
+                    ),
+                    t_cash_return_total=Coalesce(
+                        Sum("price", filter=Q(date=today, remark="return")),
+                        Value(Decimal("0.00")),
+                        output_field=money_field
+                    ),
+
+                    # MONTH COD RETURN
+                    m_cod_return_invoice_count=Count(
+                        "order_id",
+                        filter=Q(
+                            date__gte=month_start,
+                            date__lte=today,
+                            remark="cod_return"
+                        ),
+                        distinct=True
+                    ),
+                    m_cod_return_total=Coalesce(
+                        Sum(
+                            "cod_amount",
+                            filter=Q(
+                                date__gte=month_start,
+                                date__lte=today,
+                                remark="cod_return"
+                            )
+                        ),
+                        Value(Decimal("0.00")),
+                        output_field=money_field
+                    ),
+
+                    # MONTH CASH / NORMAL RETURN
+                    m_cash_return_invoice_count=Count(
+                        "order_id",
+                        filter=Q(
+                            date__gte=month_start,
+                            date__lte=today,
+                            remark="return"
+                        ),
+                        distinct=True
+                    ),
+                    m_cash_return_total=Coalesce(
+                        Sum(
+                            "price",
+                            filter=Q(
+                                date__gte=month_start,
+                                date__lte=today,
+                                remark="return"
+                            )
+                        ),
+                        Value(Decimal("0.00")),
+                        output_field=money_field
+                    ),
+                )
+            )
+
+            # -------- merge today + month + grv by family --------
             by_family = {}
+
             for r in tq:
                 by_family[r["family_id"]] = {
                     "family_id": r["family_id"],
@@ -2783,22 +2984,32 @@ class FamilyOrderSummaryView(BaseTokenView):
                     "today_count": r["today_count"],
                     "today_total_amount": float(r["today_total_amount"] or 0),
 
-                    # placeholders; will be filled by month loop below
                     "month_count": 0,
                     "month_total_amount": 0.0,
 
                     "payment_status_summary": {
                         "today": {
-                            "paid":   {"count": r["t_paid_count"],    "total": float(r["t_paid_total"]    or 0)},
-                            "COD":    {"count": r["t_cod_count"],     "total": float(r["t_cod_total"]     or 0)},
-                            "credit": {"count": r["t_credit_count"],  "total": float(r["t_credit_total"]  or 0)},
+                            "paid": {
+                                "count": r["t_paid_count"],
+                                "total": float(r["t_paid_total"] or 0),
+                            },
+                            "COD": {
+                                "count": r["t_cod_count"],
+                                "total": float(r["t_cod_total"] or 0),
+                            },
+                            "credit": {
+                                "count": r["t_credit_count"],
+                                "total": float(r["t_credit_total"] or 0),
+                            },
                         },
-                        "month": {  # will be replaced in month loop
-                            "paid":   {"count": 0, "total": 0.0},
-                            "COD":    {"count": 0, "total": 0.0},
+                        "month": {
+                            "paid": {"count": 0, "total": 0.0},
+                            "COD": {"count": 0, "total": 0.0},
                             "credit": {"count": 0, "total": 0.0},
                         }
-                    }
+                    },
+
+                    "grv_return_summary": empty_return_summary(),
                 }
 
             for r in mq:
@@ -2807,50 +3018,154 @@ class FamilyOrderSummaryView(BaseTokenView):
                     "family_name": r["family__name"],
                     "today_count": 0,
                     "today_total_amount": 0.0,
-                    "payment_status_summary": {
-                        "today": {
-                            "paid":   {"count": 0, "total": 0.0},
-                            "COD":    {"count": 0, "total": 0.0},
-                            "credit": {"count": 0, "total": 0.0},
-                        },
-                        "month": {}
-                    }
+                    "month_count": 0,
+                    "month_total_amount": 0.0,
+                    "payment_status_summary": empty_payment_status_summary(),
+                    "grv_return_summary": empty_return_summary(),
                 })
 
                 row["month_count"] = r["month_count"]
                 row["month_total_amount"] = float(r["month_total_amount"] or 0)
 
                 row["payment_status_summary"]["month"] = {
-                    "paid":   {"count": r["m_paid_count"],    "total": float(r["m_paid_total"]    or 0)},
-                    "COD":    {"count": r["m_cod_count"],     "total": float(r["m_cod_total"]     or 0)},
-                    "credit": {"count": r["m_credit_count"],  "total": float(r["m_credit_total"]  or 0)},
+                    "paid": {
+                        "count": r["m_paid_count"],
+                        "total": float(r["m_paid_total"] or 0),
+                    },
+                    "COD": {
+                        "count": r["m_cod_count"],
+                        "total": float(r["m_cod_total"] or 0),
+                    },
+                    "credit": {
+                        "count": r["m_credit_count"],
+                        "total": float(r["m_credit_total"] or 0),
+                    },
                 }
 
-            # List sorted by family name
-            results = sorted(by_family.values(), key=lambda x: (x["family_name"] or "").lower())
+            for r in grv_q:
+                family_id = r["order__family_id"]
 
-            # -------- overall aggregations (sum of families) --------
+                row = by_family.setdefault(family_id, {
+                    "family_id": family_id,
+                    "family_name": r["order__family__name"],
+                    "today_count": 0,
+                    "today_total_amount": 0.0,
+                    "month_count": 0,
+                    "month_total_amount": 0.0,
+                    "payment_status_summary": empty_payment_status_summary(),
+                    "grv_return_summary": empty_return_summary(),
+                })
+
+                row["grv_return_summary"] = {
+                    "today": {
+                        "cod_return": {
+                            "invoice_count": r["t_cod_return_invoice_count"] or 0,
+                            "total": float(r["t_cod_return_total"] or 0),
+                        },
+                        "cash_return": {
+                            "invoice_count": r["t_cash_return_invoice_count"] or 0,
+                            "total": float(r["t_cash_return_total"] or 0),
+                        },
+                    },
+                    "month": {
+                        "cod_return": {
+                            "invoice_count": r["m_cod_return_invoice_count"] or 0,
+                            "total": float(r["m_cod_return_total"] or 0),
+                        },
+                        "cash_return": {
+                            "invoice_count": r["m_cash_return_invoice_count"] or 0,
+                            "total": float(r["m_cash_return_total"] or 0),
+                        },
+                    },
+                }
+
+            results = sorted(
+                by_family.values(),
+                key=lambda x: (x["family_name"] or "").lower()
+            )
+
+            # -------- overall aggregations --------
             overall = {
                 "today_count": sum(r["today_count"] for r in results),
                 "today_total_amount": float(sum(r["today_total_amount"] for r in results)),
                 "month_count": sum(r["month_count"] for r in results),
                 "month_total_amount": float(sum(r["month_total_amount"] for r in results)),
+
                 "payment_status_summary": {
                     "today": {
-                        "paid":   {"count": sum(r["payment_status_summary"]["today"]["paid"]["count"]     for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["today"]["paid"]["total"]  for r in results))},
-                        "COD":    {"count": sum(r["payment_status_summary"]["today"]["COD"]["count"]      for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["today"]["COD"]["total"]   for r in results))},
-                        "credit": {"count": sum(r["payment_status_summary"]["today"]["credit"]["count"]   for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["today"]["credit"]["total"] for r in results))},
+                        "paid": {
+                            "count": sum(r["payment_status_summary"]["today"]["paid"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["today"]["paid"]["total"] for r in results)),
+                        },
+                        "COD": {
+                            "count": sum(r["payment_status_summary"]["today"]["COD"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["today"]["COD"]["total"] for r in results)),
+                        },
+                        "credit": {
+                            "count": sum(r["payment_status_summary"]["today"]["credit"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["today"]["credit"]["total"] for r in results)),
+                        },
                     },
                     "month": {
-                        "paid":   {"count": sum(r["payment_status_summary"]["month"]["paid"]["count"]     for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["month"]["paid"]["total"]  for r in results))},
-                        "COD":    {"count": sum(r["payment_status_summary"]["month"]["COD"]["count"]      for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["month"]["COD"]["total"]   for r in results))},
-                        "credit": {"count": sum(r["payment_status_summary"]["month"]["credit"]["count"]   for r in results),
-                                   "total": float(sum(r["payment_status_summary"]["month"]["credit"]["total"] for r in results))},
+                        "paid": {
+                            "count": sum(r["payment_status_summary"]["month"]["paid"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["month"]["paid"]["total"] for r in results)),
+                        },
+                        "COD": {
+                            "count": sum(r["payment_status_summary"]["month"]["COD"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["month"]["COD"]["total"] for r in results)),
+                        },
+                        "credit": {
+                            "count": sum(r["payment_status_summary"]["month"]["credit"]["count"] for r in results),
+                            "total": float(sum(r["payment_status_summary"]["month"]["credit"]["total"] for r in results)),
+                        },
+                    },
+                },
+
+                "grv_return_summary": {
+                    "today": {
+                        "cod_return": {
+                            "invoice_count": sum(
+                                r["grv_return_summary"]["today"]["cod_return"]["invoice_count"]
+                                for r in results
+                            ),
+                            "total": float(sum(
+                                r["grv_return_summary"]["today"]["cod_return"]["total"]
+                                for r in results
+                            )),
+                        },
+                        "cash_return": {
+                            "invoice_count": sum(
+                                r["grv_return_summary"]["today"]["cash_return"]["invoice_count"]
+                                for r in results
+                            ),
+                            "total": float(sum(
+                                r["grv_return_summary"]["today"]["cash_return"]["total"]
+                                for r in results
+                            )),
+                        },
+                    },
+                    "month": {
+                        "cod_return": {
+                            "invoice_count": sum(
+                                r["grv_return_summary"]["month"]["cod_return"]["invoice_count"]
+                                for r in results
+                            ),
+                            "total": float(sum(
+                                r["grv_return_summary"]["month"]["cod_return"]["total"]
+                                for r in results
+                            )),
+                        },
+                        "cash_return": {
+                            "invoice_count": sum(
+                                r["grv_return_summary"]["month"]["cash_return"]["invoice_count"]
+                                for r in results
+                            ),
+                            "total": float(sum(
+                                r["grv_return_summary"]["month"]["cash_return"]["total"]
+                                for r in results
+                            )),
+                        },
                     },
                 },
             }
@@ -2866,7 +3181,13 @@ class FamilyOrderSummaryView(BaseTokenView):
             )
 
         except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 
 class FamilyWiseOrderSummaryView(BaseTokenView):
