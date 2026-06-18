@@ -408,6 +408,7 @@ urlpatterns = [
     path("api/staff/attendance/my/team/", MyTeamStaffAttendanceView.as_view()),
     path("api/staff/attendance/team/wise/count/", StaffAttendanceTeamWiseCountView.as_view()),
     path("api/staff/attendance/my/team/details/", MyAttendanceTeamDetailsView.as_view()),
+    path("api/staff/attendance/added/users/", StaffAttendanceAddedUsersView.as_view()),
 
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
