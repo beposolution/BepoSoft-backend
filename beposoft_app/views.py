@@ -23132,7 +23132,9 @@ class StaffAttendanceView(BaseTokenView):
                 member_ids = [tm.member.id for tm in team_members]
 
                 attendance_qs = StaffAttendance.objects.select_related(
-                    "staff"
+                    "staff",
+                    "submitted_by",
+                    "approved_by",
                 ).filter(
                     staff_id__in=member_ids
                 )
@@ -23156,16 +23158,28 @@ class StaffAttendanceView(BaseTokenView):
                             "present_count": 0,
                             "absent_count": 0,
                             "half_day_count": 0,
+                            "pending_count": 0,
+                            "rejected_count": 0,
                             "total_count": 0,
                             "attendance": []
                         }
 
-                    if attendance.status == "present":
-                        date_wise_data[date_key]["present_count"] += 1
-                    elif attendance.status == "absent":
+                    approval_status = attendance.approval_status
+
+                    if approval_status == "approved":
+                        if attendance.status == "present":
+                            date_wise_data[date_key]["present_count"] += 1
+                        elif attendance.status == "half_day":
+                            date_wise_data[date_key]["half_day_count"] += 1
+                        else:
+                            date_wise_data[date_key]["absent_count"] += 1
+
+                    elif approval_status == "pending":
+                        date_wise_data[date_key]["pending_count"] = date_wise_data[date_key].get("pending_count", 0) + 1
+
+                    elif approval_status == "rejected":
+                        date_wise_data[date_key]["rejected_count"] = date_wise_data[date_key].get("rejected_count", 0) + 1
                         date_wise_data[date_key]["absent_count"] += 1
-                    elif attendance.status == "half_day":
-                        date_wise_data[date_key]["half_day_count"] += 1
 
                     date_wise_data[date_key]["total_count"] += 1
 
@@ -23176,6 +23190,14 @@ class StaffAttendanceView(BaseTokenView):
                         "attendance_date": date_key,
                         "attendance_time": attendance.attendance_time.strftime("%H:%M:%S") if attendance.attendance_time else None,
                         "status": attendance.status,
+
+                        "approval_status": attendance.approval_status,
+                        "is_default_absent": False,
+                        "manager_note": attendance.manager_note,
+                        "approved_by": attendance.approved_by.id if attendance.approved_by else None,
+                        "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
+                        "approved_at": attendance.approved_at,
+
                         "created_at": attendance.created_at,
                         "updated_at": attendance.updated_at,
                     })
@@ -23373,7 +23395,7 @@ class StaffAttendanceApprovalView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            
+
 
 class StaffAttendanceDetailView(BaseTokenView):
 
