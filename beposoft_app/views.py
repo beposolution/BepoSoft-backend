@@ -23825,6 +23825,148 @@ class MyAttendanceTeamDetailsView(BaseTokenView):
 
 
 
+class StaffAttendanceAddedUsersView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            team_id = request.GET.get("team")
+            member_id = request.GET.get("member")
+            approval_status = request.GET.get("approval_status")
+            attendance_status = request.GET.get("status")
+            search = request.GET.get("search", "").strip()
+
+            attendance_qs = StaffAttendance.objects.select_related(
+                "staff",
+                "submitted_by",
+                "approved_by",
+            ).all().order_by("-attendance_date", "-id")
+
+            if start_date:
+                attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+
+            if end_date:
+                attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+
+            if member_id:
+                attendance_qs = attendance_qs.filter(staff_id=member_id)
+
+            if approval_status and approval_status != "all":
+                attendance_qs = attendance_qs.filter(approval_status=approval_status)
+
+            if attendance_status and attendance_status != "all":
+                attendance_qs = attendance_qs.filter(status=attendance_status)
+
+            if team_id:
+                team_member_ids = StaffAttendanceTeamMembers.objects.filter(
+                    team_id=team_id
+                ).values_list("member_id", flat=True)
+
+                attendance_qs = attendance_qs.filter(staff_id__in=team_member_ids)
+
+            if search:
+                attendance_qs = attendance_qs.filter(
+                    Q(staff__name__icontains=search) |
+                    Q(staff__username__icontains=search) |
+                    Q(staff__staff_id__icontains=search) |
+                    Q(staff__phone__icontains=search)
+                )
+
+            paginator = StandardPagination()
+            paginated_attendance = paginator.paginate_queryset(attendance_qs, request)
+
+            staff_ids = [attendance.staff_id for attendance in paginated_attendance]
+
+            team_members = StaffAttendanceTeamMembers.objects.select_related(
+                "team",
+                "team__team_leader",
+                "member",
+            ).filter(
+                member_id__in=staff_ids
+            )
+
+            team_map = {}
+
+            for team_member in team_members:
+                team_map[team_member.member_id] = {
+                    "team_id": team_member.team.id if team_member.team else None,
+                    "team_name": team_member.team.team_name if team_member.team else None,
+                    "team_leader": team_member.team.team_leader.id if team_member.team and team_member.team.team_leader else None,
+                    "team_leader_name": team_member.team.team_leader.name if team_member.team and team_member.team.team_leader else None,
+                }
+
+            data = []
+
+            for attendance in paginated_attendance:
+                team_data = team_map.get(attendance.staff_id, {
+                    "team_id": None,
+                    "team_name": None,
+                    "team_leader": None,
+                    "team_leader_name": None,
+                })
+
+                data.append({
+                    "id": attendance.id,
+                    "staff": attendance.staff.id if attendance.staff else None,
+                    "staff_name": attendance.staff.name if attendance.staff else None,
+                    "staff_username": attendance.staff.username if attendance.staff else None,
+                    "staff_phone": attendance.staff.phone if attendance.staff else None,
+                    "staff_id": attendance.staff.staff_id if attendance.staff else None,
+
+                    "team_id": team_data["team_id"],
+                    "team_name": team_data["team_name"],
+                    "team_leader": team_data["team_leader"],
+                    "team_leader_name": team_data["team_leader_name"],
+
+                    "attendance_date": attendance.attendance_date,
+                    "attendance_time": attendance.attendance_time.strftime("%H:%M:%S") if attendance.attendance_time else None,
+                    "status": attendance.status,
+
+                    "approval_status": attendance.approval_status,
+                    "is_default_absent": False,
+                    "is_attendance_added": True,
+
+                    "submitted_by": attendance.submitted_by.id if attendance.submitted_by else None,
+                    "submitted_by_name": attendance.submitted_by.name if attendance.submitted_by else None,
+
+                    "approved_by": attendance.approved_by.id if attendance.approved_by else None,
+                    "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
+                    "approved_at": attendance.approved_at,
+
+                    "manager_note": attendance.manager_note,
+                    "created_at": attendance.created_at,
+                    "updated_at": attendance.updated_at,
+                })
+
+            return paginator.get_paginated_response({
+                "status": "success",
+                "message": "Attendance added users fetched successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "team": team_id,
+                    "member": member_id,
+                    "approval_status": approval_status,
+                    "status": attendance_status,
+                    "search": search,
+                },
+                "data": data
+            })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching attendance added users",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 # comparison GET api's
 class OrderComparisonReportView(BaseTokenView):
     def get(self, request):
