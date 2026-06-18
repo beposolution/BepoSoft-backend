@@ -23343,17 +23343,6 @@ class StaffAttendanceApprovalView(BaseTokenView):
 
             attendance = get_object_or_404(StaffAttendance, pk=pk)
 
-            is_manager_of_staff = StaffAttendanceTeamMembers.objects.filter(
-                team__team_leader=authUser,
-                member=attendance.staff
-            ).exists()
-
-            if not is_manager_of_staff:
-                return Response({
-                    "status": "error",
-                    "message": "You are not authorized to approve this attendance"
-                }, status=status.HTTP_403_FORBIDDEN)
-
             serializer = StaffAttendanceApprovalSerializer(data=request.data)
 
             if serializer.is_valid():
@@ -23384,6 +23373,7 @@ class StaffAttendanceApprovalView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+            
 
 class StaffAttendanceDetailView(BaseTokenView):
 
