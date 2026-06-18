@@ -3619,15 +3619,23 @@ class StaffAttendanceWriteSerializer(serializers.ModelSerializer):
         model = StaffAttendance
         fields = [
             "id",
-            "staff",
             "attendance_date",
             "attendance_time",
             "status",
         ]
 
+    def validate_status(self, value):
+        if value == "absent":
+            raise serializers.ValidationError(
+                "You cannot submit absent attendance manually. If attendance is not submitted, it will be treated as absent."
+            )
+        return value
+
 
 class StaffAttendanceReadSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(source="staff.name", read_only=True)
+    submitted_by_name = serializers.CharField(source="submitted_by.name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.name", read_only=True)
 
     class Meta:
         model = StaffAttendance
@@ -3638,11 +3646,27 @@ class StaffAttendanceReadSerializer(serializers.ModelSerializer):
             "attendance_date",
             "attendance_time",
             "status",
+            "approval_status",
+            "submitted_by",
+            "submitted_by_name",
+            "approved_by",
+            "approved_by_name",
+            "approved_at",
+            "manager_note",
             "created_at",
             "updated_at",
         ]
 
 
+class StaffAttendanceApprovalSerializer(serializers.Serializer):
+    approval_status = serializers.ChoiceField(
+        choices=["approved", "rejected"]
+    )
+    manager_note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True
+    )
 
 class StaffAttendanceTeamMemberSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(source="member.name", read_only=True)

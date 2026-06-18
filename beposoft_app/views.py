@@ -23287,27 +23287,34 @@ class StaffAttendanceView(BaseTokenView):
             if error_response:
                 return error_response
 
-            staff = request.data.get("staff")
-            attendance_date = request.data.get("attendance_date")
+            request_data = request.data.copy()
+
+            attendance_date = request_data.get("attendance_date") or timezone.localdate()
+            request_data["attendance_date"] = attendance_date
 
             if StaffAttendance.objects.filter(
-                staff_id=staff,
+                staff=authUser,
                 attendance_date=attendance_date
             ).exists():
                 return Response({
                     "status": "error",
-                    "message": "Attendance already added for this staff on this date"
+                    "message": "Attendance already submitted for today"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = StaffAttendanceWriteSerializer(data=request.data)
+            serializer = StaffAttendanceWriteSerializer(data=request_data)
 
             if serializer.is_valid():
-                attendance = serializer.save()
+                attendance = serializer.save(
+                    staff=authUser,
+                    submitted_by=authUser,
+                    approval_status="pending"
+                )
+
                 response_serializer = StaffAttendanceReadSerializer(attendance)
 
                 return Response({
                     "status": "success",
-                    "message": "Staff attendance created successfully",
+                    "message": "Attendance submitted successfully. Waiting for manager approval.",
                     "data": response_serializer.data
                 }, status=status.HTTP_201_CREATED)
 
@@ -23320,7 +23327,60 @@ class StaffAttendanceView(BaseTokenView):
         except Exception as e:
             return Response({
                 "status": "error",
-                "message": "An error occurred while creating staff attendance",
+                "message": "An error occurred while submitting attendance",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class StaffAttendanceApprovalView(BaseTokenView):
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            attendance = get_object_or_404(StaffAttendance, pk=pk)
+
+            is_manager_of_staff = StaffAttendanceTeamMembers.objects.filter(
+                team__team_leader=authUser,
+                member=attendance.staff
+            ).exists()
+
+            if not is_manager_of_staff:
+                return Response({
+                    "status": "error",
+                    "message": "You are not authorized to approve this attendance"
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = StaffAttendanceApprovalSerializer(data=request.data)
+
+            if serializer.is_valid():
+                attendance.approval_status = serializer.validated_data["approval_status"]
+                attendance.manager_note = serializer.validated_data.get("manager_note", "")
+                attendance.approved_by = authUser
+                attendance.approved_at = timezone.now()
+                attendance.save()
+
+                response_serializer = StaffAttendanceReadSerializer(attendance)
+
+                return Response({
+                    "status": "success",
+                    "message": f"Attendance {attendance.approval_status} successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while approving attendance",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -23390,6 +23450,31 @@ class StaffAttendanceDetailView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    
+
+
+
+def get_attendance_date_range(start_date, end_date):
+    today = timezone.localdate()
+
+    start = parse_date(start_date) if start_date else today
+    end = parse_date(end_date) if end_date else start
+
+    if not start:
+        start = today
+
+    if not end:
+        end = start
+
+    dates = []
+    current = start
+
+    while current <= end:
+        dates.append(current)
+        current += timedelta(days=1)
+
+    return dates
+
 
 class MyTeamStaffAttendanceView(BaseTokenView):
 
@@ -23431,54 +23516,106 @@ class MyTeamStaffAttendanceView(BaseTokenView):
 
                 member_ids = [tm.member.id for tm in team_members]
 
+                from_date = parse_date(start_date) if start_date else timezone.localdate()
+                to_date = parse_date(end_date) if end_date else from_date
+
+                date_list = []
+                current_date = from_date
+
+                while current_date <= to_date:
+                    date_list.append(current_date)
+                    current_date += timedelta(days=1)
+
                 attendance_qs = StaffAttendance.objects.select_related(
-                    "staff"
+                    "staff",
+                    "submitted_by",
+                    "approved_by",
                 ).filter(
-                    staff_id__in=member_ids
+                    staff_id__in=member_ids,
+                    attendance_date__in=date_list
                 )
 
-                if start_date:
-                    attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
-
-                if end_date:
-                    attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
-
-                attendance_qs = attendance_qs.order_by("-attendance_date", "-id")
+                attendance_map = {
+                    (attendance.staff_id, attendance.attendance_date): attendance
+                    for attendance in attendance_qs
+                }
 
                 date_wise_data = {}
 
-                for attendance in attendance_qs:
-                    date_key = attendance.attendance_date.strftime("%Y-%m-%d")
+                for attendance_date_obj in date_list:
+                    date_key = attendance_date_obj.strftime("%Y-%m-%d")
 
-                    if date_key not in date_wise_data:
-                        date_wise_data[date_key] = {
-                            "attendance_date": date_key,
-                            "present_count": 0,
-                            "absent_count": 0,
-                            "half_day_count": 0,
-                            "total_count": 0,
-                            "attendance": []
-                        }
-
-                    if attendance.status == "present":
-                        date_wise_data[date_key]["present_count"] += 1
-                    elif attendance.status == "absent":
-                        date_wise_data[date_key]["absent_count"] += 1
-                    elif attendance.status == "half_day":
-                        date_wise_data[date_key]["half_day_count"] += 1
-
-                    date_wise_data[date_key]["total_count"] += 1
-
-                    date_wise_data[date_key]["attendance"].append({
-                        "id": attendance.id,
-                        "staff": attendance.staff.id,
-                        "staff_name": attendance.staff.name if attendance.staff else None,
+                    date_wise_data[date_key] = {
                         "attendance_date": date_key,
-                        "status": attendance.status,
-                        "attendance_time": attendance.attendance_time,
-                        "created_at": attendance.created_at,
-                        "updated_at": attendance.updated_at,
-                    })
+                        "present_count": 0,
+                        "absent_count": 0,
+                        "half_day_count": 0,
+                        "pending_count": 0,
+                        "rejected_count": 0,
+                        "total_count": 0,
+                        "attendance": []
+                    }
+
+                    for team_member in team_members:
+                        member = team_member.member
+                        attendance = attendance_map.get((member.id, attendance_date_obj))
+
+                        if attendance:
+                            approval_status = attendance.approval_status
+
+                            if approval_status == "approved":
+                                if attendance.status == "present":
+                                    date_wise_data[date_key]["present_count"] += 1
+                                elif attendance.status == "half_day":
+                                    date_wise_data[date_key]["half_day_count"] += 1
+                                else:
+                                    date_wise_data[date_key]["absent_count"] += 1
+
+                            elif approval_status == "pending":
+                                date_wise_data[date_key]["pending_count"] += 1
+
+                            elif approval_status == "rejected":
+                                date_wise_data[date_key]["rejected_count"] += 1
+                                date_wise_data[date_key]["absent_count"] += 1
+
+                            date_wise_data[date_key]["attendance"].append({
+                                "id": attendance.id,
+                                "staff": member.id,
+                                "staff_name": member.name,
+                                "attendance_date": date_key,
+                                "status": attendance.status,
+                                "attendance_time": attendance.attendance_time.strftime("%H:%M:%S") if attendance.attendance_time else None,
+                                "approval_status": approval_status,
+                                "is_default_absent": False,
+                                "manager_note": attendance.manager_note,
+                                "approved_by": attendance.approved_by.id if attendance.approved_by else None,
+                                "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
+                                "approved_at": attendance.approved_at,
+                                "created_at": attendance.created_at,
+                                "updated_at": attendance.updated_at,
+                            })
+
+                        else:
+                            date_wise_data[date_key]["absent_count"] += 1
+
+                            date_wise_data[date_key]["attendance"].append({
+                                "id": None,
+                                "staff": member.id,
+                                "staff_name": member.name,
+                                "attendance_date": date_key,
+                                "status": "absent",
+                                "attendance_time": None,
+                                "approval_status": "default_absent",
+                                "is_default_absent": True,
+                                "manager_note": None,
+                                "approved_by": None,
+                                "approved_by_name": None,
+                                "approved_at": None,
+                                "created_at": None,
+                                "updated_at": None,
+                            })
+
+                        date_wise_data[date_key]["total_count"] += 1
 
                 data.append({
                     "team_id": team.id,
