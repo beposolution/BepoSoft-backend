@@ -23311,34 +23311,56 @@ class StaffAttendanceView(BaseTokenView):
 
             request_data = request.data.copy()
 
+            staff_id = request_data.get("staff")
             attendance_date = request_data.get("attendance_date") or timezone.localdate()
             request_data["attendance_date"] = attendance_date
 
-            if StaffAttendance.objects.filter(
-                staff=authUser,
-                attendance_date=attendance_date
-            ).exists():
+            if not staff_id:
                 return Response({
                     "status": "error",
-                    "message": "Attendance already submitted for today"
+                    "message": "Staff is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = StaffAttendanceWriteSerializer(data=request_data)
+            team_member = StaffAttendanceTeamMembers.objects.filter(
+                team__team_leader=authUser,
+                member_id=staff_id
+            ).first()
+
+            if not team_member:
+                return Response({
+                    "status": "error",
+                    "message": "You can mark attendance only for your team members"
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            attendance = StaffAttendance.objects.filter(
+                staff_id=staff_id,
+                attendance_date=attendance_date
+            ).first()
+
+            if attendance:
+                serializer = StaffAttendanceWriteSerializer(
+                    attendance,
+                    data=request_data,
+                    partial=True
+                )
+            else:
+                serializer = StaffAttendanceWriteSerializer(data=request_data)
 
             if serializer.is_valid():
                 attendance = serializer.save(
-                    staff=authUser,
                     submitted_by=authUser,
-                    approval_status="pending"
+                    approval_status="approved",
+                    approved_by=authUser,
+                    approved_at=timezone.now()
                 )
 
                 response_serializer = StaffAttendanceReadSerializer(attendance)
 
                 return Response({
                     "status": "success",
-                    "message": "Attendance submitted successfully. Waiting for manager approval.",
+                    "message": "Attendance saved successfully",
                     "data": response_serializer.data
-                }, status=status.HTTP_201_CREATED)
+                }, status=status.HTTP_200_OK if attendance.id else status.HTTP_201_CREATED)
 
             return Response({
                 "status": "error",
@@ -23349,7 +23371,7 @@ class StaffAttendanceView(BaseTokenView):
         except Exception as e:
             return Response({
                 "status": "error",
-                "message": "An error occurred while submitting attendance",
+                "message": "An error occurred while saving attendance",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
