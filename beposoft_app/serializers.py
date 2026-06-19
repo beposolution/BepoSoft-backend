@@ -3619,17 +3619,11 @@ class StaffAttendanceWriteSerializer(serializers.ModelSerializer):
         model = StaffAttendance
         fields = [
             "id",
+            "staff",
             "attendance_date",
             "attendance_time",
             "status",
         ]
-
-    def validate_status(self, value):
-        if value == "absent":
-            raise serializers.ValidationError(
-                "You cannot submit absent attendance manually. If attendance is not submitted, it will be treated as absent."
-            )
-        return value
 
 
 class StaffAttendanceReadSerializer(serializers.ModelSerializer):
