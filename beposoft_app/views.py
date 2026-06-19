@@ -23845,7 +23845,9 @@ class StaffAttendanceAddedUsersView(BaseTokenView):
                 "staff",
                 "submitted_by",
                 "approved_by",
-            ).all().order_by("-attendance_date", "-id")
+            ).filter(
+                submitted_by=authUser
+            ).order_by("-attendance_date", "-id")
 
             if start_date:
                 attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
