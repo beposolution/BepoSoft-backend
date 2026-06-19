@@ -23337,13 +23337,12 @@ class StaffAttendanceView(BaseTokenView):
             ).first()
 
             if attendance:
-                serializer = StaffAttendanceWriteSerializer(
-                    attendance,
-                    data=request_data,
-                    partial=True
-                )
-            else:
-                serializer = StaffAttendanceWriteSerializer(data=request_data)
+                return Response({
+                    "status": "error",
+                    "message": "Attendance already added for this staff today"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = StaffAttendanceWriteSerializer(data=request_data)
 
             if serializer.is_valid():
                 attendance = serializer.save(
