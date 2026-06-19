@@ -23192,7 +23192,6 @@ class StaffAttendanceView(BaseTokenView):
                         "status": attendance.status,
 
                         "approval_status": attendance.approval_status,
-                        "is_default_absent": False,
                         "manager_note": attendance.manager_note,
                         "approved_by": attendance.approved_by.id if attendance.approved_by else None,
                         "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
@@ -23620,33 +23619,12 @@ class MyTeamStaffAttendanceView(BaseTokenView):
                                 "status": attendance.status,
                                 "attendance_time": attendance.attendance_time.strftime("%H:%M:%S") if attendance.attendance_time else None,
                                 "approval_status": approval_status,
-                                "is_default_absent": False,
                                 "manager_note": attendance.manager_note,
                                 "approved_by": attendance.approved_by.id if attendance.approved_by else None,
                                 "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
                                 "approved_at": attendance.approved_at,
                                 "created_at": attendance.created_at,
                                 "updated_at": attendance.updated_at,
-                            })
-
-                        else:
-                            date_wise_data[date_key]["absent_count"] += 1
-
-                            date_wise_data[date_key]["attendance"].append({
-                                "id": None,
-                                "staff": member.id,
-                                "staff_name": member.name,
-                                "attendance_date": date_key,
-                                "status": "absent",
-                                "attendance_time": None,
-                                "approval_status": "default_absent",
-                                "is_default_absent": True,
-                                "manager_note": None,
-                                "approved_by": None,
-                                "approved_by_name": None,
-                                "approved_at": None,
-                                "created_at": None,
-                                "updated_at": None,
                             })
 
                         date_wise_data[date_key]["total_count"] += 1
@@ -23952,7 +23930,6 @@ class StaffAttendanceAddedUsersView(BaseTokenView):
                     "status": attendance.status,
 
                     "approval_status": attendance.approval_status,
-                    "is_default_absent": False,
                     "is_attendance_added": True,
 
                     "submitted_by": attendance.submitted_by.id if attendance.submitted_by else None,
