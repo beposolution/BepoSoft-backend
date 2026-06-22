@@ -23967,6 +23967,53 @@ class StaffAttendanceAddedUsersView(BaseTokenView):
 
 
 
+class StaffAttendanceTeamMembersByTeamView(BaseTokenView):
+
+    def get(self, request, team_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            team = get_object_or_404(
+                StaffAttendanceTeam.objects.select_related("team_leader"),
+                pk=team_id
+            )
+
+            members = StaffAttendanceTeamMembers.objects.select_related(
+                "team",
+                "member"
+            ).filter(
+                team_id=team_id,
+                member__approval_status="approved"
+            ).order_by("member__name")
+
+            serializer = StaffAttendanceTeamMembersReadSerializer(
+                members,
+                many=True
+            )
+
+            return Response({
+                "status": "success",
+                "message": "Approved team members fetched successfully",
+                "data": {
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id if team.team_leader else None,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": members.count(),
+                    "members": serializer.data,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching team members",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # comparison GET api's
 class OrderComparisonReportView(BaseTokenView):
     def get(self, request):
