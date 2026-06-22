@@ -23645,38 +23645,6 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     "total_count": total_count,
                 })
 
-            # SALES DEPARTMENT from BDMOrderAnalysisStaff
-            # Only show this when no specific normal attendance team is selected
-            if not team_id:
-                bdm_qs = BDMOrderAnalysisStaff.objects.all()
-
-                if start_date:
-                    bdm_qs = bdm_qs.filter(
-                        created_at__date__gte=start_date
-                    )
-
-                if end_date:
-                    bdm_qs = bdm_qs.filter(
-                        created_at__date__lte=end_date
-                    )
-
-                sales_present = bdm_qs.filter(status="present").count()
-                sales_absent = bdm_qs.filter(status="absent").count()
-                sales_half_day = bdm_qs.filter(status="half_day").count()
-                sales_total = sales_present + sales_absent + sales_half_day
-
-                data.append({
-                    "team_id": None,
-                    "team_name": "SALES DEPARTMENT",
-                    "team_leader": None,
-                    "team_leader_name": None,
-                    "members_count": bdm_qs.values("staff_id").distinct().count(),
-                    "present_count": sales_present,
-                    "absent_count": sales_absent,
-                    "half_day_count": sales_half_day,
-                    "total_count": sales_total,
-                })
-
             summary = {
                 "total_teams": len(data),
                 "total_members": sum(item["members_count"] for item in data),
