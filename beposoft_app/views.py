@@ -23910,6 +23910,114 @@ class StaffAttendanceTeamMembersByTeamView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+class SalesDepartmentAttendanceDataView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            sales_team_names = [
+                "SALES DEPARTMENT (MUBARISH)",
+                "SALES DEPARTMENT (NOUFAL)",
+                "SALES DEPARTMENT (SHAMI)",
+            ]
+
+            teams = StaffAttendanceTeam.objects.filter(
+                team_name__in=sales_team_names
+            ).prefetch_related(
+                "team_members__member"
+            ).select_related(
+                "team_leader"
+            ).order_by("team_name")
+
+            data = []
+
+            for team in teams:
+                team_members = team.team_members.all()
+                member_ids = list(
+                    team_members.values_list("member_id", flat=True)
+                )
+
+                attendance_qs = StaffAttendance.objects.select_related(
+                    "staff",
+                    "submitted_by",
+                    "approved_by",
+                ).filter(
+                    staff_id__in=member_ids
+                )
+
+                if start_date:
+                    attendance_qs = attendance_qs.filter(
+                        attendance_date__gte=start_date
+                    )
+
+                if end_date:
+                    attendance_qs = attendance_qs.filter(
+                        attendance_date__lte=end_date
+                    )
+
+                attendance_qs = attendance_qs.order_by(
+                    "-attendance_date",
+                    "-id"
+                )
+
+                attendance_data = []
+
+                for attendance in attendance_qs:
+                    attendance_data.append({
+                        "id": attendance.id,
+                        "staff": attendance.staff.id if attendance.staff else None,
+                        "staff_name": attendance.staff.name if attendance.staff else None,
+                        "attendance_date": attendance.attendance_date.strftime("%Y-%m-%d"),
+                        "attendance_time": attendance.attendance_time.strftime("%H:%M:%S") if attendance.attendance_time else None,
+                        "status": attendance.status,
+
+                        "approval_status": attendance.approval_status,
+                        "manager_note": attendance.manager_note,
+                        "submitted_by": attendance.submitted_by.id if attendance.submitted_by else None,
+                        "submitted_by_name": attendance.submitted_by.name if attendance.submitted_by else None,
+                        "approved_by": attendance.approved_by.id if attendance.approved_by else None,
+                        "approved_by_name": attendance.approved_by.name if attendance.approved_by else None,
+                        "approved_at": attendance.approved_at,
+
+                        "created_at": attendance.created_at,
+                        "updated_at": attendance.updated_at,
+                    })
+
+                data.append({
+                    "team_id": team.id,
+                    "team_name": team.team_name,
+                    "team_leader": team.team_leader.id if team.team_leader else None,
+                    "team_leader_name": team.team_leader.name if team.team_leader else None,
+                    "members_count": len(member_ids),
+                    "attendance": attendance_data,
+                })
+
+            return Response({
+                "status": "success",
+                "message": "Sales department attendance data fetched successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+                "data": data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching sales department attendance data",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+
+
 # comparison GET api's
 class OrderComparisonReportView(BaseTokenView):
     def get(self, request):
