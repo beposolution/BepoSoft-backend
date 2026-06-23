@@ -684,7 +684,8 @@ class Order(models.Model):
     customer = models.ForeignKey(Customers, on_delete=models.CASCADE, related_name="customer")
     invoice = models.CharField(max_length=20, unique=True, blank=True)
     billing_address = models.ForeignKey(Shipping, on_delete=models.CASCADE, related_name="billing_address", default="")
-    order_date = models.CharField(max_length=100)
+    order_date = models.CharField(max_length=100)  # order date field - main date field
+    billing_date = models.DateField(null=True, blank=True)  # new datefield added for bepocart
     family = models.ForeignKey(Family, on_delete=models.CASCADE)
     state = models.ForeignKey(State, on_delete=models.CASCADE)
     code_charge = models.IntegerField(default=0, null=True)

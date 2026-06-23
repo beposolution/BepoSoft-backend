@@ -403,12 +403,10 @@ urlpatterns = [
     path("api/staff/attendance/team/members/", StaffAttendanceTeamMembersView.as_view()),
     path("api/staff/attendance/team/members/edit/<int:pk>/", StaffAttendanceTeamMembersDetailView.as_view()),
     path("api/staff/attendance/", StaffAttendanceView.as_view()),
-    path("api/staff/attendance/approve/<int:pk>/", StaffAttendanceApprovalView.as_view()),
     path("api/staff/attendance/edit/<int:pk>/", StaffAttendanceDetailView.as_view()),
     path("api/staff/attendance/my/team/", MyTeamStaffAttendanceView.as_view()),
     path("api/staff/attendance/team/wise/count/", StaffAttendanceTeamWiseCountView.as_view()),
     path("api/staff/attendance/my/team/details/", MyAttendanceTeamDetailsView.as_view()),
-    path("api/staff/attendance/added/users/", StaffAttendanceAddedUsersView.as_view()),
     path("api/staff/attendance/team/members/<int:team_id>/", StaffAttendanceTeamMembersByTeamView.as_view()),
     path("api/staff/attendance/sales/data/", SalesDepartmentAttendanceDataView.as_view()),
 
