@@ -23689,7 +23689,10 @@ class MyAttendanceTeamDetailsView(BaseTokenView):
         data = []
 
         for team in teams:
-            members_qs = StaffAttendanceTeamMembers.objects.filter(team=team).select_related("member")
+            members_qs = StaffAttendanceTeamMembers.objects.filter(
+                team=team,
+                member__approval_status="approved"
+            ).select_related("member")
 
             data.append({
                 "team_id": team.id,
