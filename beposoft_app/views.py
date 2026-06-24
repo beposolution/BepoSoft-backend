@@ -23248,16 +23248,16 @@ class StaffAttendanceView(BaseTokenView):
                     "message": "Staff is required"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            team_member = StaffAttendanceTeamMembers.objects.filter(
-                team__team_leader=authUser,
-                member_id=staff_id
-            ).first()
+            # team_member = StaffAttendanceTeamMembers.objects.filter(
+            #     team__team_leader=authUser,
+            #     member_id=staff_id
+            # ).first()
 
-            if not team_member:
-                return Response({
-                    "status": "error",
-                    "message": "You can mark attendance only for your team members"
-                }, status=status.HTTP_403_FORBIDDEN)
+            # if not team_member:
+            #     return Response({
+            #         "status": "error",
+            #         "message": "You can mark attendance only for your team members"
+            #     }, status=status.HTTP_403_FORBIDDEN)
 
             attendance = StaffAttendance.objects.filter(
                 staff_id=staff_id,
