@@ -15381,8 +15381,13 @@ class BdmDailyOverallReportView(BaseTokenView):
             response_data = []
 
             for created_date in analysis_dates:
-                attendance_qs = BDMOrderAnalysisStaff.objects.filter(
-                    analysis__attendance_date=created_date
+                # attendance_qs = BDMOrderAnalysisStaff.objects.filter(
+                #     analysis__attendance_date=created_date
+                # )
+
+                attendance_qs = StaffAttendance.objects.filter(
+                    attendance_date=created_date,
+                    staff__department_id__name__in=["BDO", "BDM"]
                 )
 
                 if bdm_id:
