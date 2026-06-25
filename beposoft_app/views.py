@@ -18336,11 +18336,41 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
 
             call_durations = list(reports.values_list("call_duration", flat=True))
             total_call_duration = self.add_call_durations(call_durations)
+
             staff_count = reports.values("created_by").distinct().count()
+            total_reports = reports.count()
+
+            active_count = reports.filter(call_status="active").count()
+            productive_count = reports.filter(call_status="productive").count()
+
+            dsr_created_count = reports.filter(status="dsr created").count()
+            dsr_approved_count = reports.filter(status="dsr approved").count()
+            dsr_confirmed_count = reports.filter(status="dsr confirmed").count()
+            dsr_rejected_count = reports.filter(status="dsr rejected").count()
+
             call_duration_average_8hrs = self.get_call_duration_average_8hrs(
                 call_durations,
                 staff_count
             )
+
+            summary = {
+                "total_reports": total_reports,
+                "staff_count": staff_count,
+                "total_call_duration": total_call_duration,
+                "call_duration_average_8hrs": call_duration_average_8hrs,
+
+                "call_status": {
+                    "active": active_count,
+                    "productive": productive_count,
+                },
+
+                "status": {
+                    "dsr_created": dsr_created_count,
+                    "dsr_approved": dsr_approved_count,
+                    "dsr_confirmed": dsr_confirmed_count,
+                    "dsr_rejected": dsr_rejected_count,
+                }
+            }
 
             paginator = StandardPagination()
             page = paginator.paginate_queryset(reports, request)
@@ -18349,9 +18379,10 @@ class SalesTeamMemberDailyReportAllView(BaseTokenView):
             return paginator.get_paginated_response({
                 "status": "success",
                 "message": "All daily reports fetched successfully",
+                "summary": summary,
                 "staff_count": staff_count,
-                "total_call_duration": total_call_duration,
-                "call_duration_average_8hrs": call_duration_average_8hrs,
+                # "total_call_duration": total_call_duration,
+                # "call_duration_average_8hrs": call_duration_average_8hrs,
                 "data": serializer.data
             })
 
