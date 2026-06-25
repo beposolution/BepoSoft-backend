@@ -20216,12 +20216,25 @@ class FullHierarchySummaryView(BaseTokenView):
 
             for row in attendance_rows:
                 try:
+                    # row_data = {
+                    #     "id": row.id,
+                    #     "analysis_id": row.analysis_id if row.analysis_id else None,
+                    #     "staff_id": row.staff_id if row.staff_id else None,
+                    #     "staff_name": row.staff.name if row.staff else "",
+                    #     "status": row.status,
+                    #     "created_at": row.created_at,
+                    #     "updated_at": row.updated_at,
+                    # }
+
                     row_data = {
                         "id": row.id,
-                        "analysis_id": row.analysis_id if row.analysis_id else None,
                         "staff_id": row.staff_id if row.staff_id else None,
                         "staff_name": row.staff.name if row.staff else "",
+                        "department": row.staff.department_id.name if row.staff and row.staff.department_id else "",
+                        "attendance_date": row.attendance_date,
+                        "attendance_time": row.attendance_time,
                         "status": row.status,
+                        "approval_status": row.approval_status,
                         "created_at": row.created_at,
                         "updated_at": row.updated_at,
                     }
@@ -20386,19 +20399,28 @@ class FullHierarchySummaryView(BaseTokenView):
 
             reports = list(reports)
 
-            attendance_rows = BDMOrderAnalysisStaff.objects.select_related(
+            # attendance_rows = BDMOrderAnalysisStaff.objects.select_related(
+            #     "staff",
+            #     "staff__family",
+            #     "analysis"
+            # ).filter(
+            #     staff_id__in=staff_ids
+            # )
+
+            attendance_rows = StaffAttendance.objects.select_related(
                 "staff",
                 "staff__family",
-                "analysis"
+                "staff__department_id"
             ).filter(
-                staff_id__in=staff_ids
+                staff_id__in=staff_ids,
+                staff__department_id__name__in=["BDM", "BDO"]
             )
 
             if start_date:
-                attendance_rows = attendance_rows.filter(created_at__date__gte=start_date)
+                attendance_rows = attendance_rows.filter(attendance_date__gte=start_date)
 
             if end_date:
-                attendance_rows = attendance_rows.filter(created_at__date__lte=end_date)
+                attendance_rows = attendance_rows.filter(attendance_date__lte=end_date)
 
             attendance_rows = list(attendance_rows)
 
