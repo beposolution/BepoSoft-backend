@@ -18093,13 +18093,8 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
 
 
 class SalesTeamMemberDailyReportDetailView(BaseTokenView):
-    """
-    GET    -> single report only if created_by = logged-in user
-    PUT    -> update single report only if created_by = logged-in user
-    DELETE -> delete single report only if created_by = logged-in user
-    """
 
-    def get_object(self, pk, authUser):
+    def get_object(self, pk):
         return get_object_or_404(
             SalesTeamMemberDailyReport.objects.select_related(
                 'team',
@@ -18108,8 +18103,7 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
                 'created_by',
                 'invoice',
             ),
-            pk=pk,
-            created_by=authUser
+            pk=pk
         )
 
     def get(self, request, pk):
@@ -18118,27 +18112,21 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            report = self.get_object(pk, authUser)
+            report = self.get_object(pk)
             serializer = SalesTeamMemberDailyReportSerializer(report)
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Daily report fetched successfully",
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+            return Response({
+                "status": "success",
+                "message": "Daily report fetched successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "An error occurred while fetching daily report",
-                    "errors": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching daily report",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request, pk):
         try:
@@ -18146,38 +18134,37 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            report = self.get_object(pk, authUser)
-            serializer = SalesTeamMemberDailyReportADDSerializer(report, data=request.data, partial=True)
+            report = self.get_object(pk)
+
+            serializer = SalesTeamMemberDailyReportADDSerializer(
+                report,
+                data=request.data,
+                partial=True
+            )
 
             if serializer.is_valid():
-                serializer.save(created_by=authUser)
-                return Response(
-                    {
-                        "status": "success",
-                        "message": "Daily report updated successfully",
-                        "data": serializer.data
-                    },
-                    status=status.HTTP_200_OK
-                )
+                serializer.save()
 
-            return Response(
-                {
-                    "status": "error",
-                    "message": "Validation error",
-                    "errors": serializer.errors
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                response_serializer = SalesTeamMemberDailyReportSerializer(report)
+
+                return Response({
+                    "status": "success",
+                    "message": "Daily report updated successfully",
+                    "data": response_serializer.data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "status": "error",
+                "message": "Validation error",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "An error occurred while updating daily report",
-                    "errors": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                "status": "error",
+                "message": "An error occurred while updating daily report",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def delete(self, request, pk):
         try:
@@ -18185,26 +18172,20 @@ class SalesTeamMemberDailyReportDetailView(BaseTokenView):
             if error_response:
                 return error_response
 
-            report = self.get_object(pk, authUser)
+            report = self.get_object(pk)
             report.delete()
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Daily report deleted successfully"
-                },
-                status=status.HTTP_200_OK
-            )
+            return Response({
+                "status": "success",
+                "message": "Daily report deleted successfully"
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "An error occurred while deleting daily report",
-                    "errors": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                "status": "error",
+                "message": "An error occurred while deleting daily report",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
