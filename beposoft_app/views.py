@@ -1303,28 +1303,6 @@ class ProductUpdateView(BaseTokenView):
         
         
 
-    # def put(self, request, pk):
-    #     try:
-    #         authUser, error_response = self.get_user_from_token(request)
-    #         if error_response:
-    #             return error_response
-
-    #         product = self.get_product(pk)
-
-    #         serializer = ProductsSerializer(product, data=request.data, partial=True)
-    #         if serializer.is_valid():
-    #             serializer.save()
-                
-    #             return Response({"message": "Product updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-    
-
-              
-    #         return Response({"message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     except Exception as e:
-    #         return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -1333,30 +1311,19 @@ class ProductUpdateView(BaseTokenView):
 
             product = self.get_product(pk)
 
-            data = request.data.copy()
-            data['approval_status'] = 'Disapproved'
-
-            serializer = ProductsSerializer(product, data=data, partial=True)
-
+            serializer = ProductsSerializer(product, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
+                
+                return Response({"message": "Product updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+    
 
-                return Response({
-                    "message": "Product updated successfully",
-                    "data": serializer.data
-                }, status=status.HTTP_200_OK)
-
-            return Response({
-                "message": "Validation error",
-                "errors": serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+              
+            return Response({"message": "Validation error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            return Response({
-                "status": "error",
-                "message": "An error occurred",
-                "errors": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 
 
