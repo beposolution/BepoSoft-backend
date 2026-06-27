@@ -1760,10 +1760,11 @@ class ProductSalesReportSerializer(serializers.ModelSerializer):
     total_amount = serializers.SerializerMethodField()
     manage_staff = serializers.CharField(source="order.manage_staff.name")
     family = serializers.CharField(source="order.family.name")
+    state = serializers.CharField(source="order.state.name")
 
     class Meta:
         model = OrderItem
-        fields = ["order", "product", "total_sold", "total_amount", "manage_staff","family"]
+        fields = ["order", "product", "total_sold", "total_amount", "manage_staff","family", "state"]
 
     def get_total_sold(self, obj):
         return obj.quantity  # Assuming `quantity` is the sold quantity
