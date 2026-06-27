@@ -1360,6 +1360,10 @@ class ProductUpdateView(BaseTokenView):
 
 
 class ProductConfirmation(BaseTokenView):
+
+    def get_product(self,pk):
+        return get_object_or_404(Products, pk=pk)
+    
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
