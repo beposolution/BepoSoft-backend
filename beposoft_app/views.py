@@ -7631,6 +7631,7 @@ class ProductSalesReportView(APIView):
             status_filter = request.GET.get("status", "").strip()
             start_date = request.GET.get("start_date", "").strip()
             end_date = request.GET.get("end_date", "").strip()
+            state_id = request.GET.get("state_id", "").strip()
 
             order_items = OrderItem.objects.select_related(
                 "product",
@@ -7669,6 +7670,9 @@ class ProductSalesReportView(APIView):
 
             if end_date:
                 order_items = order_items.filter(order__order_date__lte=end_date)
+
+            if state_id:
+                order_items = order_items.filter(order__customer__state_id=state_id)
 
             if not order_items.exists():
                 return Response(
