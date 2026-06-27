@@ -7623,8 +7623,52 @@ class CODBillsView(BaseTokenView):
 class ProductSalesReportView(APIView):
     def get(self, request):
         try:
-            # Fetch all order items with related product and order details
-            order_items = OrderItem.objects.select_related('product', 'order').all()
+            search = request.GET.get("search", "").strip()
+            product_id = request.GET.get("product_id", "").strip()
+            staff_id = request.GET.get("staff_id", "").strip()
+            family_id = request.GET.get("family_id", "").strip()
+            customer_id = request.GET.get("customer_id", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            order_items = OrderItem.objects.select_related(
+                "product",
+                "order",
+                "order__manage_staff",
+                "order__family",
+                "order__customer",
+            ).order_by("-order__order_date", "-id")
+
+            if search:
+                order_items = order_items.filter(
+                    Q(order__invoice__icontains=search) |
+                    Q(product__name__icontains=search) |
+                    Q(order__manage_staff__name__icontains=search) |
+                    Q(order__customer__name__icontains=search) |
+                    Q(order__family__name__icontains=search)
+                )
+
+            if product_id:
+                order_items = order_items.filter(product_id=product_id)
+
+            if staff_id:
+                order_items = order_items.filter(order__manage_staff_id=staff_id)
+
+            if family_id:
+                order_items = order_items.filter(order__family_id=family_id)
+
+            if customer_id:
+                order_items = order_items.filter(order__customer_id=customer_id)
+
+            if status_filter:
+                order_items = order_items.filter(order__status__iexact=status_filter)
+
+            if start_date:
+                order_items = order_items.filter(order__order_date__gte=start_date)
+
+            if end_date:
+                order_items = order_items.filter(order__order_date__lte=end_date)
 
             if not order_items.exists():
                 return Response(
@@ -7632,47 +7676,48 @@ class ProductSalesReportView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Group order items by date and product
-            grouped_data = defaultdict(lambda: defaultdict(list))
-
-            for item in order_items:
-                # Parse order_date
-                date = item.order.order_date
-                formatted_date = (
-                    date if isinstance(date, str) else date.strftime('%Y-%m-%d')
-                )
-
-                product_name = item.product.name
-
-                # Serialize individual order items
-                serializer = ProductSalesReportSerializer(item)
-                grouped_data[formatted_date][product_name].append(serializer.data)
-
-            # Fetch remaining stock directly from the Products model
             product_stock = {
-                product.name: product.stock for product in Products.objects.all()
+                product.id: product.stock
+                for product in Products.objects.all()
             }
 
-            # Format the final response (latest date first)
-            formatted_response = []
-            for date in sorted(grouped_data.keys(), reverse=True):  # Sort dates descending
-                products = grouped_data[date]
-                for product, data in products.items():
-                    formatted_response.append({
-                        "date": date,
-                        "product": product,
-                        "stock": product_stock.get(product, 0),  # Attach stock from Products model
-                        "data": data
-                    })
+            summary = order_items.aggregate(
+                total_orders=Count("order", distinct=True),
+                total_items=Count("id"),
+                total_quantity=Coalesce(Sum("quantity"), 0),
+                total_amount=Coalesce(
+                    Sum(ExpressionWrapper(
+                        F("quantity") * F("rate"),
+                        output_field=DecimalField(max_digits=15, decimal_places=2)
+                    )),
+                    Decimal("0.00")
+                ),
+            )
 
-            return Response(formatted_response, status=status.HTTP_200_OK)
+            paginator = StandardPagination()
+            paginated_items = paginator.paginate_queryset(order_items, request)
+
+            serializer = ProductSalesReportSerializer(paginated_items, many=True)
+
+            results = []
+            for item, data in zip(paginated_items, serializer.data):
+                data["date"] = item.order.order_date
+                data["stock"] = product_stock.get(item.product_id, 0)
+                data["customer"] = item.order.customer.name if item.order.customer else None
+                data["status"] = item.order.status
+                results.append(data)
+
+            return paginator.get_paginated_response({
+                "message": "Product sales report fetched successfully",
+                "summary": summary,
+                "data": results
+            })
 
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )    
-
+            )
 
         
 
