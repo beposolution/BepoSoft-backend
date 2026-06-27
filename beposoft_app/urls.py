@@ -51,7 +51,6 @@ urlpatterns = [
     path('api/all/products/',ListAllProducts.as_view()),
     path('api/all/products/get/',ListAllGETProducts.as_view()),
     path('api/product/update/<int:pk>/',ProductUpdateView.as_view(),name="product-update"),
-    path('api/product/confirmation/<int:pk>/',ProductConfirmation.as_view(),name="product-update"),
     path('api/approved/products/',ApprovedProductList.as_view()),
     path('api/disapproved/products/', DisapprovedProductList.as_view()),
 
