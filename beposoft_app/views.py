@@ -7361,10 +7361,11 @@ class SalesReportView(BaseTokenView):
                 'Invoice Created',
                 'Invoice Approved',
                 'Waiting For Confirmation',
-                'Invoice Rejected',
+                # 'Invoice Rejected',
                 'To Print',
                 'Processing',
-                'Completed'
+                'Completed',
+                'Ready to ship'
             ]
 
             distinct_dates = (
