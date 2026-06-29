@@ -7554,9 +7554,6 @@ class CODSalesReportView(BaseTokenView):
 
             orders = Order.objects.filter(payment_status="COD")
 
-            # -------------------------
-            # Query params
-            # -------------------------
             start_date = request.query_params.get("start_date")
             end_date = request.query_params.get("end_date")
             status_filter = request.query_params.get("status")
@@ -7571,19 +7568,12 @@ class CODSalesReportView(BaseTokenView):
             invoice = request.query_params.get("invoice")
             search = request.query_params.get("search")
 
-            # -------------------------
-            # Date range filter
-            # order_date is CharField, so this works properly only if format is YYYY-MM-DD
-            # -------------------------
             if start_date:
                 orders = orders.filter(order_date__gte=start_date)
 
             if end_date:
                 orders = orders.filter(order_date__lte=end_date)
 
-            # -------------------------
-            # Other filters
-            # -------------------------
             if status_filter:
                 orders = orders.filter(status=status_filter)
 
@@ -7616,16 +7606,19 @@ class CODSalesReportView(BaseTokenView):
 
             if search:
                 orders = orders.filter(
-                    invoice__icontains=search
-                ) | orders.filter(
-                    customer__name__icontains=search
-                ) | orders.filter(
-                    manage_staff__name__icontains=search
+                    Q(invoice__icontains=search) |
+                    Q(customer__name__icontains=search) |
+                    Q(manage_staff__name__icontains=search)
                 )
 
             orders = orders.order_by("-order_date")
 
             grouped_orders = defaultdict(list)
+
+            total_orders = 0
+            total_amount = 0.0
+            paid_amount = 0.0
+            balance_amount = 0.0
 
             for order in orders:
                 grouped_orders[order.order_date].append(order)
@@ -7635,6 +7628,11 @@ class CODSalesReportView(BaseTokenView):
             for date, orders_list in grouped_orders.items():
                 date_data = []
 
+                date_total_orders = 0
+                date_total_amount = 0.0
+                date_paid_amount = 0.0
+                date_balance_amount = 0.0
+
                 for order in orders_list:
                     total_paid_amount = PaymentReceipt.objects.filter(order=order).aggregate(
                         total_paid=Sum(Cast("amount", FloatField()))
@@ -7642,22 +7640,46 @@ class CODSalesReportView(BaseTokenView):
 
                     total_paid_amount = float(total_paid_amount)
                     order_total_amount = float(order.total_amount or 0)
-                    balance_amount = order_total_amount - total_paid_amount
+                    order_balance_amount = order_total_amount - total_paid_amount
 
                     serializer = OrderDetailSerializer(order)
                     order_data = serializer.data
 
-                    order_data["total_paid_amount"] = total_paid_amount
-                    order_data["balance_amount"] = balance_amount
+                    order_data["total_paid_amount"] = round(total_paid_amount, 2)
+                    order_data["balance_amount"] = round(order_balance_amount, 2)
 
                     date_data.append(order_data)
 
+                    date_total_orders += 1
+                    date_total_amount += order_total_amount
+                    date_paid_amount += total_paid_amount
+                    date_balance_amount += order_balance_amount
+
+                total_orders += date_total_orders
+                total_amount += date_total_amount
+                paid_amount += date_paid_amount
+                balance_amount += date_balance_amount
+
                 response_data.append({
                     "date": date,
+                    "summary": {
+                        "total_orders": date_total_orders,
+                        "total_amount": round(date_total_amount, 2),
+                        "paid_amount": round(date_paid_amount, 2),
+                        "balance_amount": round(date_balance_amount, 2),
+                    },
                     "orders": date_data
                 })
 
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response({
+                "summary": {
+                    "total_orders": total_orders,
+                    "total_amount": round(total_amount, 2),
+                    "paid_amount": round(paid_amount, 2),
+                    "balance_amount": round(balance_amount, 2),
+                },
+                "data": response_data
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(
