@@ -7361,11 +7361,15 @@ class SalesReportView(BaseTokenView):
                 'Invoice Created',
                 'Invoice Approved',
                 'Waiting For Confirmation',
-                # 'Invoice Rejected',
                 'To Print',
                 'Processing',
                 'Completed',
-                'Ready to ship'
+                'Ready to ship',
+                'Packing under progress',
+            ]
+
+            rejected_statuses = [
+                'Invoice Rejected',
             ]
 
             distinct_dates = (
@@ -7386,7 +7390,7 @@ class SalesReportView(BaseTokenView):
                 approved_count = approved_bills.count()
                 approved_amount = approved_bills.aggregate(total=Sum('total_amount'))['total'] or 0
 
-                rejected_bills = daily_orders.exclude(status__in=approved_statuses)
+                rejected_bills = daily_orders.filter(status__in=rejected_statuses)
                 rejected_count = rejected_bills.count()
                 rejected_amount = rejected_bills.aggregate(total=Sum('total_amount'))['total'] or 0
 
