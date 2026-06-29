@@ -7320,15 +7320,41 @@ class GRVUpdateView(BaseTokenView):
 class SalesReportView(BaseTokenView):
     def get(self, request):
         try:
-            # Authenticate the user
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            # Fetch all orders
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            family = request.GET.get("family")
+            manage_staff = request.GET.get("staff")
+
             orders = Order.objects.all()
 
-            # Approved statuses
+            if start_date and end_date:
+                try:
+                    datetime.strptime(start_date, "%Y-%m-%d")
+                    datetime.strptime(end_date, "%Y-%m-%d")
+                except ValueError:
+                    return Response(
+                        {"status": "error", "message": "Invalid date format. Use YYYY-MM-DD"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                orders = orders.filter(order_date__gte=start_date, order_date__lte=end_date)
+
+            elif start_date:
+                orders = orders.filter(order_date__gte=start_date)
+
+            elif end_date:
+                orders = orders.filter(order_date__lte=end_date)
+
+            if family:
+                orders = orders.filter(family_id=family)
+
+            if manage_staff:
+                orders = orders.filter(manage_staff_id=manage_staff)
+
             approved_statuses = [
                 'Approved',
                 'Shipped',
@@ -7341,27 +7367,28 @@ class SalesReportView(BaseTokenView):
                 'Completed'
             ]
 
-            # Get distinct order dates in descending order
-            distinct_dates = orders.order_by('-order_date').values_list('order_date', flat=True).distinct()
+            distinct_dates = (
+                orders.order_by('-order_date')
+                .values_list('order_date', flat=True)
+                .distinct()
+            )
 
             report_data = []
 
             for date in distinct_dates:
                 daily_orders = orders.filter(order_date=date)
+
                 total_amount = daily_orders.aggregate(total=Sum('total_amount'))['total'] or 0
                 total_bills = daily_orders.count()
 
-                # Approved
                 approved_bills = daily_orders.filter(status__in=approved_statuses)
                 approved_count = approved_bills.count()
                 approved_amount = approved_bills.aggregate(total=Sum('total_amount'))['total'] or 0
 
-                # Rejected
                 rejected_bills = daily_orders.exclude(status__in=approved_statuses)
                 rejected_count = rejected_bills.count()
                 rejected_amount = rejected_bills.aggregate(total=Sum('total_amount'))['total'] or 0
 
-                # Order details
                 order_details = daily_orders.values(
                     'id',
                     'invoice',
@@ -7390,7 +7417,13 @@ class SalesReportView(BaseTokenView):
                     "order_details": list(order_details),
                 })
 
-            return Response({"sales_report": report_data}, status=status.HTTP_200_OK)
+            return Response({
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+                "sales_report": report_data
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
