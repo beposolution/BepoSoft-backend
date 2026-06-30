@@ -323,6 +323,8 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "groupID": variant.groupID,
                         "name": variant.name if variant.name else None,  
                         "stock": variant.stock,
+                        "partially_damaged_stock": variant.partially_damaged_stock,
+                        "damaged_stock": variant.damaged_stock,
                         "locked_stock":variant.locked_stock,
                         
                         "image": selected_image, # Image URL handling
