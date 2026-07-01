@@ -324,6 +324,7 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "name": variant.name if variant.name else None,  
                         "stock": variant.stock,
                         "partially_damaged_stock": variant.partially_damaged_stock,
+                        "liquidation_stock": variant.liquidation_stock,
                         "damaged_stock": variant.damaged_stock,
                         "locked_stock":variant.locked_stock,
                         
@@ -510,6 +511,7 @@ class ProductSerializerView(serializers.ModelSerializer):
                     "size": variant.size if variant.size else None,
                     "stock": variant.stock,
                     "partially_damaged_stock": variant.partially_damaged_stock,
+                    "liquidation_stock": variant.liquidation_stock,
                     "damaged_stock": variant.damaged_stock,
                     "created_user": variant.created_user.name,
                     "warehouse_name": warehouse_name

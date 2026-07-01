@@ -429,6 +429,7 @@ class Products(models.Model):
     rack_details = models.JSONField(default=list, blank=True, null=True)
     damaged_stock = models.IntegerField(default=0, null=True, blank=True)
     partially_damaged_stock = models.IntegerField(default=0, null=True, blank=True)
+    liquidation_stock = models.IntegerField(default=0, null=True, blank=True)
     
 
     def generate_variant_id(self):
@@ -436,7 +437,7 @@ class Products(models.Model):
         return str(uuid.uuid4())
     
     def _recompute_stock_fields(self):
-        usable = damaged = partial = 0
+        usable = damaged = partial = liquidation = 0
         for rack in self.rack_details or []:
             qty = int(rack.get('rack_stock', 0) or 0)
             u = rack.get('usability')
@@ -446,10 +447,13 @@ class Products(models.Model):
                 damaged += qty
             elif u == 'partially_damaged':
                 partial += qty
+            elif u == 'liquidation_stock':
+                liquidation += qty
         self.stock = usable
         self.damaged_stock = damaged
         self.partially_damaged_stock = partial
-        return {"stock", "damaged_stock", "partially_damaged_stock"}
+        self.liquidation_stock = liquidation
+        return {"stock", "damaged_stock", "partially_damaged_stock", "liquidation_stock"}
 
     def save(self, *args, **kwargs):
         # Default selling_price
