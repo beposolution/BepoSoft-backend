@@ -509,6 +509,8 @@ class ProductSerializerView(serializers.ModelSerializer):
                     "color": variant.color if variant.color else None,
                     "size": variant.size if variant.size else None,
                     "stock": variant.stock,
+                    "partially_damaged_stock": variant.partially_damaged_stock,
+                    "damaged_stock": variant.damaged_stock,
                     "created_user": variant.created_user.name,
                     "warehouse_name": warehouse_name
                     
