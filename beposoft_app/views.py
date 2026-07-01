@@ -9783,8 +9783,11 @@ class GETProductByWarehouseView(BaseTokenView):
                 )
 
             VALID_STOCK_TYPES = {
+                "stock": "stock",
                 "usable": "stock",
+                "damaged_stock": "damaged_stock",
                 "damaged": "damaged_stock",
+                "partially_damaged_stock": "partially_damaged_stock",
                 "partially_damaged": "partially_damaged_stock",
                 "liquidation_stock": "liquidation_stock",
             }
@@ -9801,8 +9804,10 @@ class GETProductByWarehouseView(BaseTokenView):
                     )
 
                 stock_field = VALID_STOCK_TYPES[stock_type]
-                filter_kwargs = {f"{stock_field}__gt": 0}
-                matching_stock_products = base_products.filter(**filter_kwargs)
+
+                matching_stock_products = base_products.filter(
+                    **{f"{stock_field}__gt": 0}
+                )
 
                 matched_group_ids = list(
                     matching_stock_products.exclude(groupID__isnull=True)
