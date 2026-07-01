@@ -24674,3 +24674,111 @@ class OrderComparisonReportView(BaseTokenView):
                 "message": "An error occurred while fetching order comparison report",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class GRVFamilyPaymentSummaryView(APIView):
+    def get(self, request):
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+
+        def build_summary(start_date, end_date):
+            grv_qs = GRVModel.objects.select_related(
+                "order",
+                "order__family"
+            ).filter(
+                date__range=[start_date, end_date],
+                order__payment_status__in=["paid", "COD"]
+            )
+
+            families = defaultdict(lambda: {
+                "family_id": None,
+                "family_name": "",
+                "paid": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "COD": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "total": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                }
+            })
+
+            grand_total = {
+                "paid": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "COD": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "total": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                }
+            }
+
+            processed_orders = set()
+
+            for grv in grv_qs:
+                order = grv.order
+                family = order.family
+                payment_status = order.payment_status
+
+                family_id = family.id
+                family_name = family.name
+
+                families[family_id]["family_id"] = family_id
+                families[family_id]["family_name"] = family_name
+
+                families[family_id][payment_status]["grv_count"] += 1
+                families[family_id]["total"]["grv_count"] += 1
+
+                grand_total[payment_status]["grv_count"] += 1
+                grand_total["total"]["grv_count"] += 1
+
+                order_key = f"{order.id}_{payment_status}"
+
+                if order_key not in processed_orders:
+                    processed_orders.add(order_key)
+
+                    amount = float(grv.price or 0) * int(grv.quantity or 0)
+
+                    families[family_id][payment_status]["order_count"] += 1
+                    families[family_id][payment_status]["order_amount"] += amount
+
+                    families[family_id]["total"]["order_count"] += 1
+                    families[family_id]["total"]["order_amount"] += amount
+
+                    grand_total[payment_status]["order_count"] += 1
+                    grand_total[payment_status]["order_amount"] += amount
+
+                    grand_total["total"]["order_count"] += 1
+                    grand_total["total"]["order_amount"] += amount
+
+            return {
+                "families": list(families.values()),
+                "grand_total": grand_total
+            }
+
+        today_data = build_summary(today, today)
+        current_month_data = build_summary(month_start, today)
+
+        return Response({
+            "status": "success",
+            "date": today,
+            "month_start": month_start,
+            "today": today_data,
+            "current_month": current_month_data
+        }, status=status.HTTP_200_OK)
