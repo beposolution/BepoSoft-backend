@@ -413,6 +413,9 @@ urlpatterns = [
     path("api/staff/attendance/team/members/<int:team_id>/", StaffAttendanceTeamMembersByTeamView.as_view()),
     path("api/staff/attendance/sales/data/", SalesDepartmentAttendanceDataView.as_view()),
 
+
+    path("api/grv/family/payment/summary/", GRVFamilyPaymentSummaryView.as_view()),
+
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 ]
