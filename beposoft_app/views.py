@@ -24679,10 +24679,31 @@ class OrderComparisonReportView(BaseTokenView):
 
 class GRVFamilyPaymentSummaryView(APIView):
     def get(self, request):
-        today = timezone.localdate()
-        month_start = today.replace(day=1)
+        try:
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
 
-        def build_summary(start_date, end_date):
+            if not start_date or not end_date:
+                return Response({
+                    "status": "error",
+                    "message": "start_date and end_date are required. Format: YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            start_date = parse_date(start_date)
+            end_date = parse_date(end_date)
+
+            if not start_date or not end_date:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if start_date > end_date:
+                return Response({
+                    "status": "error",
+                    "message": "start_date cannot be greater than end_date"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             grv_qs = GRVModel.objects.select_related(
                 "order",
                 "order__family"
@@ -24734,13 +24755,15 @@ class GRVFamilyPaymentSummaryView(APIView):
             for grv in grv_qs:
                 order = grv.order
                 family = order.family
-                payment_status = order.payment_status
 
+                if not family:
+                    continue
+
+                payment_status = order.payment_status
                 family_id = family.id
-                family_name = family.name
 
                 families[family_id]["family_id"] = family_id
-                families[family_id]["family_name"] = family_name
+                families[family_id]["family_name"] = family.name
 
                 families[family_id][payment_status]["grv_count"] += 1
                 families[family_id]["total"]["grv_count"] += 1
@@ -24767,18 +24790,17 @@ class GRVFamilyPaymentSummaryView(APIView):
                     grand_total["total"]["order_count"] += 1
                     grand_total["total"]["order_amount"] += amount
 
-            return {
+            return Response({
+                "status": "success",
+                "start_date": start_date,
+                "end_date": end_date,
                 "families": list(families.values()),
                 "grand_total": grand_total
-            }
+            }, status=status.HTTP_200_OK)
 
-        today_data = build_summary(today, today)
-        current_month_data = build_summary(month_start, today)
-
-        return Response({
-            "status": "success",
-            "date": today,
-            "month_start": month_start,
-            "today": today_data,
-            "current_month": current_month_data
-        }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching GRV payment summary.",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
