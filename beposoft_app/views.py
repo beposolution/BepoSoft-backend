@@ -1325,6 +1325,40 @@ class ProductUpdateView(BaseTokenView):
     #         return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+    # def put(self, request, pk):
+    #     try:
+    #         authUser, error_response = self.get_user_from_token(request)
+    #         if error_response:
+    #             return error_response
+
+    #         product = self.get_product(pk)
+
+    #         data = request.data.copy()
+    #         data['approval_status'] = 'Disapproved'
+
+    #         serializer = ProductsSerializer(product, data=data, partial=True)
+
+    #         if serializer.is_valid():
+    #             serializer.save()
+
+    #             return Response({
+    #                 "message": "Product updated successfully",
+    #                 "data": serializer.data
+    #             }, status=status.HTTP_200_OK)
+
+    #         return Response({
+    #             "message": "Validation error",
+    #             "errors": serializer.errors
+    #         }, status=status.HTTP_400_BAD_REQUEST)
+
+    #     except Exception as e:
+    #         return Response({
+    #             "status": "error",
+    #             "message": "An error occurred",
+    #             "errors": str(e)
+    #         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     def put(self, request, pk):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -1333,17 +1367,45 @@ class ProductUpdateView(BaseTokenView):
 
             product = self.get_product(pk)
 
+            # Store old stock-related values before update
+            old_stock_values = {
+                "stock": product.stock,
+                "damaged_stock": product.damaged_stock,
+                "partially_damaged_stock": product.partially_damaged_stock,
+                "liquidation_stock": product.liquidation_stock,
+            }
+
             data = request.data.copy()
-            data['approval_status'] = 'Disapproved'
+
+            # Do not allow approval_status to change directly from normal product update
+            data.pop("approval_status", None)
 
             serializer = ProductsSerializer(product, data=data, partial=True)
 
             if serializer.is_valid():
-                serializer.save()
+                updated_product = serializer.save()
+
+                # Refresh values after save because model.save() recomputes stock fields
+                updated_product.refresh_from_db()
+
+                new_stock_values = {
+                    "stock": updated_product.stock,
+                    "damaged_stock": updated_product.damaged_stock,
+                    "partially_damaged_stock": updated_product.partially_damaged_stock,
+                    "liquidation_stock": updated_product.liquidation_stock,
+                }
+
+                # Change approval_status only if stock-related fields changed
+                if old_stock_values != new_stock_values:
+                    updated_product.approval_status = "Disapproved"
+                    updated_product.save(update_fields=["approval_status"])
+
+                response_serializer = ProductsSerializer(updated_product)
 
                 return Response({
                     "message": "Product updated successfully",
-                    "data": serializer.data
+                    "stock_changed": old_stock_values != new_stock_values,
+                    "data": response_serializer.data
                 }, status=status.HTTP_200_OK)
 
             return Response({
@@ -1357,6 +1419,7 @@ class ProductUpdateView(BaseTokenView):
                 "message": "An error occurred",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 
 class ProductConfirmation(BaseTokenView):
