@@ -9728,6 +9728,7 @@ class GETProductByWarehouseView(BaseTokenView):
 
             search = request.GET.get("search", "").strip()
             category_id = request.GET.get("category_id", "").strip()
+            stock_type = request.GET.get("stock_type", "").strip()
 
             warehouse = WareHouse.objects.filter(pk=warehouse_id).first()
             if not warehouse:
@@ -9772,6 +9773,46 @@ class GETProductByWarehouseView(BaseTokenView):
 
                 matched_single_ids = list(
                     matching_products.filter(
+                        Q(groupID__isnull=True) | Q(groupID="")
+                    ).values_list("id", flat=True)
+                )
+
+                base_products = base_products.filter(
+                    Q(groupID__in=matched_group_ids) |
+                    Q(id__in=matched_single_ids)
+                )
+
+            VALID_STOCK_TYPES = {
+                "usable": "stock",
+                "damaged": "damaged_stock",
+                "partially_damaged": "partially_damaged_stock",
+                "liquidation_stock": "liquidation_stock",
+            }
+
+            if stock_type:
+                if stock_type not in VALID_STOCK_TYPES:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid stock_type",
+                            "allowed_values": list(VALID_STOCK_TYPES.keys())
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                stock_field = VALID_STOCK_TYPES[stock_type]
+                filter_kwargs = {f"{stock_field}__gt": 0}
+                matching_stock_products = base_products.filter(**filter_kwargs)
+
+                matched_group_ids = list(
+                    matching_stock_products.exclude(groupID__isnull=True)
+                    .exclude(groupID="")
+                    .values_list("groupID", flat=True)
+                    .distinct()
+                )
+
+                matched_single_ids = list(
+                    matching_stock_products.filter(
                         Q(groupID__isnull=True) | Q(groupID="")
                     ).values_list("id", flat=True)
                 )
@@ -9854,6 +9895,10 @@ class GETProductByWarehouseView(BaseTokenView):
             variant_partially_damaged_stock = 0
             single_partially_damaged_stock = 0
 
+            total_liquidation_stock = 0
+            variant_liquidation_stock = 0
+            single_liquidation_stock = 0
+
             total_damaged_exclude_price_amount = 0
             total_damaged_selling_amount = 0
             total_damaged_landing_cost_amount = 0
@@ -9863,6 +9908,11 @@ class GETProductByWarehouseView(BaseTokenView):
             total_partially_damaged_selling_amount = 0
             total_partially_damaged_landing_cost_amount = 0
             total_partially_damaged_retail_amount = 0
+
+            total_liquidation_exclude_price_amount = 0
+            total_liquidation_selling_amount = 0
+            total_liquidation_landing_cost_amount = 0
+            total_liquidation_retail_amount = 0
 
             variant_product_count = 0
             single_product_count = 0
@@ -9884,6 +9934,7 @@ class GETProductByWarehouseView(BaseTokenView):
 
                         damaged_stock = variant.get("damaged_stock") or 0
                         partially_damaged_stock = variant.get("partially_damaged_stock") or 0
+                        liquidation_stock = variant.get("liquidation_stock") or 0
 
                         total_stock += stock
                         variant_stock += stock
@@ -9934,11 +9985,25 @@ class GETProductByWarehouseView(BaseTokenView):
                         total_partially_damaged_landing_cost_amount += partially_damaged_landing_cost_amount
                         total_partially_damaged_retail_amount += partially_damaged_retail_amount
 
+                        total_liquidation_stock += liquidation_stock
+                        variant_liquidation_stock += liquidation_stock
+
+                        liquidation_exclude_price_amount = liquidation_stock * exclude_price
+                        liquidation_selling_amount = liquidation_stock * selling_price
+                        liquidation_landing_cost_amount = liquidation_stock * landing_cost
+                        liquidation_retail_amount = liquidation_stock * retail_price
+
+                        total_liquidation_exclude_price_amount += liquidation_exclude_price_amount
+                        total_liquidation_selling_amount += liquidation_selling_amount
+                        total_liquidation_landing_cost_amount += liquidation_landing_cost_amount
+                        total_liquidation_retail_amount += liquidation_retail_amount
+
                 else:
                     single_product_count += 1
 
                     stock = product_data.get("stock") or 0
                     locked_stock = product_data.get("locked_stock") or 0
+                    liquidation_stock = product_data.get("liquidation_stock") or 0
 
                     exclude_price = product_data.get("exclude_price") or 0
                     selling_price = product_data.get("selling_price") or 0
@@ -9997,6 +10062,19 @@ class GETProductByWarehouseView(BaseTokenView):
                     total_partially_damaged_landing_cost_amount += partially_damaged_landing_cost_amount
                     total_partially_damaged_retail_amount += partially_damaged_retail_amount
 
+                    total_liquidation_stock += liquidation_stock
+                    single_liquidation_stock += liquidation_stock
+
+                    liquidation_exclude_price_amount = liquidation_stock * exclude_price
+                    liquidation_selling_amount = liquidation_stock * selling_price
+                    liquidation_landing_cost_amount = liquidation_stock * landing_cost
+                    liquidation_retail_amount = liquidation_stock * retail_price
+
+                    total_liquidation_exclude_price_amount += liquidation_exclude_price_amount
+                    total_liquidation_selling_amount += liquidation_selling_amount
+                    total_liquidation_landing_cost_amount += liquidation_landing_cost_amount
+                    total_liquidation_retail_amount += liquidation_retail_amount
+
             summary = {
                 "total_products": len(unique_products),
 
@@ -10046,6 +10124,16 @@ class GETProductByWarehouseView(BaseTokenView):
                     "total_partially_damaged_landing_cost_amount": round(total_partially_damaged_landing_cost_amount, 2),
                     "total_partially_damaged_retail_amount": round(total_partially_damaged_retail_amount, 2),
                 },
+
+                "liquidation_stock_summary": {
+                    "total_liquidation_stock": total_liquidation_stock,
+                    "variant_liquidation_stock": variant_liquidation_stock,
+                    "single_liquidation_stock": single_liquidation_stock,
+                    "total_liquidation_exclude_price_amount": round(total_liquidation_exclude_price_amount, 2),
+                    "total_liquidation_selling_amount": round(total_liquidation_selling_amount, 2),
+                    "total_liquidation_landing_cost_amount": round(total_liquidation_landing_cost_amount, 2),
+                    "total_liquidation_retail_amount": round(total_liquidation_retail_amount, 2),
+                },
             }
 
             paginator = StandardPagination()
@@ -10064,6 +10152,7 @@ class GETProductByWarehouseView(BaseTokenView):
                 "warehouse_name": warehouse.name,
                 "search": search,
                 "category_id": category_id if category_id else None,
+                "stock_type": stock_type if stock_type else None,
                 "summary": summary,
                 "data": serializer.data
             })
