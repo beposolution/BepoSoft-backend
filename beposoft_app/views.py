@@ -9799,20 +9799,23 @@ class GETProductByWarehouseView(BaseTokenView):
             }
 
             if stock_type:
-                if stock_type not in VALID_STOCK_TYPES:
-                    return Response(
-                        {
-                            "status": "error",
-                            "message": "Invalid stock_type",
-                            "allowed_values": list(VALID_STOCK_TYPES.keys())
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                stock_field = VALID_STOCK_TYPES.get(stock_type)
 
-                stock_field = VALID_STOCK_TYPES[stock_type]
+                if not stock_field:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid stock_type",
+                        "allowed_values": list(VALID_STOCK_TYPES.keys())
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-                matching_stock_products = base_products.filter(
+                matching_stock_products = Products.objects.filter(
+                    approval_status__in=["Approved", "Disapproved"],
                     **{f"{stock_field}__gt": 0}
+                ).filter(
+                    Q(warehouse=warehouse) |
+                    Q(warehouse__isnull=True, groupID__in=base_products.exclude(groupID__isnull=True)
+                        .exclude(groupID="")
+                        .values_list("groupID", flat=True))
                 )
 
                 matched_group_ids = list(
@@ -9825,6 +9828,8 @@ class GETProductByWarehouseView(BaseTokenView):
                 matched_single_ids = list(
                     matching_stock_products.filter(
                         Q(groupID__isnull=True) | Q(groupID="")
+                    ).filter(
+                        warehouse=warehouse
                     ).values_list("id", flat=True)
                 )
 
