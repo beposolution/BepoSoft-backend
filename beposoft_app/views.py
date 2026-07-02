@@ -9729,6 +9729,7 @@ class GETProductByWarehouseView(BaseTokenView):
             search = request.GET.get("search", "").strip()
             category_id = request.GET.get("category_id", "").strip()
             stock_type = request.GET.get("stock_type", "").strip()
+            purchase_type = request.GET.get("purchase_type", "").strip()
 
             warehouse = WareHouse.objects.filter(pk=warehouse_id).first()
             if not warehouse:
@@ -9756,6 +9757,11 @@ class GETProductByWarehouseView(BaseTokenView):
             if category_id:
                 base_products = base_products.filter(
                     product_category_id=category_id
+                )
+
+            if purchase_type:
+                base_products = base_products.filter(
+                    purchase_type__iexact=purchase_type
                 )
 
             if search:
@@ -10158,6 +10164,7 @@ class GETProductByWarehouseView(BaseTokenView):
                 "search": search,
                 "category_id": category_id if category_id else None,
                 "stock_type": stock_type if stock_type else None,
+                "purchase_type": purchase_type if purchase_type else None,
                 "summary": summary,
                 "data": serializer.data
             })
