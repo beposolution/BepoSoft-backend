@@ -3630,7 +3630,12 @@ class StaffAttendanceWriteSerializer(serializers.ModelSerializer):
             "attendance_date",
             "attendance_time",
             "status",
+            "approval_status",
+            "approved_by",
+            "approved_at",
+            "manager_note",
         ]
+        read_only_fields = ["approved_by", "approved_at"]
 
 
 class StaffAttendanceReadSerializer(serializers.ModelSerializer):

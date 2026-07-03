@@ -23919,14 +23919,30 @@ class StaffAttendanceDetailView(BaseTokenView):
 
             attendance = self.get_attendance(pk)
 
+            data = request.data.copy()
+
+            approval_status = data.get("approval_status")
+
             serializer = StaffAttendanceWriteSerializer(
                 attendance,
-                data=request.data,
+                data=data,
                 partial=True
             )
 
             if serializer.is_valid():
                 attendance = serializer.save()
+
+                if approval_status in ["approved", "rejected"]:
+                    attendance.approval_status = approval_status
+                    attendance.approved_by = authUser
+                    attendance.approved_at = timezone.now()
+                    attendance.save(update_fields=[
+                        "approval_status",
+                        "approved_by",
+                        "approved_at",
+                        "updated_at"
+                    ])
+
                 response_serializer = StaffAttendanceReadSerializer(attendance)
 
                 return Response({
