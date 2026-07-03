@@ -23855,9 +23855,9 @@ class StaffAttendanceView(BaseTokenView):
             if serializer.is_valid():
                 attendance = serializer.save(
                     submitted_by=authUser,
-                    approval_status="approved",
-                    approved_by=authUser,
-                    approved_at=timezone.now()
+                    # approval_status="approved",
+                    # approved_by=authUser,
+                    # approved_at=timezone.now()
                 )
 
                 response_serializer = StaffAttendanceReadSerializer(attendance)
@@ -24414,7 +24414,7 @@ class SalesDepartmentAttendanceDataView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            
+
 
 class MyStaffAttendanceDetailsView(BaseTokenView):
 
