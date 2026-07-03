@@ -728,6 +728,7 @@ class Order(models.Model):
         ('Packing under progress', 'Packing under progress'),
         ('Packed', 'Packed'),
         ('Ready to ship', 'Ready to ship'),
+        ('Pre Booked', 'Pre Booked'),
     ], default='pending')
 
     total_amount = models.FloatField()
