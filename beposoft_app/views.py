@@ -24414,6 +24414,59 @@ class SalesDepartmentAttendanceDataView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
+            
+
+class MyStaffAttendanceDetailsView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+            attendance_qs = StaffAttendance.objects.select_related(
+                "staff",
+                "submitted_by",
+                "approved_by"
+            ).filter(
+                staff=authUser
+            )
+
+            if start_date:
+                attendance_qs = attendance_qs.filter(attendance_date__gte=start_date)
+
+            if end_date:
+                attendance_qs = attendance_qs.filter(attendance_date__lte=end_date)
+
+            attendance_qs = attendance_qs.order_by("-attendance_date", "-id")
+
+            serializer = StaffAttendanceReadSerializer(attendance_qs, many=True)
+
+            return Response({
+                "status": "success",
+                "message": "Logged-in user attendance details fetched successfully",
+                "filters": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                },
+                "user": {
+                    "id": authUser.id,
+                    "name": authUser.name,
+                },
+                "count": attendance_qs.count(),
+                "data": serializer.data,
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching logged-in user attendance details",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 # comparison GET api's
