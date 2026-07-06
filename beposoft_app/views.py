@@ -18138,6 +18138,29 @@ class SalesTeamMemberDetailUpdateView(BaseTokenView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    
+    def delete(self, request, pk):
+        try:
+            member = SalesTeamMember.objects.get(pk=pk)
+            member.delete()
+
+            return Response({
+                "success": True,
+                "message": "Sales team member deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except SalesTeamMember.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Sales team member not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
