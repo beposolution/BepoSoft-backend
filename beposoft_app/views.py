@@ -23698,6 +23698,28 @@ class StaffAttendanceTeamMembersDetailView(BaseTokenView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+    def delete(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            member = self.get_member(pk)
+            member.delete()
+
+            return Response({
+                "status": "success",
+                "message": "Staff attendance team member deleted successfully"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while deleting staff attendance team member",
+                "errors": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 class StaffAttendanceView(BaseTokenView):
 
