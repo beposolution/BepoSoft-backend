@@ -24213,6 +24213,11 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     team.team_members.values_list("member_id", flat=True)
                 )
 
+                approved_members_count = User.objects.filter(
+                    approval_status="approved",
+                    id__in=member_ids
+                ).count()
+
                 attendance_qs = StaffAttendance.objects.filter(
                     staff_id__in=member_ids
                 )
@@ -24237,16 +24242,28 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     "team_name": team.team_name,
                     "team_leader": team.team_leader.id if team.team_leader else None,
                     "team_leader_name": team.team_leader.name if team.team_leader else None,
-                    "members_count": team.team_members.count(),
+                    # "members_count": team.team_members.count(),
+                    "members_count": approved_members_count,
                     "present_count": present_count,
                     "absent_count": absent_count,
                     "half_day_count": half_day_count,
                     "total_count": total_count,
                 })
 
+            team_member_user_ids = StaffAttendanceTeamMembers.objects.values_list(
+                "member_id",
+                flat=True
+            ).distinct()
+
+            approved_team_members_count = User.objects.filter(
+                approval_status="approved",
+                id__in=team_member_user_ids
+            ).count()
+
             summary = {
                 "total_teams": len(data),
-                "total_members": sum(item["members_count"] for item in data),
+                # "total_members": sum(item["members_count"] for item in data),
+                "total_members": approved_team_members_count,
                 "total_present": sum(item["present_count"] for item in data),
                 "total_absent": sum(item["absent_count"] for item in data),
                 "total_half_day": sum(item["half_day_count"] for item in data),
