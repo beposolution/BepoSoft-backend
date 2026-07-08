@@ -25104,3 +25104,137 @@ class GRVFamilyPaymentSummaryView(APIView):
                 "message": "An error occurred while fetching GRV payment summary.",
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# internal mail for users
+
+class InternalMailView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    MAX_FILE_SIZE = 1024 * 1024  # 1 MB
+
+    def get(self, request):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        mail_type = request.GET.get("type", "inbox")
+        search = request.GET.get("search", "").strip()
+
+        if mail_type == "sent":
+            mails = InternalMail.objects.filter(
+                sender=authUser,
+                is_deleted_by_sender=False
+            )
+        else:
+            mails = InternalMail.objects.filter(
+                recipients=authUser
+            )
+
+        if search:
+            mails = mails.filter(
+                Q(subject__icontains=search) |
+                Q(message__icontains=search) |
+                Q(sender__name__icontains=search) |
+                Q(recipients__name__icontains=search)
+            ).distinct()
+
+        mails = mails.prefetch_related("recipients", "attachments").select_related("sender").order_by("-created_at")
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(mails, request)
+        serializer = InternalMailSerializer(page, many=True, context={"request": request})
+
+        return paginator.get_paginated_response({
+            "message": "Mails fetched successfully",
+            "data": serializer.data
+        })
+
+    def post(self, request):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        recipient_ids = request.data.getlist("recipients")
+        subject = request.data.get("subject", "").strip()
+        message = request.data.get("message", "").strip()
+        documents = request.FILES.getlist("documents")
+
+        if not recipient_ids:
+            return Response({"status": "error", "message": "At least one recipient is required."}, status=400)
+
+        if not subject:
+            return Response({"status": "error", "message": "Subject is required."}, status=400)
+
+        if not message and not documents:
+            return Response({"status": "error", "message": "Message or document is required."}, status=400)
+
+        recipients = User.objects.filter(id__in=recipient_ids, approval_status="approved")
+
+        if recipients.count() != len(recipient_ids):
+            return Response({"status": "error", "message": "Invalid recipient selected."}, status=400)
+
+        for doc in documents:
+            if doc.size > self.MAX_FILE_SIZE:
+                return Response({
+                    "status": "error",
+                    "message": f"{doc.name} is larger than 1 MB. Upload documents under 1 MB only."
+                }, status=400)
+
+        mail = InternalMail.objects.create(
+            sender=authUser,
+            subject=subject,
+            message=message
+        )
+        mail.recipients.set(recipients)
+
+        for doc in documents:
+            InternalMailAttachment.objects.create(
+                mail=mail,
+                document=doc
+            )
+
+        serializer = InternalMailSerializer(mail, context={"request": request})
+
+        return Response({
+            "status": "success",
+            "message": "Mail sent successfully",
+            "data": serializer.data
+        }, status=201)
+
+
+class InternalMailDetailView(BaseTokenView):
+    def get(self, request, pk):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        mail = get_object_or_404(
+            InternalMail.objects.prefetch_related("recipients", "attachments").select_related("sender"),
+            pk=pk
+        )
+
+        if mail.sender != authUser and not mail.recipients.filter(pk=authUser.pk).exists():
+            return Response({"status": "error", "message": "Permission denied."}, status=403)
+
+        serializer = InternalMailSerializer(mail, context={"request": request})
+        return Response({"message": "Mail fetched successfully", "data": serializer.data}, status=200)
+
+    def delete(self, request, pk):
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        mail = get_object_or_404(InternalMail, pk=pk)
+
+        if mail.sender == authUser:
+            mail.is_deleted_by_sender = True
+            mail.save(update_fields=["is_deleted_by_sender"])
+            return Response({"status": "success", "message": "Mail deleted from sent box."}, status=200)
+
+        if mail.recipients.filter(pk=authUser.pk).exists():
+            mail.recipients.remove(authUser)
+            return Response({"status": "success", "message": "Mail deleted from inbox."}, status=200)
+
+        return Response({"status": "error", "message": "Permission denied."}, status=403)

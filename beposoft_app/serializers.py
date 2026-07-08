@@ -3689,3 +3689,56 @@ class StaffAttendanceTeamMemberSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+
+# internal mail for users
+
+class InternalMailAttachmentSerializer(serializers.ModelSerializer):
+    document_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InternalMailAttachment
+        fields = ["id", "document", "document_url", "uploaded_at"]
+
+    def get_document_url(self, obj):
+        request = self.context.get("request")
+        if obj.document and request:
+            return request.build_absolute_uri(obj.document.url)
+        if obj.document:
+            return obj.document.url
+        return None
+
+
+class InternalMailSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source="sender.name", read_only=True)
+    recipients_data = serializers.SerializerMethodField()
+    attachments = InternalMailAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InternalMail
+        fields = [
+            "id",
+            "sender",
+            "sender_name",
+            "recipients",
+            "recipients_data",
+            "subject",
+            "message",
+            "attachments",
+            "is_deleted_by_sender",
+            "created_at",
+        ]
+        read_only_fields = ["sender", "is_deleted_by_sender", "created_at"]
+
+    def get_recipients_data(self, obj):
+        return [
+            {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "department": user.department_id.name if user.department_id else None,
+            }
+            for user in obj.recipients.all()
+        ]
