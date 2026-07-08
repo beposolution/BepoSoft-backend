@@ -2271,3 +2271,36 @@ class StaffAttendance(models.Model):
 
     def __str__(self):
         return f"{self.staff.name} - {self.attendance_date} - {self.status}"
+
+
+
+# internal mail system models
+
+class InternalMail(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_mails")
+    recipients = models.ManyToManyField(User, related_name="received_mails")
+
+    subject = models.CharField(max_length=255)
+    message = models.TextField(blank=True, null=True)
+
+    is_deleted_by_sender = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "internal_mail"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.subject} - {self.sender.name}"
+
+
+class InternalMailAttachment(models.Model):
+    mail = models.ForeignKey(InternalMail, on_delete=models.CASCADE, related_name="attachments")
+    document = models.FileField(upload_to="internal_mail_documents/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "internal_mail_attachment"
+
+    def __str__(self):
+        return self.document.name
