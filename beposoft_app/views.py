@@ -5268,6 +5268,71 @@ class CreateCompnayDetailsView(BaseTokenView):
             )
 
 
+class CompanyDetailsEditView(BaseTokenView):
+    def get(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            company = Company.objects.get(id=id)
+            serializer = CompanyDetailsSerializer(company)
+
+            return Response(
+                {"status": "success", "data": serializer.data},
+                status=status.HTTP_200_OK,
+            )
+
+        except Company.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "Company not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def put(self, request, id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            company = Company.objects.get(id=id)
+            serializer = CompanyDetailsSerializer(company, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Company details updated successfully",
+                        "data": serializer.data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            return Response(
+                {"status": "error", "message": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Company.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "Company not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        except Exception as e:
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class CallLogDataView(APIView):
     def post(self, request, created_by_id):
         data = request.data.copy()
