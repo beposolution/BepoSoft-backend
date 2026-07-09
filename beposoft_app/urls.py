@@ -154,6 +154,7 @@ urlpatterns = [
     path('api/banks/',BankView.as_view()),
     path('api/bank/view/<int:pk>/',BankAccountView.as_view()),
     path('api/company/data/',CreateCompnayDetailsView.as_view()),
+    path("api/company/data/edit/<int:id>/", CompanyDetailsEditView.as_view()),
 
 
     path("api/add/bank/account/type/", BankAccountTypeView.as_view()),
