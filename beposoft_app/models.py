@@ -2280,6 +2280,10 @@ class InternalMail(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_mails")
     recipients = models.ManyToManyField(User, related_name="received_mails")
 
+    # The mail being replied to.
+    # Null means this is a new/original mail.
+    parent_mail = models.ForeignKey("self", on_delete=models.CASCADE, related_name="replies", null=True, blank=True)
+
     subject = models.CharField(max_length=255)
     message = models.TextField(blank=True, null=True)
 
@@ -2290,8 +2294,29 @@ class InternalMail(models.Model):
         db_table = "internal_mail"
         ordering = ["-created_at"]
 
+        indexes = [
+            models.Index(fields=["parent_mail"]),
+            models.Index(fields=["created_at"]),
+        ]
+
     def __str__(self):
         return f"{self.subject} - {self.sender.name}"
+    
+    @property
+    def is_reply(self):
+        return self.parent_mail_id is not None
+
+    def get_thread_root(self):
+        """
+        Return the first/original mail in the conversation.
+        """
+        mail = self
+
+        while mail.parent_mail_id:
+            mail = mail.parent_mail
+
+        return mail
+    
 
 
 class InternalMailAttachment(models.Model):

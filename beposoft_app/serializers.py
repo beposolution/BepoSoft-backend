@@ -3712,9 +3712,22 @@ class InternalMailAttachmentSerializer(serializers.ModelSerializer):
 
 
 class InternalMailSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source="sender.name", read_only=True)
+    sender_name = serializers.CharField(
+        source="sender.name",
+        read_only=True
+    )
+
     recipients_data = serializers.SerializerMethodField()
-    attachments = InternalMailAttachmentSerializer(many=True, read_only=True)
+
+    attachments = InternalMailAttachmentSerializer(
+        many=True,
+        read_only=True
+    )
+
+    is_reply = serializers.SerializerMethodField()
+    parent_mail_subject = serializers.SerializerMethodField()
+    parent_mail_sender_name = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
 
     class Meta:
         model = InternalMail
@@ -3724,13 +3737,24 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "sender_name",
             "recipients",
             "recipients_data",
+            "parent_mail",
+            "parent_mail_subject",
+            "parent_mail_sender_name",
+            "is_reply",
+            "reply_count",
             "subject",
             "message",
             "attachments",
             "is_deleted_by_sender",
             "created_at",
         ]
-        read_only_fields = ["sender", "is_deleted_by_sender", "created_at"]
+
+        read_only_fields = [
+            "sender",
+            "parent_mail",
+            "is_deleted_by_sender",
+            "created_at",
+        ]
 
     def get_recipients_data(self, obj):
         return [
@@ -3738,7 +3762,72 @@ class InternalMailSerializer(serializers.ModelSerializer):
                 "id": user.id,
                 "name": user.name,
                 "email": user.email,
-                "department": user.department_id.name if user.department_id else None,
+                "department": (
+                    user.department_id.name
+                    if user.department_id
+                    else None
+                ),
+            }
+            for user in obj.recipients.all()
+        ]
+
+    def get_is_reply(self, obj):
+        return obj.parent_mail_id is not None
+
+    def get_parent_mail_subject(self, obj):
+        if obj.parent_mail:
+            return obj.parent_mail.subject
+        return None
+
+    def get_parent_mail_sender_name(self, obj):
+        if obj.parent_mail:
+            return obj.parent_mail.sender.name
+        return None
+
+    def get_reply_count(self, obj):
+        return obj.replies.count()
+
+
+
+class InternalMailThreadSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(
+        source="sender.name",
+        read_only=True
+    )
+
+    recipients_data = serializers.SerializerMethodField()
+
+    attachments = InternalMailAttachmentSerializer(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = InternalMail
+        fields = [
+            "id",
+            "sender",
+            "sender_name",
+            "recipients",
+            "recipients_data",
+            "parent_mail",
+            "subject",
+            "message",
+            "attachments",
+            "created_at",
+        ]
+
+    def get_recipients_data(self, obj):
+        return [
+            {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "department": (
+                    user.department_id.name
+                    if user.department_id
+                    else None
+                ),
             }
             for user in obj.recipients.all()
         ]

@@ -26113,21 +26113,94 @@ class InternalMailView(BaseTokenView):
 
 
 class InternalMailDetailView(BaseTokenView):
+
+    def get_thread_mail_ids(self, root_mail):
+        """
+        Return IDs of the original mail and every nested reply.
+        """
+        mail_ids = [root_mail.id]
+        pending_ids = [root_mail.id]
+
+        while pending_ids:
+            reply_ids = list(
+                InternalMail.objects.filter(
+                    parent_mail_id__in=pending_ids
+                ).values_list("id", flat=True)
+            )
+
+            if not reply_ids:
+                break
+
+            mail_ids.extend(reply_ids)
+            pending_ids = reply_ids
+
+        return mail_ids
+
+
     def get(self, request, pk):
-        authUser, error_response = self.get_user_from_token(request)
+        auth_user, error_response = self.get_user_from_token(request)
+
         if error_response:
             return error_response
 
         mail = get_object_or_404(
-            InternalMail.objects.prefetch_related("recipients", "attachments").select_related("sender"),
+            InternalMail.objects
+            .select_related("sender", "parent_mail")
+            .prefetch_related("recipients", "attachments"),
             pk=pk
         )
 
-        if mail.sender != authUser and not mail.recipients.filter(pk=authUser.pk).exists():
-            return Response({"status": "error", "message": "Permission denied."}, status=403)
+        is_sender = mail.sender_id == auth_user.id
+        is_recipient = mail.recipients.filter(
+            pk=auth_user.pk
+        ).exists()
 
-        serializer = InternalMailSerializer(mail, context={"request": request})
-        return Response({"message": "Mail fetched successfully", "data": serializer.data}, status=200)
+        if not is_sender and not is_recipient:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Permission denied.",
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        root_mail = mail.get_thread_root()
+
+        thread_mail_ids = self.get_thread_mail_ids(root_mail)
+
+        thread_mails = (
+            InternalMail.objects
+            .filter(id__in=thread_mail_ids)
+            .select_related("sender", "parent_mail")
+            .prefetch_related(
+                "recipients",
+                "recipients__department_id",
+                "attachments"
+            )
+            .order_by("created_at")
+        )
+
+        selected_mail_serializer = InternalMailSerializer(
+            mail,
+            context={"request": request}
+        )
+
+        thread_serializer = InternalMailThreadSerializer(
+            thread_mails,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Mail thread fetched successfully.",
+                "data": selected_mail_serializer.data,
+                "thread_root_id": root_mail.id,
+                "thread": thread_serializer.data,
+            },
+            status=status.HTTP_200_OK
+        )
 
     def delete(self, request, pk):
         authUser, error_response = self.get_user_from_token(request)
@@ -26146,3 +26219,167 @@ class InternalMailDetailView(BaseTokenView):
             return Response({"status": "success", "message": "Mail deleted from inbox."}, status=200)
 
         return Response({"status": "error", "message": "Permission denied."}, status=403)
+
+
+
+class InternalMailReplyView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    MAX_FILE_SIZE = 1024 * 1024  # 1 MB
+
+    @transaction.atomic
+    def post(self, request, pk):
+        auth_user, error_response = self.get_user_from_token(request)
+
+        if error_response:
+            return error_response
+
+        parent_mail = get_object_or_404(
+            InternalMail.objects
+            .select_related("sender", "parent_mail")
+            .prefetch_related("recipients"),
+            pk=pk
+        )
+
+        # Only the sender or one of the recipients can reply.
+        is_sender = parent_mail.sender_id == auth_user.id
+        is_recipient = parent_mail.recipients.filter(
+            pk=auth_user.pk
+        ).exists()
+
+        if not is_sender and not is_recipient:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "You do not have permission to reply "
+                        "to this mail."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        recipient_ids = request.data.getlist("recipients")
+        message = request.data.get("message", "").strip()
+        documents = request.FILES.getlist("documents")
+
+        # Remove empty values and duplicates.
+        normalized_recipient_ids = []
+
+        for recipient_id in recipient_ids:
+            recipient_id = str(recipient_id).strip()
+
+            if (
+                recipient_id
+                and recipient_id not in normalized_recipient_ids
+            ):
+                normalized_recipient_ids.append(recipient_id)
+
+        if not normalized_recipient_ids:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "At least one reply recipient is required."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not message and not documents:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "Reply message or document is required."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        recipients = User.objects.filter(
+            id__in=normalized_recipient_ids,
+            approval_status="approved"
+        )
+
+        found_recipient_ids = {
+            str(user_id)
+            for user_id in recipients.values_list("id", flat=True)
+        }
+
+        invalid_recipient_ids = [
+            recipient_id
+            for recipient_id in normalized_recipient_ids
+            if recipient_id not in found_recipient_ids
+        ]
+
+        if invalid_recipient_ids:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid recipient selected.",
+                    "invalid_recipient_ids": invalid_recipient_ids,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        for document in documents:
+            if document.size > self.MAX_FILE_SIZE:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            f"{document.name} is larger than "
+                            "1 MB. Upload documents under "
+                            "1 MB only."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        original_subject = parent_mail.subject.strip()
+
+        if original_subject.lower().startswith("re:"):
+            reply_subject = original_subject
+        else:
+            reply_subject = f"Re: {original_subject}"
+
+        reply_mail = InternalMail.objects.create(
+            sender=auth_user,
+            parent_mail=parent_mail,
+            subject=reply_subject,
+            message=message
+        )
+
+        reply_mail.recipients.set(recipients)
+
+        for document in documents:
+            InternalMailAttachment.objects.create(
+                mail=reply_mail,
+                document=document
+            )
+
+        reply_mail = (
+            InternalMail.objects
+            .select_related("sender", "parent_mail")
+            .prefetch_related(
+                "recipients",
+                "recipients__department_id",
+                "attachments"
+            )
+            .get(pk=reply_mail.pk)
+        )
+
+        serializer = InternalMailSerializer(
+            reply_mail,
+            context={"request": request}
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Reply sent successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_201_CREATED
+        )
