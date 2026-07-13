@@ -26024,6 +26024,7 @@ class InternalMailView(BaseTokenView):
 
     def get(self, request):
         authUser, error_response = self.get_user_from_token(request)
+
         if error_response:
             return error_response
 
@@ -26033,11 +26034,13 @@ class InternalMailView(BaseTokenView):
         if mail_type == "sent":
             mails = InternalMail.objects.filter(
                 sender=authUser,
-                is_deleted_by_sender=False
+                is_deleted_by_sender=False,
+                parent_mail__isnull=True,
             )
         else:
             mails = InternalMail.objects.filter(
-                recipients=authUser
+                recipients=authUser,
+                parent_mail__isnull=True,
             )
 
         if search:
@@ -26045,19 +26048,36 @@ class InternalMailView(BaseTokenView):
                 Q(subject__icontains=search) |
                 Q(message__icontains=search) |
                 Q(sender__name__icontains=search) |
-                Q(recipients__name__icontains=search)
+                Q(recipients__name__icontains=search) |
+                Q(replies__message__icontains=search) |
+                Q(replies__sender__name__icontains=search)
             ).distinct()
 
-        mails = mails.prefetch_related("recipients", "attachments").select_related("sender").order_by("-created_at")
+        mails = (
+            mails
+            .select_related("sender")
+            .prefetch_related(
+                "recipients",
+                "attachments",
+                "replies",
+            )
+            .order_by("-created_at")
+        )
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(mails, request)
-        serializer = InternalMailSerializer(page, many=True, context={"request": request})
+
+        serializer = InternalMailSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
 
         return paginator.get_paginated_response({
             "message": "Mails fetched successfully",
             "data": serializer.data
         })
+    
 
     def post(self, request):
         authUser, error_response = self.get_user_from_token(request)
