@@ -3729,6 +3729,9 @@ class InternalMailSerializer(serializers.ModelSerializer):
     parent_mail_sender_name = serializers.SerializerMethodField()
     reply_count = serializers.SerializerMethodField()
 
+    is_read = serializers.SerializerMethodField()
+    read_at = serializers.SerializerMethodField()
+
     class Meta:
         model = InternalMail
         fields = [
@@ -3745,6 +3748,11 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "subject",
             "message",
             "attachments",
+
+            # Read status fields
+            "is_read",
+            "read_at",
+
             "is_deleted_by_sender",
             "created_at",
         ]
@@ -3754,6 +3762,8 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "parent_mail",
             "is_deleted_by_sender",
             "created_at",
+            "is_read",
+            "read_at",
         ]
 
     def get_recipients_data(self, obj):
@@ -3775,17 +3785,82 @@ class InternalMailSerializer(serializers.ModelSerializer):
         return obj.parent_mail_id is not None
 
     def get_parent_mail_subject(self, obj):
-        if obj.parent_mail:
-            return obj.parent_mail.subject
-        return None
+        return (
+            obj.parent_mail.subject
+            if obj.parent_mail
+            else None
+        )
 
     def get_parent_mail_sender_name(self, obj):
-        if obj.parent_mail:
-            return obj.parent_mail.sender.name
-        return None
+        return (
+            obj.parent_mail.sender.name
+            if obj.parent_mail
+            else None
+        )
 
     def get_reply_count(self, obj):
         return obj.replies.count()
+
+    def _get_user_read_status(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return None
+
+        # A sender sees their own sent mail as read.
+        if obj.sender_id == auth_user.id:
+            return None
+
+        prefetched_statuses = getattr(
+            obj,
+            "current_user_read_statuses",
+            None
+        )
+
+        if prefetched_statuses is not None:
+            return (
+                prefetched_statuses[0]
+                if prefetched_statuses
+                else None
+            )
+
+        return obj.read_statuses.filter(
+            user=auth_user
+        ).first()
+
+    def get_is_read(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return False
+
+        if obj.sender_id == auth_user.id:
+            return True
+
+        read_status = self._get_user_read_status(obj)
+
+        return (
+            read_status.is_read
+            if read_status
+            else False
+        )
+
+    def get_read_at(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return None
+
+        if obj.sender_id == auth_user.id:
+            return None
+
+        read_status = self._get_user_read_status(obj)
+
+        return (
+            read_status.read_at
+            if read_status
+            else None
+        )
 
 
 
@@ -3802,6 +3877,9 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    is_read = serializers.SerializerMethodField()
+    read_at = serializers.SerializerMethodField()
+
     class Meta:
         model = InternalMail
         fields = [
@@ -3814,6 +3892,17 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
             "subject",
             "message",
             "attachments",
+
+            # Read status fields
+            "is_read",
+            "read_at",
+
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "is_read",
+            "read_at",
             "created_at",
         ]
 
@@ -3831,3 +3920,60 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
             }
             for user in obj.recipients.all()
         ]
+
+    def _get_user_read_status(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return None
+
+        prefetched_statuses = getattr(
+            obj,
+            "current_user_read_statuses",
+            None
+        )
+
+        if prefetched_statuses is not None:
+            return (
+                prefetched_statuses[0]
+                if prefetched_statuses
+                else None
+            )
+
+        return obj.read_statuses.filter(
+            user=auth_user
+        ).first()
+
+    def get_is_read(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return False
+
+        if obj.sender_id == auth_user.id:
+            return True
+
+        read_status = self._get_user_read_status(obj)
+
+        return (
+            read_status.is_read
+            if read_status
+            else False
+        )
+
+    def get_read_at(self, obj):
+        auth_user = self.context.get("auth_user")
+
+        if not auth_user:
+            return None
+
+        if obj.sender_id == auth_user.id:
+            return None
+
+        read_status = self._get_user_read_status(obj)
+
+        return (
+            read_status.read_at
+            if read_status
+            else None
+        )
