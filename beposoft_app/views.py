@@ -25789,7 +25789,232 @@ class GRVFamilyPaymentSummaryWithoutBepocartView(APIView):
                 "error": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            
+
+
+class WarehouseDateWiseProductAmountView(APIView):
+
+    def get(self, request):
+        try:
+            start_date_string = request.GET.get("start_date")
+            end_date_string = request.GET.get("end_date")
+
+            if not start_date_string or not end_date_string:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "start_date and end_date are required. "
+                            "Format: YYYY-MM-DD"
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            start_date = parse_date(start_date_string)
+            end_date = parse_date(end_date_string)
+
+            if not start_date or not end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if start_date > end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "start_date cannot be greater than end_date"
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            warehouse_qs = (
+                Warehousedata.objects
+                .filter(
+                    shipped_date__range=[
+                        start_date,
+                        end_date,
+                    ]
+                )
+                .exclude(
+                    order__family__name__iexact="bepocart"
+                )
+            )
+
+            # Avoid duplicate calculation when an order has
+            # multiple Warehousedata records.
+            order_ids = warehouse_qs.values_list(
+                "order_id",
+                flat=True,
+            ).distinct()
+
+            money_field = DecimalField(
+                max_digits=18,
+                decimal_places=2,
+            )
+
+            zero_money = Value(
+                Decimal("0.00"),
+                output_field=money_field,
+            )
+
+            zero_quantity = Value(
+                0,
+                output_field=IntegerField(),
+            )
+
+            # Actual sold amount:
+            # (OrderItem rate - discount) × quantity
+            total_amount_expression = ExpressionWrapper(
+                (
+                    F("rate")
+                    - Coalesce(
+                        F("discount"),
+                        zero_money,
+                        output_field=money_field,
+                    )
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            exclude_price_total_expression = ExpressionWrapper(
+                Coalesce(
+                    F("product__exclude_price"),
+                    Value(0.0),
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            selling_price_total_expression = ExpressionWrapper(
+                Coalesce(
+                    F("product__selling_price"),
+                    Value(0.0),
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            landing_cost_total_expression = ExpressionWrapper(
+                Coalesce(
+                    F("product__landing_cost"),
+                    Value(0.0),
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            retail_price_total_expression = ExpressionWrapper(
+                Coalesce(
+                    F("product__retail_price"),
+                    Value(0.0),
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            final_price_total_expression = ExpressionWrapper(
+                Coalesce(
+                    F("product__final_price"),
+                    Value(0.0),
+                )
+                * F("quantity"),
+                output_field=money_field,
+            )
+
+            totals = (
+                OrderItem.objects
+                .filter(order_id__in=order_ids)
+                .aggregate(
+                    total_quantity=Coalesce(
+                        Sum("quantity"),
+                        zero_quantity,
+                        output_field=IntegerField(),
+                    ),
+                    total_amount=Coalesce(
+                        Sum(total_amount_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                    exclude_price_total=Coalesce(
+                        Sum(exclude_price_total_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                    selling_price_total=Coalesce(
+                        Sum(selling_price_total_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                    landing_cost_total=Coalesce(
+                        Sum(landing_cost_total_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                    retail_price_total=Coalesce(
+                        Sum(retail_price_total_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                    final_price_total=Coalesce(
+                        Sum(final_price_total_expression),
+                        zero_money,
+                        output_field=money_field,
+                    ),
+                )
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "total_quantity": (
+                        totals["total_quantity"] or 0
+                    ),
+                    "total_amount": float(
+                        totals["total_amount"] or 0
+                    ),
+                    "exclude_price_total": float(
+                        totals["exclude_price_total"] or 0
+                    ),
+                    "selling_price_total": float(
+                        totals["selling_price_total"] or 0
+                    ),
+                    "landing_cost_total": float(
+                        totals["landing_cost_total"] or 0
+                    ),
+                    "retail_price_total": float(
+                        totals["retail_price_total"] or 0
+                    ),
+                    "final_price_total": float(
+                        totals["final_price_total"] or 0
+                    ),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while fetching "
+                        "warehouse amount data."
+                    ),
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+
 # internal mail for users
 
 class InternalMailView(BaseTokenView):
