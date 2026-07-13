@@ -2329,3 +2329,39 @@ class InternalMailAttachment(models.Model):
 
     def __str__(self):
         return self.document.name
+
+
+class InternalMailReadStatus(models.Model):
+    mail = models.ForeignKey(
+        InternalMail,
+        on_delete=models.CASCADE,
+        related_name="read_statuses"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="internal_mail_read_statuses"
+    )
+
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "internal_mail_read_status"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mail", "user"],
+                name="unique_internal_mail_read_status"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "is_read"]),
+            models.Index(fields=["mail", "user"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.mail.subject} - "
+            f"{self.user.name} - "
+            f"{'Read' if self.is_read else 'Unread'}"
+        )

@@ -26396,25 +26396,41 @@ class InternalMailView(BaseTokenView):
     MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
     def get(self, request):
-        authUser, error_response = self.get_user_from_token(request)
+        auth_user, error_response = self.get_user_from_token(request)
 
         if error_response:
             return error_response
 
-        mail_type = request.GET.get("type", "inbox")
+        mail_type = request.GET.get("type", "inbox").strip().lower()
         search = request.GET.get("search", "").strip()
+        read_status_filter = request.GET.get(
+            "read_status",
+            ""
+        ).strip().lower()
 
         if mail_type == "sent":
             mails = InternalMail.objects.filter(
-                sender=authUser,
+                sender=auth_user,
                 is_deleted_by_sender=False,
                 parent_mail__isnull=True,
             )
         else:
             mails = InternalMail.objects.filter(
-                recipients=authUser,
+                recipients=auth_user,
                 parent_mail__isnull=True,
             )
+
+            if read_status_filter == "read":
+                mails = mails.filter(
+                    read_statuses__user=auth_user,
+                    read_statuses__is_read=True,
+                )
+
+            elif read_status_filter == "unread":
+                mails = mails.filter(
+                    read_statuses__user=auth_user,
+                    read_statuses__is_read=False,
+                )
 
         if search:
             mails = mails.filter(
@@ -26428,14 +26444,33 @@ class InternalMailView(BaseTokenView):
 
         mails = (
             mails
-            .select_related("sender")
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
             .prefetch_related(
                 "recipients",
+                "recipients__department_id",
                 "attachments",
                 "replies",
+                Prefetch(
+                    "read_statuses",
+                    queryset=InternalMailReadStatus.objects.filter(
+                        user=auth_user
+                    ),
+                    to_attr="current_user_read_statuses",
+                ),
             )
             .order_by("-created_at")
+            .distinct()
         )
+
+        unread_count = InternalMailReadStatus.objects.filter(
+            user=auth_user,
+            is_read=False,
+            mail__recipients=auth_user,
+        ).count()
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(mails, request)
@@ -26443,12 +26478,17 @@ class InternalMailView(BaseTokenView):
         serializer = InternalMailSerializer(
             page,
             many=True,
-            context={"request": request}
+            context={
+                "request": request,
+                "auth_user": auth_user,
+            },
         )
 
         return paginator.get_paginated_response({
             "message": "Mails fetched successfully",
-            "data": serializer.data
+            "mail_type": mail_type,
+            "unread_count": unread_count,
+            "data": serializer.data,
         })
     
 
@@ -26490,13 +26530,50 @@ class InternalMailView(BaseTokenView):
         )
         mail.recipients.set(recipients)
 
+        InternalMailReadStatus.objects.bulk_create([
+            InternalMailReadStatus(
+                mail=mail,
+                user=recipient,
+                is_read=False
+            )
+            for recipient in recipients
+        ])
+
         for doc in documents:
             InternalMailAttachment.objects.create(
                 mail=mail,
                 document=doc
             )
 
-        serializer = InternalMailSerializer(mail, context={"request": request})
+        mail = (
+            InternalMail.objects
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
+            .prefetch_related(
+                "recipients",
+                "recipients__department_id",
+                "attachments",
+                Prefetch(
+                    "read_statuses",
+                    queryset=InternalMailReadStatus.objects.filter(
+                        user=authUser
+                    ),
+                    to_attr="current_user_read_statuses",
+                ),
+            )
+            .get(pk=mail.pk)
+        )
+
+        serializer = InternalMailSerializer(
+            mail,
+            context={
+                "request": request,
+                "auth_user": authUser,
+            },
+        )
 
         return Response({
             "status": "success",
@@ -26538,12 +26615,20 @@ class InternalMailDetailView(BaseTokenView):
 
         mail = get_object_or_404(
             InternalMail.objects
-            .select_related("sender", "parent_mail")
-            .prefetch_related("recipients", "attachments"),
-            pk=pk
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
+            .prefetch_related(
+                "recipients",
+                "attachments",
+            ),
+            pk=pk,
         )
 
         is_sender = mail.sender_id == auth_user.id
+
         is_recipient = mail.recipients.filter(
             pk=auth_user.pk
         ).exists()
@@ -26554,34 +26639,124 @@ class InternalMailDetailView(BaseTokenView):
                     "status": "error",
                     "message": "Permission denied.",
                 },
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         root_mail = mail.get_thread_root()
 
-        thread_mail_ids = self.get_thread_mail_ids(root_mail)
+        thread_mail_ids = self.get_thread_mail_ids(
+            root_mail
+        )
+
+        received_thread_mail_ids = list(
+            InternalMail.objects.filter(
+                id__in=thread_mail_ids,
+                recipients=auth_user,
+            ).values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        now = timezone.now()
+
+        existing_status_mail_ids = set(
+            InternalMailReadStatus.objects.filter(
+                user=auth_user,
+                mail_id__in=received_thread_mail_ids,
+            ).values_list(
+                "mail_id",
+                flat=True,
+            )
+        )
+
+        missing_read_statuses = [
+            InternalMailReadStatus(
+                mail_id=mail_id,
+                user=auth_user,
+                is_read=True,
+                read_at=now,
+            )
+            for mail_id in received_thread_mail_ids
+            if mail_id not in existing_status_mail_ids
+        ]
+
+        if missing_read_statuses:
+            InternalMailReadStatus.objects.bulk_create(
+                missing_read_statuses,
+                ignore_conflicts=True,
+            )
+
+        InternalMailReadStatus.objects.filter(
+            user=auth_user,
+            mail_id__in=received_thread_mail_ids,
+            is_read=False,
+        ).update(
+            is_read=True,
+            read_at=now,
+        )
 
         thread_mails = (
             InternalMail.objects
             .filter(id__in=thread_mail_ids)
-            .select_related("sender", "parent_mail")
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
-                "attachments"
+                "attachments",
+                Prefetch(
+                    "read_statuses",
+                    queryset=InternalMailReadStatus.objects.filter(
+                        user=auth_user
+                    ),
+                    to_attr="current_user_read_statuses",
+                ),
             )
             .order_by("created_at")
         )
 
+        selected_mail = (
+            InternalMail.objects
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
+            .prefetch_related(
+                "recipients",
+                "recipients__department_id",
+                "attachments",
+                "replies",
+                Prefetch(
+                    "read_statuses",
+                    queryset=InternalMailReadStatus.objects.filter(
+                        user=auth_user
+                    ),
+                    to_attr="current_user_read_statuses",
+                ),
+            )
+            .get(pk=mail.pk)
+        )
+
         selected_mail_serializer = InternalMailSerializer(
-            mail,
-            context={"request": request}
+            selected_mail,
+            context={
+                "request": request,
+                "auth_user": auth_user,
+            },
         )
 
         thread_serializer = InternalMailThreadSerializer(
             thread_mails,
             many=True,
-            context={"request": request}
+            context={
+                "request": request,
+                "auth_user": auth_user,
+            },
         )
 
         return Response(
@@ -26592,7 +26767,7 @@ class InternalMailDetailView(BaseTokenView):
                 "thread_root_id": root_mail.id,
                 "thread": thread_serializer.data,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
     def delete(self, request, pk):
@@ -26746,6 +26921,15 @@ class InternalMailReplyView(BaseTokenView):
 
         reply_mail.recipients.set(recipients)
 
+        InternalMailReadStatus.objects.bulk_create([
+            InternalMailReadStatus(
+                mail=reply_mail,
+                user=recipient,
+                is_read=False
+            )
+            for recipient in recipients
+        ])
+
         for document in documents:
             InternalMailAttachment.objects.create(
                 mail=reply_mail,
@@ -26754,18 +26938,32 @@ class InternalMailReplyView(BaseTokenView):
 
         reply_mail = (
             InternalMail.objects
-            .select_related("sender", "parent_mail")
+            .select_related(
+                "sender",
+                "parent_mail",
+                "parent_mail__sender",
+            )
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
-                "attachments"
+                "attachments",
+                Prefetch(
+                    "read_statuses",
+                    queryset=InternalMailReadStatus.objects.filter(
+                        user=auth_user
+                    ),
+                    to_attr="current_user_read_statuses",
+                ),
             )
             .get(pk=reply_mail.pk)
         )
 
         serializer = InternalMailSerializer(
             reply_mail,
-            context={"request": request}
+            context={
+                "request": request,
+                "auth_user": auth_user,
+            },
         )
 
         return Response(
@@ -26775,4 +26973,84 @@ class InternalMailReplyView(BaseTokenView):
                 "data": serializer.data,
             },
             status=status.HTTP_201_CREATED
+        )
+
+
+
+class InternalMailReadStatusView(BaseTokenView):
+
+    def patch(self, request, pk):
+        auth_user, error_response = self.get_user_from_token(
+            request
+        )
+
+        if error_response:
+            return error_response
+
+        mail = get_object_or_404(
+            InternalMail.objects.prefetch_related(
+                "recipients"
+            ),
+            pk=pk,
+        )
+
+        is_recipient = mail.recipients.filter(
+            pk=auth_user.pk
+        ).exists()
+
+        if not is_recipient:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "Only a recipient can update "
+                        "the read status."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        requested_status = request.data.get(
+            "is_read",
+            True,
+        )
+
+        if isinstance(requested_status, str):
+            requested_status = (
+                requested_status.strip().lower()
+                in ["true", "1", "yes"]
+            )
+
+        requested_status = bool(requested_status)
+
+        read_status, created = (
+            InternalMailReadStatus.objects.update_or_create(
+                mail=mail,
+                user=auth_user,
+                defaults={
+                    "is_read": requested_status,
+                    "read_at": (
+                        timezone.now()
+                        if requested_status
+                        else None
+                    ),
+                },
+            )
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": (
+                    "Mail marked as read."
+                    if requested_status
+                    else "Mail marked as unread."
+                ),
+                "data": {
+                    "mail_id": mail.id,
+                    "is_read": read_status.is_read,
+                    "read_at": read_status.read_at,
+                },
+            },
+            status=status.HTTP_200_OK,
         )
