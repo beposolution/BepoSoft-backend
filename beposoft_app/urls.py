@@ -418,6 +418,7 @@ urlpatterns = [
 
 
     path("api/grv/family/payment/summary/", GRVFamilyPaymentSummaryView.as_view()),
+    path("api/grv/family/payment/summary/without/bepocart/", GRVFamilyPaymentSummaryWithoutBepocartView.as_view(), name="grv-family-payment-summary-without-bepocart"),
 
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),

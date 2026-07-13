@@ -25654,7 +25654,142 @@ class GRVFamilyPaymentSummaryView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class GRVFamilyPaymentSummaryWithoutBepocartView(APIView):
+    def get(self, request):
+        try:
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
 
+            if not start_date or not end_date:
+                return Response({
+                    "status": "error",
+                    "message": "start_date and end_date are required. Format: YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            start_date = parse_date(start_date)
+            end_date = parse_date(end_date)
+
+            if not start_date or not end_date:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if start_date > end_date:
+                return Response({
+                    "status": "error",
+                    "message": "start_date cannot be greater than end_date"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            grv_qs = (
+                GRVModel.objects
+                .select_related(
+                    "order",
+                    "order__family"
+                )
+                .filter(
+                    date__range=[start_date, end_date],
+                    order__payment_status__in=["paid", "COD"]
+                )
+                .exclude(
+                    order__family__name__iexact="bepocart"
+                )
+            )
+
+            families = defaultdict(lambda: {
+                "family_id": None,
+                "family_name": "",
+                "paid": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "COD": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "total": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                }
+            })
+
+            grand_total = {
+                "paid": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "COD": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                },
+                "total": {
+                    "grv_count": 0,
+                    "order_count": 0,
+                    "order_amount": 0
+                }
+            }
+
+            processed_orders = set()
+
+            for grv in grv_qs:
+                order = grv.order
+                family = order.family
+
+                if not family:
+                    continue
+
+                payment_status = order.payment_status
+                family_id = family.id
+
+                families[family_id]["family_id"] = family_id
+                families[family_id]["family_name"] = family.name
+
+                families[family_id][payment_status]["grv_count"] += 1
+                families[family_id]["total"]["grv_count"] += 1
+
+                grand_total[payment_status]["grv_count"] += 1
+                grand_total["total"]["grv_count"] += 1
+
+                order_key = f"{order.id}_{payment_status}"
+
+                if order_key not in processed_orders:
+                    processed_orders.add(order_key)
+
+                    amount = float(grv.price or 0) * int(grv.quantity or 0)
+
+                    families[family_id][payment_status]["order_count"] += 1
+                    families[family_id][payment_status]["order_amount"] += amount
+
+                    families[family_id]["total"]["order_count"] += 1
+                    families[family_id]["total"]["order_amount"] += amount
+
+                    grand_total[payment_status]["order_count"] += 1
+                    grand_total[payment_status]["order_amount"] += amount
+
+                    grand_total["total"]["order_count"] += 1
+                    grand_total["total"]["order_amount"] += amount
+
+            return Response({
+                "status": "success",
+                "start_date": start_date,
+                "end_date": end_date,
+                "families": list(families.values()),
+                "grand_total": grand_total
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching GRV payment summary.",
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
 # internal mail for users
 
 class InternalMailView(BaseTokenView):
