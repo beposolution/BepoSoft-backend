@@ -109,6 +109,7 @@ urlpatterns = [
     path('api/orders/<str:status_value>/', OrderListByStatusView.as_view(), name='orders-status'),
     path('api/order/dashboard/summary/', OrderSummaryDashboardView.as_view(), name='order-summary'),
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
+    path("api/family/orders/summary/without/bepocart/", FamilyOrderSummaryWithoutBepocartView.as_view(), name="family-order-summary-without-bepocart",),
     path('api/orders/family/wise/summary/', FamilyWiseOrderSummaryView.as_view(), name='family-wise-order-summary'),
     path("api/orders/date/report/<str:start_date>/<str:end_date>/", OrderDateReportView.as_view(), name="order-date-report"),
     path('api/orders/parcel/service/data/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
@@ -417,6 +418,7 @@ urlpatterns = [
 
 
     path("api/grv/family/payment/summary/", GRVFamilyPaymentSummaryView.as_view()),
+    path("api/grv/family/payment/summary/without/bepocart/", GRVFamilyPaymentSummaryWithoutBepocartView.as_view(), name="grv-family-payment-summary-without-bepocart"),
 
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
