@@ -26401,23 +26401,32 @@ class InternalMailView(BaseTokenView):
         if error_response:
             return error_response
 
-        mail_type = request.GET.get("type", "inbox").strip().lower()
-        search = request.GET.get("search", "").strip()
+        mail_type = request.GET.get(
+            "type",
+            "inbox"
+        ).strip().lower()
+
+        search = request.GET.get(
+            "search",
+            ""
+        ).strip()
+
         read_status_filter = request.GET.get(
             "read_status",
             ""
         ).strip().lower()
 
         if mail_type == "sent":
+            # Include both original mails and replies sent by the user.
             mails = InternalMail.objects.filter(
                 sender=auth_user,
                 is_deleted_by_sender=False,
-                parent_mail__isnull=True,
             )
+
         else:
+            # Include original mails and replies received by the user.
             mails = InternalMail.objects.filter(
                 recipients=auth_user,
-                parent_mail__isnull=True,
             )
 
             if read_status_filter == "read":
@@ -26434,12 +26443,12 @@ class InternalMailView(BaseTokenView):
 
         if search:
             mails = mails.filter(
-                Q(subject__icontains=search) |
-                Q(message__icontains=search) |
-                Q(sender__name__icontains=search) |
-                Q(recipients__name__icontains=search) |
-                Q(replies__message__icontains=search) |
-                Q(replies__sender__name__icontains=search)
+                Q(subject__icontains=search)
+                | Q(message__icontains=search)
+                | Q(sender__name__icontains=search)
+                | Q(recipients__name__icontains=search)
+                | Q(parent_mail__subject__icontains=search)
+                | Q(parent_mail__message__icontains=search)
             ).distinct()
 
         mails = (
@@ -26473,7 +26482,10 @@ class InternalMailView(BaseTokenView):
         ).count()
 
         paginator = StandardPagination()
-        page = paginator.paginate_queryset(mails, request)
+        page = paginator.paginate_queryset(
+            mails,
+            request
+        )
 
         serializer = InternalMailSerializer(
             page,
