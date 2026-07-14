@@ -26390,20 +26390,188 @@ class FamilyWiseProductSummaryAPIView(APIView):
 
 # internal mail for users
 
+
+def normalize_internal_mail_user_ids(raw_ids):
+    """
+    Convert incoming multipart values into unique positive integers.
+    """
+
+    normalized_ids = []
+
+    for raw_id in raw_ids:
+        raw_id = str(raw_id).strip()
+
+        if not raw_id:
+            continue
+
+        try:
+            user_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+
+        if user_id <= 0:
+            continue
+
+        if user_id not in normalized_ids:
+            normalized_ids.append(user_id)
+
+    return normalized_ids
+
+
+def normalize_internal_mail_recipient_groups(
+    to_ids,
+    cc_ids,
+    bcc_ids,
+    sender_id=None,
+):
+    """
+    Remove duplicate users across recipient groups.
+
+    Priority:
+    To > CC > BCC
+
+    The sender is removed from all recipient groups.
+    """
+
+    to_ids = normalize_internal_mail_user_ids(to_ids)
+    cc_ids = normalize_internal_mail_user_ids(cc_ids)
+    bcc_ids = normalize_internal_mail_user_ids(bcc_ids)
+
+    if sender_id:
+        to_ids = [
+            user_id
+            for user_id in to_ids
+            if user_id != sender_id
+        ]
+
+        cc_ids = [
+            user_id
+            for user_id in cc_ids
+            if user_id != sender_id
+        ]
+
+        bcc_ids = [
+            user_id
+            for user_id in bcc_ids
+            if user_id != sender_id
+        ]
+
+    to_id_set = set(to_ids)
+
+    cc_ids = [
+        user_id
+        for user_id in cc_ids
+        if user_id not in to_id_set
+    ]
+
+    cc_id_set = set(cc_ids)
+
+    bcc_ids = [
+        user_id
+        for user_id in bcc_ids
+        if user_id not in to_id_set
+        and user_id not in cc_id_set
+    ]
+
+    return to_ids, cc_ids, bcc_ids
+
+
+def get_internal_mail_recipient_users(
+    to_ids,
+    cc_ids,
+    bcc_ids,
+):
+    """
+    Validate all recipient IDs and return separated user lists.
+    """
+
+    all_recipient_ids = set(
+        to_ids + cc_ids + bcc_ids
+    )
+
+    users = User.objects.filter(
+        id__in=all_recipient_ids,
+        approval_status="approved",
+    )
+
+    found_user_ids = set(
+        users.values_list("id", flat=True)
+    )
+
+    invalid_user_ids = sorted(
+        all_recipient_ids - found_user_ids
+    )
+
+    user_map = {
+        user.id: user
+        for user in users
+    }
+
+    to_users = [
+        user_map[user_id]
+        for user_id in to_ids
+        if user_id in user_map
+    ]
+
+    cc_users = [
+        user_map[user_id]
+        for user_id in cc_ids
+        if user_id in user_map
+    ]
+
+    bcc_users = [
+        user_map[user_id]
+        for user_id in bcc_ids
+        if user_id in user_map
+    ]
+
+    return (
+        to_users,
+        cc_users,
+        bcc_users,
+        invalid_user_ids,
+    )
+
+
+def get_unique_internal_mail_recipients(
+    to_users,
+    cc_users,
+    bcc_users,
+):
+    """
+    Return unique users from To, CC and BCC.
+    """
+
+    unique_users = {}
+
+    for user in [
+        *to_users,
+        *cc_users,
+        *bcc_users,
+    ]:
+        unique_users[user.id] = user
+
+    return list(unique_users.values())
+
+
 class InternalMailView(BaseTokenView):
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [
+        MultiPartParser,
+        FormParser,
+    ]
 
     MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
     def group_mails_by_thread(self, mails):
-    
         grouped_threads = {}
 
         for mail in mails:
             root_mail = mail.get_thread_root()
             root_id = root_mail.id
 
-            existing_mail = grouped_threads.get(root_id)
+            existing_mail = grouped_threads.get(
+                root_id
+            )
 
             if (
                 existing_mail is None
@@ -26417,26 +26585,27 @@ class InternalMailView(BaseTokenView):
             reverse=True,
         )
 
-
     def get(self, request):
-        auth_user, error_response = self.get_user_from_token(request)
+        auth_user, error_response = (
+            self.get_user_from_token(request)
+        )
 
         if error_response:
             return error_response
 
         mail_type = request.GET.get(
             "type",
-            "inbox"
+            "inbox",
         ).strip().lower()
 
         search = request.GET.get(
             "search",
-            ""
+            "",
         ).strip()
 
         read_status_filter = request.GET.get(
             "read_status",
-            ""
+            "",
         ).strip().lower()
 
         if mail_type == "sent":
@@ -26446,10 +26615,15 @@ class InternalMailView(BaseTokenView):
             )
 
         else:
-            mails = InternalMail.objects.filter(
-                recipients=auth_user,
-            ).exclude(
-                sender=auth_user
+            mails = (
+                InternalMail.objects
+                .filter(
+                    Q(recipients=auth_user)
+                    | Q(cc_recipients=auth_user)
+                    | Q(bcc_recipients=auth_user)
+                )
+                .exclude(sender=auth_user)
+                .distinct()
             )
 
             if read_status_filter == "read":
@@ -26470,9 +26644,13 @@ class InternalMailView(BaseTokenView):
                 | Q(message__icontains=search)
                 | Q(sender__name__icontains=search)
                 | Q(recipients__name__icontains=search)
+                | Q(cc_recipients__name__icontains=search)
+                | Q(bcc_recipients__name__icontains=search)
                 | Q(parent_mail__subject__icontains=search)
                 | Q(parent_mail__message__icontains=search)
-                | Q(parent_mail__sender__name__icontains=search)
+                | Q(
+                    parent_mail__sender__name__icontains=search
+                )
             ).distinct()
 
         mails = (
@@ -26485,39 +26663,52 @@ class InternalMailView(BaseTokenView):
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
+                "cc_recipients",
+                "cc_recipients__department_id",
+                "bcc_recipients",
+                "bcc_recipients__department_id",
                 "attachments",
                 "replies",
                 Prefetch(
                     "read_statuses",
-                    queryset=InternalMailReadStatus.objects.filter(
-                        user=auth_user
+                    queryset=(
+                        InternalMailReadStatus.objects
+                        .filter(user=auth_user)
                     ),
-                    to_attr="current_user_read_statuses",
+                    to_attr=(
+                        "current_user_read_statuses"
+                    ),
                 ),
             )
             .order_by("-created_at")
             .distinct()
         )
 
-        # Convert QuerySet to a list and keep only the newest mail
-        # from each conversation.
         grouped_mails = self.group_mails_by_thread(
             list(mails)
         )
 
-        unread_count = InternalMailReadStatus.objects.filter(
-            user=auth_user,
-            is_read=False,
-            mail__recipients=auth_user,
-        ).exclude(
-            mail__sender=auth_user
-        ).count()
+        unread_count = (
+            InternalMailReadStatus.objects
+            .filter(
+                user=auth_user,
+                is_read=False,
+            )
+            .filter(
+                Q(mail__recipients=auth_user)
+                | Q(mail__cc_recipients=auth_user)
+                | Q(mail__bcc_recipients=auth_user)
+            )
+            .exclude(mail__sender=auth_user)
+            .distinct()
+            .count()
+        )
 
         paginator = StandardPagination()
 
         page = paginator.paginate_queryset(
             grouped_mails,
-            request
+            request,
         )
 
         serializer = InternalMailSerializer(
@@ -26529,65 +26720,166 @@ class InternalMailView(BaseTokenView):
             },
         )
 
-        return paginator.get_paginated_response({
-            "message": "Mails fetched successfully",
-            "mail_type": mail_type,
-            "unread_count": unread_count,
-            "data": serializer.data,
-        })
-    
+        return paginator.get_paginated_response(
+            {
+                "message": "Mails fetched successfully.",
+                "mail_type": mail_type,
+                "unread_count": unread_count,
+                "data": serializer.data,
+            }
+        )
 
+    @transaction.atomic
     def post(self, request):
-        authUser, error_response = self.get_user_from_token(request)
+        auth_user, error_response = (
+            self.get_user_from_token(request)
+        )
+
         if error_response:
             return error_response
 
-        recipient_ids = request.data.getlist("recipients")
-        subject = request.data.get("subject", "").strip()
-        message = request.data.get("message", "").strip()
-        documents = request.FILES.getlist("documents")
+        to_ids = request.data.getlist(
+            "recipients"
+        )
 
-        if not recipient_ids:
-            return Response({"status": "error", "message": "At least one recipient is required."}, status=400)
+        cc_ids = request.data.getlist(
+            "cc_recipients"
+        )
+
+        bcc_ids = request.data.getlist(
+            "bcc_recipients"
+        )
+
+        to_ids, cc_ids, bcc_ids = (
+            normalize_internal_mail_recipient_groups(
+                to_ids=to_ids,
+                cc_ids=cc_ids,
+                bcc_ids=bcc_ids,
+                sender_id=auth_user.id,
+            )
+        )
+
+        subject = request.data.get(
+            "subject",
+            "",
+        ).strip()
+
+        message = request.data.get(
+            "message",
+            "",
+        ).strip()
+
+        documents = request.FILES.getlist(
+            "documents"
+        )
+
+        if not to_ids and not cc_ids and not bcc_ids:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "At least one To, CC or BCC "
+                        "recipient is required."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not subject:
-            return Response({"status": "error", "message": "Subject is required."}, status=400)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Subject is required.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not message and not documents:
-            return Response({"status": "error", "message": "Message or document is required."}, status=400)
-
-        recipients = User.objects.filter(id__in=recipient_ids, approval_status="approved")
-
-        if recipients.count() != len(recipient_ids):
-            return Response({"status": "error", "message": "Invalid recipient selected."}, status=400)
-
-        for doc in documents:
-            if doc.size > self.MAX_FILE_SIZE:
-                return Response({
+            return Response(
+                {
                     "status": "error",
-                    "message": f"{doc.name} is larger than 1 MB. Upload documents under 1 MB only."
-                }, status=400)
+                    "message": (
+                        "Message or document is required."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        (
+            to_users,
+            cc_users,
+            bcc_users,
+            invalid_user_ids,
+        ) = get_internal_mail_recipient_users(
+            to_ids=to_ids,
+            cc_ids=cc_ids,
+            bcc_ids=bcc_ids,
+        )
+
+        if invalid_user_ids:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "One or more selected recipients "
+                        "are invalid or not approved."
+                    ),
+                    "invalid_recipient_ids": (
+                        invalid_user_ids
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for document in documents:
+            if document.size > self.MAX_FILE_SIZE:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            f"{document.name} is larger "
+                            "than 1 MB. Upload documents "
+                            "under 1 MB only."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         mail = InternalMail.objects.create(
-            sender=authUser,
+            sender=auth_user,
             subject=subject,
-            message=message
+            message=message,
         )
-        mail.recipients.set(recipients)
 
-        InternalMailReadStatus.objects.bulk_create([
-            InternalMailReadStatus(
-                mail=mail,
-                user=recipient,
-                is_read=False
+        mail.recipients.set(to_users)
+        mail.cc_recipients.set(cc_users)
+        mail.bcc_recipients.set(bcc_users)
+
+        all_recipient_users = (
+            get_unique_internal_mail_recipients(
+                to_users=to_users,
+                cc_users=cc_users,
+                bcc_users=bcc_users,
             )
-            for recipient in recipients
-        ])
+        )
 
-        for doc in documents:
+        InternalMailReadStatus.objects.bulk_create(
+            [
+                InternalMailReadStatus(
+                    mail=mail,
+                    user=recipient,
+                    is_read=False,
+                    read_at=None,
+                )
+                for recipient in all_recipient_users
+            ],
+            ignore_conflicts=True,
+        )
+
+        for document in documents:
             InternalMailAttachment.objects.create(
                 mail=mail,
-                document=doc
+                document=document,
             )
 
         mail = (
@@ -26600,13 +26892,21 @@ class InternalMailView(BaseTokenView):
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
+                "cc_recipients",
+                "cc_recipients__department_id",
+                "bcc_recipients",
+                "bcc_recipients__department_id",
                 "attachments",
+                "replies",
                 Prefetch(
                     "read_statuses",
-                    queryset=InternalMailReadStatus.objects.filter(
-                        user=authUser
+                    queryset=(
+                        InternalMailReadStatus.objects
+                        .filter(user=auth_user)
                     ),
-                    to_attr="current_user_read_statuses",
+                    to_attr=(
+                        "current_user_read_statuses"
+                    ),
                 ),
             )
             .get(pk=mail.pk)
@@ -26616,23 +26916,27 @@ class InternalMailView(BaseTokenView):
             mail,
             context={
                 "request": request,
-                "auth_user": authUser,
+                "auth_user": auth_user,
             },
         )
 
-        return Response({
-            "status": "success",
-            "message": "Mail sent successfully",
-            "data": serializer.data
-        }, status=201)
+        return Response(
+            {
+                "status": "success",
+                "message": "Mail sent successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class InternalMailDetailView(BaseTokenView):
 
     def get_thread_mail_ids(self, root_mail):
         """
-        Return IDs of the original mail and every nested reply.
+        Return IDs of the original mail and all nested replies.
         """
+
         mail_ids = [root_mail.id]
         pending_ids = [root_mail.id]
 
@@ -26640,7 +26944,10 @@ class InternalMailDetailView(BaseTokenView):
             reply_ids = list(
                 InternalMail.objects.filter(
                     parent_mail_id__in=pending_ids
-                ).values_list("id", flat=True)
+                ).values_list(
+                    "id",
+                    flat=True,
+                )
             )
 
             if not reply_ids:
@@ -26651,9 +26958,30 @@ class InternalMailDetailView(BaseTokenView):
 
         return mail_ids
 
+    def user_can_access_mail(
+        self,
+        mail,
+        auth_user,
+    ):
+        if mail.sender_id == auth_user.id:
+            return True
+
+        return (
+            mail.recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+            or mail.cc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+            or mail.bcc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
 
     def get(self, request, pk):
-        auth_user, error_response = self.get_user_from_token(request)
+        auth_user, error_response = (
+            self.get_user_from_token(request)
+        )
 
         if error_response:
             return error_response
@@ -26667,18 +26995,17 @@ class InternalMailDetailView(BaseTokenView):
             )
             .prefetch_related(
                 "recipients",
+                "cc_recipients",
+                "bcc_recipients",
                 "attachments",
             ),
             pk=pk,
         )
 
-        is_sender = mail.sender_id == auth_user.id
-
-        is_recipient = mail.recipients.filter(
-            pk=auth_user.pk
-        ).exists()
-
-        if not is_sender and not is_recipient:
+        if not self.user_can_access_mail(
+            mail,
+            auth_user,
+        ):
             return Response(
                 {
                     "status": "error",
@@ -26694,10 +27021,15 @@ class InternalMailDetailView(BaseTokenView):
         )
 
         received_thread_mail_ids = list(
-            InternalMail.objects.filter(
-                id__in=thread_mail_ids,
-                recipients=auth_user,
-            ).values_list(
+            InternalMail.objects
+            .filter(id__in=thread_mail_ids)
+            .filter(
+                Q(recipients=auth_user)
+                | Q(cc_recipients=auth_user)
+                | Q(bcc_recipients=auth_user)
+            )
+            .distinct()
+            .values_list(
                 "id",
                 flat=True,
             )
@@ -26752,13 +27084,20 @@ class InternalMailDetailView(BaseTokenView):
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
+                "cc_recipients",
+                "cc_recipients__department_id",
+                "bcc_recipients",
+                "bcc_recipients__department_id",
                 "attachments",
                 Prefetch(
                     "read_statuses",
-                    queryset=InternalMailReadStatus.objects.filter(
-                        user=auth_user
+                    queryset=(
+                        InternalMailReadStatus.objects
+                        .filter(user=auth_user)
                     ),
-                    to_attr="current_user_read_statuses",
+                    to_attr=(
+                        "current_user_read_statuses"
+                    ),
                 ),
             )
             .order_by("created_at")
@@ -26774,129 +27113,255 @@ class InternalMailDetailView(BaseTokenView):
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
+                "cc_recipients",
+                "cc_recipients__department_id",
+                "bcc_recipients",
+                "bcc_recipients__department_id",
                 "attachments",
                 "replies",
                 Prefetch(
                     "read_statuses",
-                    queryset=InternalMailReadStatus.objects.filter(
-                        user=auth_user
+                    queryset=(
+                        InternalMailReadStatus.objects
+                        .filter(user=auth_user)
                     ),
-                    to_attr="current_user_read_statuses",
+                    to_attr=(
+                        "current_user_read_statuses"
+                    ),
                 ),
             )
             .get(pk=mail.pk)
         )
 
-        selected_mail_serializer = InternalMailSerializer(
-            selected_mail,
-            context={
-                "request": request,
-                "auth_user": auth_user,
-            },
+        selected_mail_serializer = (
+            InternalMailSerializer(
+                selected_mail,
+                context={
+                    "request": request,
+                    "auth_user": auth_user,
+                },
+            )
         )
 
-        thread_serializer = InternalMailThreadSerializer(
-            thread_mails,
-            many=True,
-            context={
-                "request": request,
-                "auth_user": auth_user,
-            },
+        thread_serializer = (
+            InternalMailThreadSerializer(
+                thread_mails,
+                many=True,
+                context={
+                    "request": request,
+                    "auth_user": auth_user,
+                },
+            )
         )
 
         return Response(
             {
                 "status": "success",
-                "message": "Mail thread fetched successfully.",
-                "data": selected_mail_serializer.data,
+                "message": (
+                    "Mail thread fetched successfully."
+                ),
+                "data": (
+                    selected_mail_serializer.data
+                ),
                 "thread_root_id": root_mail.id,
                 "thread": thread_serializer.data,
             },
             status=status.HTTP_200_OK,
         )
 
+    @transaction.atomic
     def delete(self, request, pk):
-        authUser, error_response = self.get_user_from_token(request)
+        auth_user, error_response = (
+            self.get_user_from_token(request)
+        )
+
         if error_response:
             return error_response
 
-        mail = get_object_or_404(InternalMail, pk=pk)
+        mail = get_object_or_404(
+            InternalMail.objects.prefetch_related(
+                "recipients",
+                "cc_recipients",
+                "bcc_recipients",
+            ),
+            pk=pk,
+        )
 
-        if mail.sender == authUser:
+        if mail.sender_id == auth_user.id:
             mail.is_deleted_by_sender = True
-            mail.save(update_fields=["is_deleted_by_sender"])
-            return Response({"status": "success", "message": "Mail deleted from sent box."}, status=200)
 
-        if mail.recipients.filter(pk=authUser.pk).exists():
-            mail.recipients.remove(authUser)
-            return Response({"status": "success", "message": "Mail deleted from inbox."}, status=200)
+            mail.save(
+                update_fields=[
+                    "is_deleted_by_sender"
+                ]
+            )
 
-        return Response({"status": "error", "message": "Permission denied."}, status=403)
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "Mail deleted from sent box."
+                    ),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        is_to_recipient = mail.recipients.filter(
+            pk=auth_user.pk
+        ).exists()
+
+        is_cc_recipient = (
+            mail.cc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
+
+        is_bcc_recipient = (
+            mail.bcc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
+
+        if (
+            is_to_recipient
+            or is_cc_recipient
+            or is_bcc_recipient
+        ):
+            mail.recipients.remove(auth_user)
+            mail.cc_recipients.remove(auth_user)
+            mail.bcc_recipients.remove(auth_user)
+
+            InternalMailReadStatus.objects.filter(
+                mail=mail,
+                user=auth_user,
+            ).delete()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "Mail deleted from inbox."
+                    ),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "status": "error",
+                "message": "Permission denied.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
 
 
 class InternalMailReplyView(BaseTokenView):
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [
+        MultiPartParser,
+        FormParser,
+    ]
 
     MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
+    def user_can_reply(
+        self,
+        mail,
+        auth_user,
+    ):
+        if mail.sender_id == auth_user.id:
+            return True
+
+        return (
+            mail.recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+            or mail.cc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+            or mail.bcc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
+
     @transaction.atomic
     def post(self, request, pk):
-        auth_user, error_response = self.get_user_from_token(request)
+        auth_user, error_response = (
+            self.get_user_from_token(request)
+        )
 
         if error_response:
             return error_response
 
         parent_mail = get_object_or_404(
             InternalMail.objects
-            .select_related("sender", "parent_mail")
-            .prefetch_related("recipients"),
-            pk=pk
+            .select_related(
+                "sender",
+                "parent_mail",
+            )
+            .prefetch_related(
+                "recipients",
+                "cc_recipients",
+                "bcc_recipients",
+            ),
+            pk=pk,
         )
 
-        # Only the sender or one of the recipients can reply.
-        is_sender = parent_mail.sender_id == auth_user.id
-        is_recipient = parent_mail.recipients.filter(
-            pk=auth_user.pk
-        ).exists()
-
-        if not is_sender and not is_recipient:
+        if not self.user_can_reply(
+            parent_mail,
+            auth_user,
+        ):
             return Response(
                 {
                     "status": "error",
                     "message": (
-                        "You do not have permission to reply "
-                        "to this mail."
+                        "You do not have permission "
+                        "to reply to this mail."
                     ),
                 },
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        recipient_ids = request.data.getlist("recipients")
-        message = request.data.get("message", "").strip()
-        documents = request.FILES.getlist("documents")
+        to_ids = request.data.getlist(
+            "recipients"
+        )
 
-        # Remove empty values and duplicates.
-        normalized_recipient_ids = []
+        cc_ids = request.data.getlist(
+            "cc_recipients"
+        )
 
-        for recipient_id in recipient_ids:
-            recipient_id = str(recipient_id).strip()
+        bcc_ids = request.data.getlist(
+            "bcc_recipients"
+        )
 
-            if (
-                recipient_id
-                and recipient_id not in normalized_recipient_ids
-            ):
-                normalized_recipient_ids.append(recipient_id)
+        to_ids, cc_ids, bcc_ids = (
+            normalize_internal_mail_recipient_groups(
+                to_ids=to_ids,
+                cc_ids=cc_ids,
+                bcc_ids=bcc_ids,
+                sender_id=auth_user.id,
+            )
+        )
 
-        if not normalized_recipient_ids:
+        message = request.data.get(
+            "message",
+            "",
+        ).strip()
+
+        documents = request.FILES.getlist(
+            "documents"
+        )
+
+        if not to_ids and not cc_ids and not bcc_ids:
             return Response(
                 {
                     "status": "error",
                     "message": (
-                        "At least one reply recipient is required."
+                        "At least one To, CC or BCC "
+                        "reply recipient is required."
                     ),
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not message and not documents:
@@ -26904,36 +27369,37 @@ class InternalMailReplyView(BaseTokenView):
                 {
                     "status": "error",
                     "message": (
-                        "Reply message or document is required."
+                        "Reply message or document "
+                        "is required."
                     ),
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        recipients = User.objects.filter(
-            id__in=normalized_recipient_ids,
-            approval_status="approved"
+        (
+            to_users,
+            cc_users,
+            bcc_users,
+            invalid_user_ids,
+        ) = get_internal_mail_recipient_users(
+            to_ids=to_ids,
+            cc_ids=cc_ids,
+            bcc_ids=bcc_ids,
         )
 
-        found_recipient_ids = {
-            str(user_id)
-            for user_id in recipients.values_list("id", flat=True)
-        }
-
-        invalid_recipient_ids = [
-            recipient_id
-            for recipient_id in normalized_recipient_ids
-            if recipient_id not in found_recipient_ids
-        ]
-
-        if invalid_recipient_ids:
+        if invalid_user_ids:
             return Response(
                 {
                     "status": "error",
-                    "message": "Invalid recipient selected.",
-                    "invalid_recipient_ids": invalid_recipient_ids,
+                    "message": (
+                        "One or more selected recipients "
+                        "are invalid or not approved."
+                    ),
+                    "invalid_recipient_ids": (
+                        invalid_user_ids
+                    ),
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         for document in documents:
@@ -26942,45 +27408,67 @@ class InternalMailReplyView(BaseTokenView):
                     {
                         "status": "error",
                         "message": (
-                            f"{document.name} is larger than "
-                            "1 MB. Upload documents under "
-                            "1 MB only."
+                            f"{document.name} is larger "
+                            "than 1 MB. Upload documents "
+                            "under 1 MB only."
                         ),
                     },
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        original_subject = parent_mail.subject.strip()
+        original_subject = (
+            parent_mail.subject or ""
+        ).strip()
 
-        if original_subject.lower().startswith("re:"):
+        if original_subject.lower().startswith(
+            "re:"
+        ):
             reply_subject = original_subject
         else:
-            reply_subject = f"Re: {original_subject}"
+            reply_subject = (
+                f"Re: {original_subject}"
+            )
 
-        thread_root = parent_mail.get_thread_root()
+        thread_root = (
+            parent_mail.get_thread_root()
+        )
 
         reply_mail = InternalMail.objects.create(
             sender=auth_user,
             parent_mail=thread_root,
             subject=reply_subject,
-            message=message
+            message=message,
         )
 
-        reply_mail.recipients.set(recipients)
+        reply_mail.recipients.set(to_users)
+        reply_mail.cc_recipients.set(cc_users)
+        reply_mail.bcc_recipients.set(bcc_users)
 
-        InternalMailReadStatus.objects.bulk_create([
-            InternalMailReadStatus(
-                mail=reply_mail,
-                user=recipient,
-                is_read=False
+        all_recipient_users = (
+            get_unique_internal_mail_recipients(
+                to_users=to_users,
+                cc_users=cc_users,
+                bcc_users=bcc_users,
             )
-            for recipient in recipients
-        ])
+        )
+
+        InternalMailReadStatus.objects.bulk_create(
+            [
+                InternalMailReadStatus(
+                    mail=reply_mail,
+                    user=recipient,
+                    is_read=False,
+                    read_at=None,
+                )
+                for recipient in all_recipient_users
+            ],
+            ignore_conflicts=True,
+        )
 
         for document in documents:
             InternalMailAttachment.objects.create(
                 mail=reply_mail,
-                document=document
+                document=document,
             )
 
         reply_mail = (
@@ -26993,13 +27481,21 @@ class InternalMailReplyView(BaseTokenView):
             .prefetch_related(
                 "recipients",
                 "recipients__department_id",
+                "cc_recipients",
+                "cc_recipients__department_id",
+                "bcc_recipients",
+                "bcc_recipients__department_id",
                 "attachments",
+                "replies",
                 Prefetch(
                     "read_statuses",
-                    queryset=InternalMailReadStatus.objects.filter(
-                        user=auth_user
+                    queryset=(
+                        InternalMailReadStatus.objects
+                        .filter(user=auth_user)
                     ),
-                    to_attr="current_user_read_statuses",
+                    to_attr=(
+                        "current_user_read_statuses"
+                    ),
                 ),
             )
             .get(pk=reply_mail.pk)
@@ -27016,10 +27512,12 @@ class InternalMailReplyView(BaseTokenView):
         return Response(
             {
                 "status": "success",
-                "message": "Reply sent successfully.",
+                "message": (
+                    "Reply sent successfully."
+                ),
                 "data": serializer.data,
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -27027,8 +27525,8 @@ class InternalMailReplyView(BaseTokenView):
 class InternalMailReadStatusView(BaseTokenView):
 
     def patch(self, request, pk):
-        auth_user, error_response = self.get_user_from_token(
-            request
+        auth_user, error_response = (
+            self.get_user_from_token(request)
         )
 
         if error_response:
@@ -27036,22 +27534,41 @@ class InternalMailReadStatusView(BaseTokenView):
 
         mail = get_object_or_404(
             InternalMail.objects.prefetch_related(
-                "recipients"
+                "recipients",
+                "cc_recipients",
+                "bcc_recipients",
             ),
             pk=pk,
         )
 
-        is_recipient = mail.recipients.filter(
+        is_to_recipient = mail.recipients.filter(
             pk=auth_user.pk
         ).exists()
 
-        if not is_recipient:
+        is_cc_recipient = (
+            mail.cc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
+
+        is_bcc_recipient = (
+            mail.bcc_recipients.filter(
+                pk=auth_user.pk
+            ).exists()
+        )
+
+        if not (
+            is_to_recipient
+            or is_cc_recipient
+            or is_bcc_recipient
+        ):
             return Response(
                 {
                     "status": "error",
                     "message": (
-                        "Only a recipient can update "
-                        "the read status."
+                        "Only a To, CC or BCC "
+                        "recipient can update the "
+                        "read status."
                     ),
                 },
                 status=status.HTTP_403_FORBIDDEN,
@@ -27064,14 +27581,23 @@ class InternalMailReadStatusView(BaseTokenView):
 
         if isinstance(requested_status, str):
             requested_status = (
-                requested_status.strip().lower()
-                in ["true", "1", "yes"]
+                requested_status
+                .strip()
+                .lower()
+                in [
+                    "true",
+                    "1",
+                    "yes",
+                ]
             )
 
-        requested_status = bool(requested_status)
+        requested_status = bool(
+            requested_status
+        )
 
         read_status, created = (
-            InternalMailReadStatus.objects.update_or_create(
+            InternalMailReadStatus.objects
+            .update_or_create(
                 mail=mail,
                 user=auth_user,
                 defaults={
@@ -27095,8 +27621,12 @@ class InternalMailReadStatusView(BaseTokenView):
                 ),
                 "data": {
                     "mail_id": mail.id,
-                    "is_read": read_status.is_read,
-                    "read_at": read_status.read_at,
+                    "is_read": (
+                        read_status.is_read
+                    ),
+                    "read_at": (
+                        read_status.read_at
+                    ),
                 },
             },
             status=status.HTTP_200_OK,
