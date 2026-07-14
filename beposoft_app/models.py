@@ -2278,7 +2278,30 @@ class StaffAttendance(models.Model):
 
 class InternalMail(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_mails")
-    recipients = models.ManyToManyField(User, related_name="received_mails")
+
+    # Normal "To" recipients.
+    recipients = models.ManyToManyField(User, related_name="received_mails", blank=True)
+
+    # Normal "To" recipients.
+    recipients = models.ManyToManyField(
+        User,
+        related_name="received_mails",
+        blank=True
+    )
+
+    # Carbon-copy recipients.
+    cc_recipients = models.ManyToManyField(
+        User,
+        related_name="cc_internal_mails",
+        blank=True
+    )
+
+    # Blind-carbon-copy recipients.
+    bcc_recipients = models.ManyToManyField(
+        User,
+        related_name="bcc_internal_mails",
+        blank=True
+    )
 
     # The mail being replied to.
     # Null means this is a new/original mail.
@@ -2316,6 +2339,31 @@ class InternalMail(models.Model):
             mail = mail.parent_mail
 
         return mail
+
+    def get_all_recipient_ids(self):
+        """
+        Return unique To, CC and BCC recipient user IDs.
+        """
+        return set(
+            self.recipients.values_list("id", flat=True)
+        ) | set(
+            self.cc_recipients.values_list("id", flat=True)
+        ) | set(
+            self.bcc_recipients.values_list("id", flat=True)
+        )
+
+    def is_recipient(self, user):
+        """
+        Check whether a user is in To, CC or BCC.
+        """
+        if not user or not user.pk:
+            return False
+
+        return (
+            self.recipients.filter(pk=user.pk).exists()
+            or self.cc_recipients.filter(pk=user.pk).exists()
+            or self.bcc_recipients.filter(pk=user.pk).exists()
+        )
     
 
 
