@@ -26395,6 +26395,29 @@ class InternalMailView(BaseTokenView):
 
     MAX_FILE_SIZE = 1024 * 1024  # 1 MB
 
+    def group_mails_by_thread(self, mails):
+    
+        grouped_threads = {}
+
+        for mail in mails:
+            root_mail = mail.get_thread_root()
+            root_id = root_mail.id
+
+            existing_mail = grouped_threads.get(root_id)
+
+            if (
+                existing_mail is None
+                or mail.created_at > existing_mail.created_at
+            ):
+                grouped_threads[root_id] = mail
+
+        return sorted(
+            grouped_threads.values(),
+            key=lambda mail: mail.created_at,
+            reverse=True,
+        )
+
+
     def get(self, request):
         auth_user, error_response = self.get_user_from_token(request)
 
@@ -26417,16 +26440,16 @@ class InternalMailView(BaseTokenView):
         ).strip().lower()
 
         if mail_type == "sent":
-            # Include both original mails and replies sent by the user.
             mails = InternalMail.objects.filter(
                 sender=auth_user,
                 is_deleted_by_sender=False,
             )
 
         else:
-            # Include original mails and replies received by the user.
             mails = InternalMail.objects.filter(
                 recipients=auth_user,
+            ).exclude(
+                sender=auth_user
             )
 
             if read_status_filter == "read":
@@ -26449,6 +26472,7 @@ class InternalMailView(BaseTokenView):
                 | Q(recipients__name__icontains=search)
                 | Q(parent_mail__subject__icontains=search)
                 | Q(parent_mail__message__icontains=search)
+                | Q(parent_mail__sender__name__icontains=search)
             ).distinct()
 
         mails = (
@@ -26475,15 +26499,24 @@ class InternalMailView(BaseTokenView):
             .distinct()
         )
 
+        # Convert QuerySet to a list and keep only the newest mail
+        # from each conversation.
+        grouped_mails = self.group_mails_by_thread(
+            list(mails)
+        )
+
         unread_count = InternalMailReadStatus.objects.filter(
             user=auth_user,
             is_read=False,
             mail__recipients=auth_user,
+        ).exclude(
+            mail__sender=auth_user
         ).count()
 
         paginator = StandardPagination()
+
         page = paginator.paginate_queryset(
-            mails,
+            grouped_mails,
             request
         )
 
@@ -26924,9 +26957,11 @@ class InternalMailReplyView(BaseTokenView):
         else:
             reply_subject = f"Re: {original_subject}"
 
+        thread_root = parent_mail.get_thread_root()
+
         reply_mail = InternalMail.objects.create(
             sender=auth_user,
-            parent_mail=parent_mail,
+            parent_mail=thread_root,
             subject=reply_subject,
             message=message
         )
