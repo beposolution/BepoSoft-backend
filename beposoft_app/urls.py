@@ -423,6 +423,9 @@ urlpatterns = [
 
      path('api/products/family/wise/summary/', FamilyWiseProductSummaryAPIView.as_view(), name='family-wise-product-summary'),
 
+    path("api/main/categories/add/", MainCategoryListCreateView.as_view(), name="main-category-list-create"),
+    path("api/main/categories/edit/<int:pk>/", MainCategoryDetailView.as_view(), name="main-category-detail"),
+
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 

@@ -571,6 +571,14 @@ class SupervisorViewSerializers(serializers.ModelSerializer):
         fields = ['id', 'name', 'department', 'department_name']
 
 
+
+class MainCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MainCategory
+        fields = ["id", "name", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
 class ShippingSerializers(serializers.ModelSerializer):
     class Meta:
         model = Shipping

@@ -25095,6 +25095,159 @@ class MyStaffAttendanceDetailsView(BaseTokenView):
 
 
 
+
+# Main Category
+
+class MainCategoryListCreateView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            main_categories = MainCategory.objects.all().order_by("-id")
+            serializer = MainCategorySerializer(main_categories, many=True)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Main categories fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching main categories",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            serializer = MainCategorySerializer(data=request.data)
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Main category created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating main category",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class MainCategoryDetailView(BaseTokenView):
+
+    def get_object(self, pk):
+        return get_object_or_404(MainCategory, pk=pk)
+
+    def get(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            main_category = self.get_object(pk)
+            serializer = MainCategorySerializer(main_category)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Main category fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching main category",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            main_category = self.get_object(pk)
+
+            serializer = MainCategorySerializer(
+                main_category,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Main category updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating main category",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+
 # comparison GET api's
 class OrderComparisonReportView(BaseTokenView):
     def get(self, request):
