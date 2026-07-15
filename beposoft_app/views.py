@@ -10276,6 +10276,7 @@ class GETProductByWarehouseView(BaseTokenView):
 
             search = request.GET.get("search", "").strip()
             category_id = request.GET.get("category_id", "").strip()
+            main_category_id = request.GET.get("main_category_id", "").strip()
             stock_type = request.GET.get("stock_type", "").strip()
             purchase_type = request.GET.get("purchase_type", "").strip()
 
@@ -10296,6 +10297,7 @@ class GETProductByWarehouseView(BaseTokenView):
                 "warehouse",
                 "created_user",
                 "product_category",
+                "main_category",
                 "product_approved_user"
             ).prefetch_related(
                 "family",
@@ -10305,6 +10307,11 @@ class GETProductByWarehouseView(BaseTokenView):
             if category_id:
                 base_products = base_products.filter(
                     product_category_id=category_id
+                )
+
+            if main_category_id:
+                base_products = base_products.filter(
+                    main_category_id=main_category_id
                 )
 
             if purchase_type:
@@ -10716,6 +10723,7 @@ class GETProductByWarehouseView(BaseTokenView):
                 "warehouse_name": warehouse.name,
                 "search": search,
                 "category_id": category_id if category_id else None,
+                "main_category_id": main_category_id or None,
                 "stock_type": stock_type if stock_type else None,
                 "purchase_type": purchase_type if purchase_type else None,
                 "summary": summary,
