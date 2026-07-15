@@ -421,7 +421,7 @@ urlpatterns = [
     path("api/grv/family/payment/summary/without/bepocart/", GRVFamilyPaymentSummaryWithoutBepocartView.as_view(), name="grv-family-payment-summary-without-bepocart"),
     path("api/warehouse/product/amount/summary/", WarehouseDateWiseProductAmountView.as_view(), name="warehouse-product-amount-summary"),
 
-     path('api/products/family/wise/summary/', FamilyWiseProductSummaryAPIView.as_view(), name='family-wise-product-summary'),
+    path('api/products/main/category/wise/summary/', MainCategoryWiseProductSummaryAPIView.as_view(), name='main-category-wise-product-summary'),
 
     path("api/main/categories/add/", MainCategoryListCreateView.as_view(), name="main-category-list-create"),
     path("api/main/categories/edit/<int:pk>/", MainCategoryDetailView.as_view(), name="main-category-detail"),

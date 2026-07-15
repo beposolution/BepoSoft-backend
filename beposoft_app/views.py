@@ -26177,10 +26177,10 @@ class WarehouseDateWiseProductAmountView(APIView):
 
 
 
-class FamilyWiseProductSummaryAPIView(APIView):
+class MainCategoryWiseProductSummaryAPIView(APIView):
 
     def get(self, request):
-        family_id = request.query_params.get('family_id')
+        main_category_id = request.query_params.get('main_category_id')
         warehouse_id = request.query_params.get('warehouse_id')
         purchase_type = request.query_params.get('purchase_type')
         approval_status = request.query_params.get('approval_status')
@@ -26188,10 +26188,26 @@ class FamilyWiseProductSummaryAPIView(APIView):
         product_filter = Q()
 
         if warehouse_id:
-            product_filter &= Q(familys__warehouse_id=warehouse_id)
+            try:
+                warehouse_id = int(warehouse_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {
+                        "status": False,
+                        "message": "warehouse_id must be a valid integer."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            product_filter &= Q(
+                products__warehouse_id=warehouse_id
+            )
 
         if purchase_type:
-            valid_purchase_types = ['Local', 'International']
+            valid_purchase_types = [
+                'Local',
+                'International',
+            ]
 
             if purchase_type not in valid_purchase_types:
                 return Response(
@@ -26206,13 +26222,13 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 )
 
             product_filter &= Q(
-                familys__purchase_type=purchase_type
+                products__purchase_type=purchase_type
             )
 
         if approval_status:
             valid_approval_statuses = [
                 'Approved',
-                'Disapproved'
+                'Disapproved',
             ]
 
             if approval_status not in valid_approval_statuses:
@@ -26228,53 +26244,57 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 )
 
             product_filter &= Q(
-                familys__approval_status=approval_status
+                products__approval_status=approval_status
             )
 
-        families = Family.objects.all()
+        main_categories = MainCategory.objects.all()
 
-        if family_id:
+        if main_category_id:
             try:
-                family_id = int(family_id)
+                main_category_id = int(main_category_id)
             except (TypeError, ValueError):
                 return Response(
                     {
                         "status": False,
-                        "message": "family_id must be a valid integer."
+                        "message": (
+                            "main_category_id must be a valid integer."
+                        )
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            families = families.filter(id=family_id)
+            main_categories = main_categories.filter(
+                id=main_category_id
+            )
 
-        families = families.annotate(
+        main_categories = main_categories.annotate(
             product_count=Count(
-                'familys',
+                'products',
                 filter=product_filter,
                 distinct=True
             ),
 
             single_product_count=Count(
-                'familys',
+                'products',
                 filter=(
                     product_filter
-                    & Q(familys__type='single')
+                    & Q(products__type='single')
                 ),
                 distinct=True
             ),
 
             variant_product_count=Count(
-                'familys',
+                'products',
                 filter=(
                     product_filter
-                    & Q(familys__type='variant')
+                    & Q(products__type='variant')
                 ),
                 distinct=True
             ),
 
             total_stock=Coalesce(
                 Sum(
-                    'familys__stock',
+                    'products__stock',
                     filter=product_filter
                 ),
                 Value(0),
@@ -26283,7 +26303,7 @@ class FamilyWiseProductSummaryAPIView(APIView):
 
             total_locked_stock=Coalesce(
                 Sum(
-                    'familys__locked_stock',
+                    'products__locked_stock',
                     filter=product_filter
                 ),
                 Value(0),
@@ -26292,7 +26312,7 @@ class FamilyWiseProductSummaryAPIView(APIView):
 
             total_damaged_stock=Coalesce(
                 Sum(
-                    'familys__damaged_stock',
+                    'products__damaged_stock',
                     filter=product_filter
                 ),
                 Value(0),
@@ -26301,7 +26321,7 @@ class FamilyWiseProductSummaryAPIView(APIView):
 
             total_partially_damaged_stock=Coalesce(
                 Sum(
-                    'familys__partially_damaged_stock',
+                    'products__partially_damaged_stock',
                     filter=product_filter
                 ),
                 Value(0),
@@ -26310,7 +26330,7 @@ class FamilyWiseProductSummaryAPIView(APIView):
 
             total_liquidation_stock=Coalesce(
                 Sum(
-                    'familys__liquidation_stock',
+                    'products__liquidation_stock',
                     filter=product_filter
                 ),
                 Value(0),
@@ -26321,11 +26341,11 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 Sum(
                     ExpressionWrapper(
                         Coalesce(
-                            F('familys__stock'),
+                            F('products__stock'),
                             Value(0)
                         )
                         * Coalesce(
-                            F('familys__landing_cost'),
+                            F('products__landing_cost'),
                             Value(0.0)
                         ),
                         output_field=FloatField()
@@ -26340,11 +26360,11 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 Sum(
                     ExpressionWrapper(
                         Coalesce(
-                            F('familys__stock'),
+                            F('products__stock'),
                             Value(0)
                         )
                         * Coalesce(
-                            F('familys__retail_price'),
+                            F('products__retail_price'),
                             Value(0.0)
                         ),
                         output_field=FloatField()
@@ -26359,11 +26379,11 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 Sum(
                     ExpressionWrapper(
                         Coalesce(
-                            F('familys__stock'),
+                            F('products__stock'),
                             Value(0)
                         )
                         * Coalesce(
-                            F('familys__selling_price'),
+                            F('products__selling_price'),
                             Value(0.0)
                         ),
                         output_field=FloatField()
@@ -26378,11 +26398,11 @@ class FamilyWiseProductSummaryAPIView(APIView):
                 Sum(
                     ExpressionWrapper(
                         Coalesce(
-                            F('familys__stock'),
+                            F('products__stock'),
                             Value(0)
                         )
                         * Coalesce(
-                            F('familys__final_price'),
+                            F('products__final_price'),
                             Value(0.0)
                         ),
                         output_field=FloatField()
@@ -26412,106 +26432,104 @@ class FamilyWiseProductSummaryAPIView(APIView):
             "total_final_price_value": 0.0,
         }
 
-        for family in families:
+        for main_category in main_categories:
             available_stock = (
-                family.total_stock
-                - family.total_locked_stock
+                main_category.total_stock
+                - main_category.total_locked_stock
             )
 
-            family_data = {
-                "family_id": family.id,
-                "family_name": family.name,
-                "product_count": family.product_count,
+            main_category_data = {
+                "main_category_id": main_category.id,
+                "main_category_name": main_category.name,
+                "product_count": main_category.product_count,
                 "single_product_count": (
-                    family.single_product_count
+                    main_category.single_product_count
                 ),
                 "variant_product_count": (
-                    family.variant_product_count
+                    main_category.variant_product_count
                 ),
-                "total_stock": family.total_stock,
+                "total_stock": main_category.total_stock,
                 "total_locked_stock": (
-                    family.total_locked_stock
+                    main_category.total_locked_stock
                 ),
                 "available_stock": available_stock,
                 "total_damaged_stock": (
-                    family.total_damaged_stock
+                    main_category.total_damaged_stock
                 ),
                 "total_partially_damaged_stock": (
-                    family.total_partially_damaged_stock
+                    main_category.total_partially_damaged_stock
                 ),
                 "total_liquidation_stock": (
-                    family.total_liquidation_stock
+                    main_category.total_liquidation_stock
                 ),
                 "total_landing_value": round(
-                    family.total_landing_value,
+                    main_category.total_landing_value,
                     2
                 ),
                 "total_retail_value": round(
-                    family.total_retail_value,
+                    main_category.total_retail_value,
                     2
                 ),
                 "total_selling_value": round(
-                    family.total_selling_value,
+                    main_category.total_selling_value,
                     2
                 ),
                 "total_final_price_value": round(
-                    family.total_final_price_value,
+                    main_category.total_final_price_value,
                     2
                 ),
             }
 
-            results.append(family_data)
+            results.append(main_category_data)
 
             grand_total["product_count"] += (
-                family.product_count
+                main_category.product_count
             )
 
             grand_total["single_product_count"] += (
-                family.single_product_count
+                main_category.single_product_count
             )
 
             grand_total["variant_product_count"] += (
-                family.variant_product_count
+                main_category.variant_product_count
             )
 
             grand_total["total_stock"] += (
-                family.total_stock
+                main_category.total_stock
             )
 
             grand_total["total_locked_stock"] += (
-                family.total_locked_stock
+                main_category.total_locked_stock
             )
 
-            grand_total["available_stock"] += (
-                available_stock
-            )
+            grand_total["available_stock"] += available_stock
 
             grand_total["total_damaged_stock"] += (
-                family.total_damaged_stock
+                main_category.total_damaged_stock
             )
 
             grand_total[
                 "total_partially_damaged_stock"
-            ] += family.total_partially_damaged_stock
+            ] += main_category.total_partially_damaged_stock
 
             grand_total["total_liquidation_stock"] += (
-                family.total_liquidation_stock
+                main_category.total_liquidation_stock
             )
 
             grand_total["total_landing_value"] += (
-                family.total_landing_value
+                main_category.total_landing_value
             )
 
             grand_total["total_retail_value"] += (
-                family.total_retail_value
+                main_category.total_retail_value
             )
 
             grand_total["total_selling_value"] += (
-                family.total_selling_value
+                main_category.total_selling_value
             )
 
             grand_total["total_final_price_value"] += (
-                family.total_final_price_value
+                main_category.total_final_price_value
             )
 
         value_fields = [
@@ -26531,16 +26549,16 @@ class FamilyWiseProductSummaryAPIView(APIView):
             {
                 "status": True,
                 "message": (
-                    "Family-wise product summary fetched "
-                    "successfully."
+                    "Main category-wise product summary "
+                    "fetched successfully."
                 ),
                 "filters": {
-                    "family_id": family_id,
+                    "main_category_id": main_category_id,
                     "warehouse_id": warehouse_id,
                     "purchase_type": purchase_type,
                     "approval_status": approval_status,
                 },
-                "family_count": len(results),
+                "main_category_count": len(results),
                 "grand_total": grand_total,
                 "results": results,
             },
