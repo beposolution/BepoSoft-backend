@@ -2280,9 +2280,6 @@ class InternalMail(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_mails")
 
     # Normal "To" recipients.
-    recipients = models.ManyToManyField(User, related_name="received_mails", blank=True)
-
-    # Normal "To" recipients.
     recipients = models.ManyToManyField(
         User,
         related_name="received_mails",
