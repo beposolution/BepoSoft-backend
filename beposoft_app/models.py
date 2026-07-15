@@ -443,6 +443,8 @@ class Products(models.Model):
     damaged_stock = models.IntegerField(default=0, null=True, blank=True)
     partially_damaged_stock = models.IntegerField(default=0, null=True, blank=True)
     liquidation_stock = models.IntegerField(default=0, null=True, blank=True)
+    date = models.DateField(null=True, blank=True)
+    main_category = models.ForeignKey(MainCategory, on_delete=models.SET_NULL, null=True, blank=True)
     
 
     def generate_variant_id(self):
