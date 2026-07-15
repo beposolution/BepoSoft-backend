@@ -3695,6 +3695,82 @@ class StaffAttendanceTeamMemberSerializer(serializers.ModelSerializer):
 
 # internal mail for users
 
+class InternalMailRecipientVisibilityMixin:
+    """
+    Controls recipient visibility based on the authenticated user.
+
+    Sender:
+        Can see To, CC and all BCC recipients.
+
+    To / CC recipient:
+        Can see To and CC recipients.
+        Cannot see any BCC recipient.
+
+    BCC recipient:
+        Can see To and CC recipients.
+        Can see only themselves in BCC.
+    """
+
+    def get_auth_user(self):
+        return self.context.get("auth_user")
+
+    def get_current_user_recipient_type(self, obj):
+        auth_user = self.get_auth_user()
+
+        if not auth_user:
+            return None
+
+        if obj.sender_id == auth_user.id:
+            return "sender"
+
+        if obj.recipients.filter(pk=auth_user.pk).exists():
+            return "to"
+
+        if obj.cc_recipients.filter(pk=auth_user.pk).exists():
+            return "cc"
+
+        if obj.bcc_recipients.filter(pk=auth_user.pk).exists():
+            return "bcc"
+
+        return None
+
+    def get_visible_bcc_users(self, obj):
+        auth_user = self.get_auth_user()
+
+        if not auth_user:
+            return []
+
+        # Sender sees the complete BCC list.
+        if obj.sender_id == auth_user.id:
+            return obj.bcc_recipients.all()
+
+        # A BCC recipient sees only themselves.
+        if obj.bcc_recipients.filter(pk=auth_user.pk).exists():
+            return [auth_user]
+
+        # To and CC users must not see BCC users.
+        return []
+
+    def get_bcc_recipients(self, obj):
+        """
+        Return only visible BCC user IDs.
+
+        This prevents leaking all BCC IDs through the raw
+        ManyToMany serializer field.
+        """
+        return [
+            user.id
+            for user in self.get_visible_bcc_users(obj)
+        ]
+
+    def get_bcc_recipients_data(self, obj):
+        return InternalMailUserSerializer(
+            self.get_visible_bcc_users(obj),
+            many=True,
+            context=self.context,
+        ).data
+    
+
 class InternalMailUserSerializer(serializers.ModelSerializer):
     department = serializers.SerializerMethodField()
 
@@ -3730,30 +3806,41 @@ class InternalMailAttachmentSerializer(serializers.ModelSerializer):
         return None
 
 
-class InternalMailSerializer(serializers.ModelSerializer):
+class InternalMailSerializer(
+    InternalMailRecipientVisibilityMixin,
+    serializers.ModelSerializer,
+):
     sender_name = serializers.CharField(
         source="sender.name",
-        read_only=True
+        read_only=True,
+    )
+
+    sender_data = InternalMailUserSerializer(
+        source="sender",
+        read_only=True,
     )
 
     recipients_data = InternalMailUserSerializer(
         source="recipients",
         many=True,
-        read_only=True
+        read_only=True,
     )
 
     cc_recipients_data = InternalMailUserSerializer(
         source="cc_recipients",
         many=True,
-        read_only=True
+        read_only=True,
     )
 
+    # Never expose the raw ManyToMany BCC relation.
+    bcc_recipients = serializers.SerializerMethodField()
     bcc_recipients_data = serializers.SerializerMethodField()
+
     current_user_recipient_type = serializers.SerializerMethodField()
 
     attachments = InternalMailAttachmentSerializer(
         many=True,
-        read_only=True
+        read_only=True,
     )
 
     is_reply = serializers.SerializerMethodField()
@@ -3766,10 +3853,14 @@ class InternalMailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InternalMail
+
         fields = [
             "id",
+
+            # From
             "sender",
             "sender_name",
+            "sender_data",
 
             # To
             "recipients",
@@ -3779,7 +3870,7 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "cc_recipients",
             "cc_recipients_data",
 
-            # BCC
+            # BCC: visibility-controlled fields
             "bcc_recipients",
             "bcc_recipients_data",
 
@@ -3790,20 +3881,23 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "parent_mail_sender_name",
             "is_reply",
             "reply_count",
+
             "subject",
             "message",
             "attachments",
+
             "is_read",
             "read_at",
+
             "is_deleted_by_sender",
             "created_at",
         ]
 
         read_only_fields = [
             "sender",
+            "sender_data",
             "recipients",
             "cc_recipients",
-            "bcc_recipients",
             "parent_mail",
             "is_deleted_by_sender",
             "created_at",
@@ -3811,53 +3905,15 @@ class InternalMailSerializer(serializers.ModelSerializer):
             "read_at",
         ]
 
-    def get_bcc_recipients_data(self, obj):
-        auth_user = self.context.get("auth_user")
-
-        if not auth_user:
-            return []
-
-        # Sender can see the complete BCC list.
-        if obj.sender_id == auth_user.id:
-            return InternalMailUserSerializer(
-                obj.bcc_recipients.all(),
-                many=True
-            ).data
-
-        # A BCC recipient can only see themselves.
-        if obj.bcc_recipients.filter(pk=auth_user.pk).exists():
-            return InternalMailUserSerializer(
-                [auth_user],
-                many=True
-            ).data
-
-        return []
-
-    def get_current_user_recipient_type(self, obj):
-        auth_user = self.context.get("auth_user")
-
-        if not auth_user:
-            return None
-
-        if obj.sender_id == auth_user.id:
-            return "sender"
-
-        if obj.recipients.filter(pk=auth_user.pk).exists():
-            return "to"
-
-        if obj.cc_recipients.filter(pk=auth_user.pk).exists():
-            return "cc"
-
-        if obj.bcc_recipients.filter(pk=auth_user.pk).exists():
-            return "bcc"
-
-        return None
-
     def get_is_reply(self, obj):
         return obj.parent_mail_id is not None
 
     def get_parent_mail_subject(self, obj):
-        return obj.parent_mail.subject if obj.parent_mail else None
+        return (
+            obj.parent_mail.subject
+            if obj.parent_mail
+            else None
+        )
 
     def get_parent_mail_sender_name(self, obj):
         return (
@@ -3881,7 +3937,7 @@ class InternalMailSerializer(serializers.ModelSerializer):
         prefetched_statuses = getattr(
             obj,
             "current_user_read_statuses",
-            None
+            None,
         )
 
         if prefetched_statuses is not None:
@@ -3892,7 +3948,7 @@ class InternalMailSerializer(serializers.ModelSerializer):
             )
 
         return obj.read_statuses.filter(
-            user=auth_user
+            user=auth_user,
         ).first()
 
     def get_is_read(self, obj):
@@ -3906,7 +3962,11 @@ class InternalMailSerializer(serializers.ModelSerializer):
 
         read_status = self._get_user_read_status(obj)
 
-        return read_status.is_read if read_status else False
+        return (
+            read_status.is_read
+            if read_status
+            else False
+        )
 
     def get_read_at(self, obj):
         auth_user = self.context.get("auth_user")
@@ -3919,21 +3979,48 @@ class InternalMailSerializer(serializers.ModelSerializer):
 
         read_status = self._get_user_read_status(obj)
 
-        return read_status.read_at if read_status else None
+        return (
+            read_status.read_at
+            if read_status
+            else None
+        )
 
 
 
-class InternalMailThreadSerializer(serializers.ModelSerializer):
+class InternalMailThreadSerializer(
+    InternalMailRecipientVisibilityMixin,
+    serializers.ModelSerializer,
+):
     sender_name = serializers.CharField(
         source="sender.name",
-        read_only=True
+        read_only=True,
     )
 
-    recipients_data = serializers.SerializerMethodField()
+    sender_data = InternalMailUserSerializer(
+        source="sender",
+        read_only=True,
+    )
+
+    recipients_data = InternalMailUserSerializer(
+        source="recipients",
+        many=True,
+        read_only=True,
+    )
+
+    cc_recipients_data = InternalMailUserSerializer(
+        source="cc_recipients",
+        many=True,
+        read_only=True,
+    )
+
+    bcc_recipients = serializers.SerializerMethodField()
+    bcc_recipients_data = serializers.SerializerMethodField()
+
+    current_user_recipient_type = serializers.SerializerMethodField()
 
     attachments = InternalMailAttachmentSerializer(
         many=True,
-        read_only=True
+        read_only=True,
     )
 
     is_read = serializers.SerializerMethodField()
@@ -3941,43 +4028,47 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InternalMail
+
         fields = [
             "id",
+
+            # From
             "sender",
             "sender_name",
+            "sender_data",
+
+            # To
             "recipients",
             "recipients_data",
+
+            # CC
+            "cc_recipients",
+            "cc_recipients_data",
+
+            # BCC: visibility controlled
+            "bcc_recipients",
+            "bcc_recipients_data",
+
+            "current_user_recipient_type",
+
             "parent_mail",
             "subject",
             "message",
             "attachments",
 
-            # Read status fields
             "is_read",
             "read_at",
-
             "created_at",
         ]
 
         read_only_fields = [
+            "sender",
+            "recipients",
+            "cc_recipients",
+            "parent_mail",
             "is_read",
             "read_at",
             "created_at",
-        ]
-
-    def get_recipients_data(self, obj):
-        return [
-            {
-                "id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "department": (
-                    user.department_id.name
-                    if user.department_id
-                    else None
-                ),
-            }
-            for user in obj.recipients.all()
         ]
 
     def _get_user_read_status(self, obj):
@@ -3989,7 +4080,7 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
         prefetched_statuses = getattr(
             obj,
             "current_user_read_statuses",
-            None
+            None,
         )
 
         if prefetched_statuses is not None:
@@ -4000,7 +4091,7 @@ class InternalMailThreadSerializer(serializers.ModelSerializer):
             )
 
         return obj.read_statuses.filter(
-            user=auth_user
+            user=auth_user,
         ).first()
 
     def get_is_read(self, obj):
