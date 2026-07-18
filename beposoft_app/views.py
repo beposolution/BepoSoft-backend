@@ -24944,20 +24944,12 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                     "total_count": total_count,
                 })
 
-            team_member_user_ids = StaffAttendanceTeamMembers.objects.values_list(
-                "member_id",
-                flat=True
-            ).distinct()
-
-            approved_team_members_count = User.objects.filter(
-                approval_status="approved",
-                id__in=team_member_user_ids
-            ).count()
+            total_team_members = StaffAttendanceTeamMembers.objects.count()
 
             summary = {
                 "total_teams": len(data),
                 # "total_members": sum(item["members_count"] for item in data),
-                "total_members": approved_team_members_count,
+                "total_members": total_team_members,
                 "total_present": sum(item["present_count"] for item in data),
                 "total_absent": sum(item["absent_count"] for item in data),
                 "total_half_day": sum(item["half_day_count"] for item in data),
