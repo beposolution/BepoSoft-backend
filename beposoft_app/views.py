@@ -25084,14 +25084,8 @@ class SalesDepartmentAttendanceDataView(BaseTokenView):
             start_date = request.GET.get("start_date")
             end_date = request.GET.get("end_date")
 
-            sales_team_names = [
-                "SALES DEPARTMENT (MUBARISH)",
-                "SALES DEPARTMENT (NOUFAL)",
-                "SALES DEPARTMENT (SHAMI)",
-            ]
-
             teams = StaffAttendanceTeam.objects.filter(
-                team_name__in=sales_team_names
+                team_name__icontains="SALES DEPARTMENT"
             ).prefetch_related(
                 "team_members__member"
             ).select_related(
