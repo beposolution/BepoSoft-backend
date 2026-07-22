@@ -2292,6 +2292,14 @@ class StaffAttendance(models.Model):
 # internal mail system models
 
 class InternalMail(models.Model):
+    EXTERNAL_STATUS_CHOICES = [
+        ("not_requested", "Not Requested"),
+        ("pending", "Pending"),
+        ("sent", "Sent"),
+        ("partial", "Partially Sent"),
+        ("failed", "Failed"),
+    ]
+
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_mails")
 
     # Normal "To" recipients.
@@ -2322,6 +2330,32 @@ class InternalMail(models.Model):
     subject = models.CharField(max_length=255)
     message = models.TextField(blank=True, null=True)
 
+    # EXTERNAL MAIL
+    send_external_email = models.BooleanField(
+        default=False,
+    )
+    external_email_status = models.CharField(
+        max_length=20,
+        choices=EXTERNAL_STATUS_CHOICES,
+        default="not_requested",
+    )
+    external_sender_email = models.EmailField(
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+    external_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+    )
+    external_email_error = models.TextField(
+        blank=True,
+        null=True,
+    )
+    external_recipient_count = models.PositiveIntegerField(
+        default=0,
+    )
+
     is_deleted_by_sender = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -2332,6 +2366,7 @@ class InternalMail(models.Model):
         indexes = [
             models.Index(fields=["parent_mail"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["external_email_status"]),
         ]
 
     def __str__(self):

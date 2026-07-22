@@ -186,4 +186,34 @@ SMS_ALERT_SENDER_ID = 1707162624534280862
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# EMAIL CONFIGURATION
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = os.getenv(
+    "EMAIL_HOST",
+    "sg2plzcpnl509181.prod.sin2.secureserver.net",
+)
+
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+
+EMAIL_HOST_USER = "mail@psage.in"
+EMAIL_HOST_PASSWORD = "Mail.psage.in_57"
+
+EMAIL_USE_SSL = (
+    os.getenv("EMAIL_USE_SSL", "True").lower()
+    == "true"
+)
+
+EMAIL_USE_TLS = (
+    os.getenv("EMAIL_USE_TLS", "False").lower()
+    == "true"
+)
+
+DEFAULT_FROM_EMAIL = "mail@psage.in"
+
+EMAIL_TIMEOUT = int(
+    os.getenv("EMAIL_TIMEOUT", "30")
+)
+
 
