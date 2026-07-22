@@ -3894,6 +3894,13 @@ class InternalMailSerializer(
             "message",
             "attachments",
 
+            "send_external_email",
+            "external_email_status",
+            "external_sender_email",
+            "external_sent_at",
+            "external_email_error",
+            "external_recipient_count",
+
             "is_read",
             "read_at",
 
@@ -3911,6 +3918,13 @@ class InternalMailSerializer(
             "created_at",
             "is_read",
             "read_at",
+
+            "send_external_email",
+            "external_email_status",
+            "external_sender_email",
+            "external_sent_at",
+            "external_email_error",
+            "external_recipient_count",
         ]
 
     def get_is_reply(self, obj):
@@ -4067,6 +4081,13 @@ class InternalMailThreadSerializer(
             "is_read",
             "read_at",
             "created_at",
+
+            "send_external_email",
+            "external_email_status",
+            "external_sender_email",
+            "external_sent_at",
+            "external_email_error",
+            "external_recipient_count",
         ]
 
         read_only_fields = [

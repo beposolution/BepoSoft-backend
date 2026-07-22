@@ -36,6 +36,12 @@ from django.db.models.functions import Cast, NullIf
 from django.db.models.functions import TruncDate
 import calendar
 from django.utils.timezone import localtime
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from .services.internal_mail_email import (
+    parse_boolean,
+    process_external_internal_mail,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27076,6 +27082,13 @@ class InternalMailView(BaseTokenView):
             "documents"
         )
 
+        send_external_email = parse_boolean(
+            request.data.get(
+                "send_external_email",
+                "false",
+            )
+        )
+
         if not to_ids and not cc_ids and not bcc_ids:
             return Response(
                 {
@@ -27148,10 +27161,67 @@ class InternalMailView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        if send_external_email:
+            sender_email = (
+                auth_user.email
+                or ""
+            ).strip().lower()
+
+            if not sender_email:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Your profile does not contain "
+                            "an email address."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                validate_email(sender_email)
+            except ValidationError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Your profile contains an "
+                            "invalid sender email address."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not sender_email.endswith(
+                "@psage.in"
+            ):
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "External sending is allowed "
+                            "only from @psage.in profile emails."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         mail = InternalMail.objects.create(
             sender=auth_user,
             subject=subject,
             message=message,
+            send_external_email=send_external_email,
+            external_email_status=(
+                "pending"
+                if send_external_email
+                else "not_requested"
+            ),
+            external_sender_email=(
+                auth_user.email
+                if send_external_email
+                else None
+            ),
         )
 
         mail.recipients.set(to_users)
@@ -27184,6 +27254,42 @@ class InternalMailView(BaseTokenView):
                 mail=mail,
                 document=document,
             )
+
+        external_result = {
+            "status": "not_requested",
+        }
+
+        if send_external_email:
+            to_user_ids = [
+                user.id
+                for user in to_users
+            ]
+
+            cc_user_ids = [
+                user.id
+                for user in cc_users
+            ]
+
+            bcc_user_ids = [
+                user.id
+                for user in bcc_users
+            ]
+
+            def send_after_commit():
+                process_external_internal_mail(
+                    internal_mail_id=mail.id,
+                    to_user_ids=to_user_ids,
+                    cc_user_ids=cc_user_ids,
+                    bcc_user_ids=bcc_user_ids,
+                )
+
+            transaction.on_commit(
+                send_after_commit
+            )
+
+            external_result = {
+                "status": "pending",
+            }
 
         mail = (
             InternalMail.objects
@@ -27223,10 +27329,18 @@ class InternalMailView(BaseTokenView):
             },
         )
 
+        response_message = (
+            "Mail sent internally. "
+            "External email delivery is pending."
+            if send_external_email
+            else "Mail sent successfully."
+        )
+
         return Response(
             {
                 "status": "success",
-                "message": "Mail sent successfully.",
+                "message": response_message,
+                "external_email": external_result,
                 "data": serializer.data,
             },
             status=status.HTTP_201_CREATED,
