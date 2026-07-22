@@ -188,7 +188,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # EMAIL CONFIGURATION
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = "beposoft_app.email_backend.CustomSMTPEmailBackend"
 
 EMAIL_HOST = "sg2plzcpnl509181.prod.sin2.secureserver.net"
 EMAIL_PORT = 465
