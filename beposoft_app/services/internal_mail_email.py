@@ -138,6 +138,7 @@ def build_html_message(
     """
 
 
+
 def attach_internal_mail_files(
     email_message,
     attachments,
@@ -145,32 +146,45 @@ def attach_internal_mail_files(
     for attachment in attachments:
         document = attachment.document
 
-        if not document:
+        if not document or not document.name:
             continue
 
         try:
             document.open("rb")
             content = document.read()
+
+        except FileNotFoundError:
+            logger.warning(
+                "Skipping missing internal-mail attachment. "
+                "Attachment ID=%s, file=%s",
+                attachment.pk,
+                document.name,
+            )
+            continue
+
+        except Exception:
+            logger.exception(
+                "Unable to attach internal-mail file. "
+                "Attachment ID=%s, file=%s",
+                attachment.pk,
+                document.name,
+            )
+            continue
+
         finally:
             try:
                 document.close()
             except Exception:
                 pass
 
-        filename = document.name.rsplit(
-            "/",
-            1,
-        )[-1]
+        filename = document.name.rsplit("/", 1)[-1]
 
-        content_type, _ = mimetypes.guess_type(
-            filename
-        )
+        content_type, _ = mimetypes.guess_type(filename)
 
         email_message.attach(
             filename,
             content,
-            content_type
-            or "application/octet-stream",
+            content_type or "application/octet-stream",
         )
 
 
@@ -262,6 +276,13 @@ def send_internal_mail_externally(
             "Please see the attached document."
         )
 
+    from django.core.mail import get_connection
+
+    connection = get_connection(
+        backend=settings.EMAIL_BACKEND,
+        fail_silently=False,
+    )
+
     email_message = EmailMultiAlternatives(
         subject=internal_mail.subject,
         body=plain_message,
@@ -271,10 +292,9 @@ def send_internal_mail_externally(
         bcc=bcc_emails,
         headers={
             "Reply-To": sender_email,
-            "X-Internal-Mail-ID": str(
-                internal_mail.pk
-            ),
+            "X-Internal-Mail-ID": str(internal_mail.pk),
         },
+        connection=connection,
     )
 
     html_message = build_html_message(
