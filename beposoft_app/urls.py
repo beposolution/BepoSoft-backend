@@ -431,6 +431,7 @@ urlpatterns = [
     path("api/lpo/", MyLocalPurchaseOrderView.as_view()),
     path("api/lpo/edit/<int:pk>/", LocalPurchaseOrderDetailView.as_view()),
     path("api/lpo/all/", AllLocalPurchaseOrderView.as_view()),
+    path("api/lpo/invoice/<int:pk>/", GenerateLPOInvoice.as_view()),
 
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),

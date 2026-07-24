@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>LPO Invoice</title>
+
+<style>
+
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
+
+*{
+    box-sizing:border-box;
+}
+
+
+body{
+
+    font-family: Arial, Helvetica, sans-serif;
+    background:#f5f5f5;
+    margin:0;
+    padding:20px;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+
+}
+
+
+
+.invoice-container{
+
+    width:800px;
+    margin:auto;
+    background:white;
+    border:1px solid #000;
+    padding:20px;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+}
+
+
+
+/* COMPANY HEADER */
+
+.header{
+
+    text-align:center;
+
+}
+
+
+.header h2{
+
+    font-size:25px;
+    margin:0 0 10px 0;
+    font-weight:bold;
+
+}
+
+
+.header p{
+
+    margin:4px 0;
+    font-size:13px;
+
+}
+
+
+
+/* TITLE */
+
+.title{
+
+    margin-top:15px;
+    background:#ed0000 !important;
+    color:white !important;
+    text-align:center;
+    padding:8px;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+}
+
+
+.title h1{
+
+    margin:0;
+    font-size:28px;
+
+}
+
+
+.subtitle{
+
+    margin-top:5px;
+    font-size:16px;
+    font-weight:bold;
+
+}
+
+
+
+/* INFO */
+
+.info-table{
+
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+
+}
+
+
+.info-table td{
+
+    padding:8px;
+    font-size:14px;
+
+}
+
+
+
+
+/* PRODUCT TABLE */
+
+
+.product-table{
+
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+
+}
+
+
+.product-table th{
+
+    background:#ed0000 !important;
+    color:white !important;
+
+    border:1px solid black;
+    padding:10px;
+
+    font-size:14px;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+}
+
+
+.product-table td{
+
+    border:1px solid black;
+    padding:12px;
+
+    text-align:center;
+    font-size:14px;
+
+}
+
+
+
+.total td{
+
+    background:#ed0000 !important;
+    color:white !important;
+
+    font-size:18px;
+    font-weight:bold;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+}
+
+
+
+/* SIGNATURE */
+
+.signature{
+
+    display:flex;
+    justify-content:space-between;
+
+    margin-top:50px;
+
+    font-size:14px;
+    font-weight:bold;
+
+}
+
+
+.signature div{
+
+    width:45%;
+
+}
+
+
+
+/* FOOTER */
+
+
+.footer{
+
+    margin-top:30px;
+
+    background:#ed0000 !important;
+    color:white !important;
+
+    text-align:center;
+    padding:10px;
+
+    font-size:14px;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+}
+
+
+
+
+/* PRINT BUTTON */
+
+
+.print-btn{
+
+    text-align:center;
+    margin-top:20px;
+
+}
+
+
+.print-btn button{
+
+    background:#198754;
+    color:white;
+
+    border:none;
+
+    padding:12px 30px;
+
+    font-size:16px;
+
+    border-radius:5px;
+
+    cursor:pointer;
+
+}
+
+
+
+
+/* PRINT MODE */
+
+
+@media print {
+
+
+    body{
+
+        background:white;
+        padding:0;
+
+    }
+
+
+    .print-btn{
+
+        display:none !important;
+
+    }
+
+
+    .invoice-container{
+
+        width:100%;
+        border:1px solid black;
+        margin:0;
+
+    }
+
+
+    .title,
+    .product-table th,
+    .total td,
+    .footer{
+
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+
+    }
+
+
+}
+
+
+</style>
+
+
+</head>
+
+
+
+<body>
+
+
+
+<div class="invoice-container">
+
+
+
+<!-- COMPANY -->
+
+<div class="header">
+
+
+<h2>
+{{ company.name }}
+</h2>
+
+
+<p>
+{{ company.address }}
+</p>
+
+
+<p>
+Mobile : {{ company.phone }}
+&nbsp; | &nbsp;
+Email : {{ company.email }}
+</p>
+
+
+<p>
+<b>
+GSTIN : {{ company.gst }}
+</b>
+</p>
+
+
+</div>
+
+
+
+
+
+<!-- TITLE -->
+
+
+<div class="title">
+
+
+<h1>
+LPO
+</h1>
+
+
+<div class="subtitle">
+
+(LOCAL PURCHASE ORDER REQUEST)
+
+</div>
+
+
+</div>
+
+
+
+
+
+<!-- INVOICE DETAILS -->
+
+
+<table class="info-table">
+
+
+<tr>
+
+
+<td>
+
+<b>
+Invoice No :
+</b>
+
+{{lpo.invoice}}
+
+</td>
+
+
+
+<td style="text-align:right">
+
+
+<b>
+Invoice Date :
+</b>
+
+{{lpo.date|date:"d-m-Y"}}
+
+
+</td>
+
+
+</tr>
+
+
+</table>
+
+
+
+
+
+
+<!-- PRODUCTS -->
+
+
+<table class="product-table">
+
+
+<thead>
+
+
+<tr>
+
+
+<th>
+Sl No
+</th>
+
+
+<th>
+Product Description
+</th>
+
+
+<th>
+QTY
+</th>
+
+
+<th>
+Amount
+</th>
+
+
+</tr>
+
+
+</thead>
+
+
+
+
+<tbody>
+
+
+
+{% for item in items %}
+
+
+<tr>
+
+
+<td>
+{{forloop.counter}}
+</td>
+
+
+
+<td>
+
+
+<b>
+{{item.product}}
+</b>
+
+
+<br>
+
+
+{{item.product_description}}
+
+
+</td>
+
+
+
+
+<td>
+
+{{item.quantity}}
+
+</td>
+
+
+
+<td>
+
+₹ {{item.amount}}
+
+</td>
+
+
+
+</tr>
+
+
+
+{% endfor %}
+
+
+
+
+
+<tr class="total">
+
+
+<td colspan="2">
+
+TOTAL
+
+</td>
+
+
+<td>
+
+{{lpo.total_quantity}}
+
+</td>
+
+
+
+<td>
+
+₹ {{lpo.total_amount}}
+
+</td>
+
+
+
+</tr>
+
+
+
+</tbody>
+
+
+
+</table>
+
+
+
+
+
+
+
+
+<!-- SIGN -->
+
+<div class="signature">
+
+
+<div>
+
+
+REQUESTED BY :
+
+<br><br>
+
+
+{{lpo.requested_by.name}}
+
+
+</div>
+
+
+
+
+
+<div style="text-align:right">
+
+
+APPROVED BY :
+
+<br><br>
+
+
+{% if lpo.approved_by %}
+
+{{lpo.approved_by.name}}
+
+{% endif %}
+
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+
+
+<div class="footer">
+
+This is a Computer Generated Invoice
+
+</div>
+
+
+
+
+
+</div>
+
+
+
+
+
+
+<div class="print-btn">
+
+
+<button onclick="window.print()">
+
+🖨 Print LPO
+
+</button>
+
+
+</div>
+
+
+
+
+
+</body>
+
+</html>

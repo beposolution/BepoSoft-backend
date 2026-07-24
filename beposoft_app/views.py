@@ -28513,3 +28513,53 @@ class AllLocalPurchaseOrderView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class GenerateLPOInvoice(APIView):
+
+    def get(self, request, pk):
+
+        try:
+
+            lpo = LocalPurchaseOrder.objects.select_related(
+                "company",
+                "requested_by",
+                "approved_by"
+            ).prefetch_related(
+                "items"
+            ).get(id=pk)
+
+
+            context = {
+                "lpo": lpo,
+                "company": lpo.company,
+                "items": lpo.items.all(),
+            }
+
+
+            return render(
+                request,
+                "lpo_invoice.html",
+                context
+            )
+
+
+        except LocalPurchaseOrder.DoesNotExist:
+
+            return Response(
+                {
+                    "message":"LPO not found"
+                },
+                status=404
+            )
+
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "message":"Invoice generation error",
+                    "error":str(e)
+                },
+                status=500
+            )
