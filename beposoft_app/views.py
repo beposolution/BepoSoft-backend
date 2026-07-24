@@ -28048,3 +28048,468 @@ class InternalMailReadStatusView(BaseTokenView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+
+
+# --------------------------
+# LOCAL PURCHASE---------------
+# ----------------------
+
+class MyLocalPurchaseOrderView(BaseTokenView):
+
+
+    def post(self, request):
+        try:
+
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                data=request.data
+            )
+
+
+            if serializer.is_valid():
+
+                serializer.save(
+                    requested_by=user
+                )
+
+
+                return Response(
+                    {
+                        "message": "LPO created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+
+            return Response(
+                {
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "message": "Error creating LPO",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+    def get(self, request):
+
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            # Base queryset - logged in user's LPO
+            lpos = LocalPurchaseOrder.objects.filter(
+                requested_by=user
+            ).select_related(
+                "company",
+                "requested_by",
+                "approved_by"
+            ).prefetch_related(
+                "items"
+            ).order_by("-id")
+
+
+            # Search filter
+            search = request.GET.get("search", "").strip()
+
+            if search:
+                lpos = lpos.filter(
+                    Q(invoice__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(company__name__icontains=search) |
+                    Q(items__product__icontains=search) |
+                    Q(items__product_description__icontains=search)
+                ).distinct()
+
+
+
+            # Company filter
+            company_id = request.GET.get("company")
+
+            if company_id:
+                lpos = lpos.filter(
+                    company_id=company_id
+                )
+
+
+
+            # Requested by filter
+            requested_by = request.GET.get("requested_by")
+
+            if requested_by:
+                lpos = lpos.filter(
+                    requested_by_id=requested_by
+                )
+
+
+
+            # Approved by filter
+            approved_by = request.GET.get("approved_by")
+
+            if approved_by:
+                lpos = lpos.filter(
+                    approved_by_id=approved_by
+                )
+
+
+
+            # Date range filter
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+
+            if start_date and end_date:
+                lpos = lpos.filter(
+                    date__range=[
+                        start_date,
+                        end_date
+                    ]
+                )
+
+            elif start_date:
+                lpos = lpos.filter(
+                    date__gte=start_date
+                )
+
+            elif end_date:
+                lpos = lpos.filter(
+                    date__lte=end_date
+                )
+
+
+
+            # Pagination
+
+            paginator = StandardPagination()
+
+            paginated_lpos = paginator.paginate_queryset(
+                lpos,
+                request
+            )
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                paginated_lpos,
+                many=True
+            )
+
+
+            return paginator.get_paginated_response(
+                {
+                    "count": lpos.count(),
+                    "data": serializer.data
+                }
+            )
+
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "message": "Error fetching LPO data",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LocalPurchaseOrderDetailView(BaseTokenView):
+
+
+    def get_object(self, pk):
+        return get_object_or_404(
+            LocalPurchaseOrder,
+            pk=pk
+        )
+
+
+    def get(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            lpo = self.get_object(pk)
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                lpo
+            )
+
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK
+            )
+
+        except LocalPurchaseOrder.DoesNotExist:
+            return Response(
+                {
+                    "message": "LPO not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "message": "Error fetching LPO",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+    def put(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            lpo = self.get_object(pk)
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                lpo,
+                data=request.data,
+                partial=True
+            )
+
+
+            if serializer.is_valid():
+
+                serializer.save()
+
+
+                return Response(
+                    {
+                        "message":"LPO updated successfully",
+                        "data":serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+
+            return Response(
+                {
+                    "message":"Validation failed",
+                    "errors":serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+        except LocalPurchaseOrder.DoesNotExist:
+            return Response(
+                {
+                    "message":"LPO not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+        except Exception as e:
+            return Response(
+                {
+                    "message":"Error updating LPO",
+                    "error":str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+    def delete(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            lpo = self.get_object(pk)
+
+
+            lpo.delete()
+
+
+            return Response(
+                {
+                    "message":"LPO deleted successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+
+
+        except LocalPurchaseOrder.DoesNotExist:
+            return Response(
+                {
+                    "message":"LPO not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+        except Exception as e:
+            return Response(
+                {
+                    "message":"Error deleting LPO",
+                    "error":str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AllLocalPurchaseOrderView(APIView):
+
+    def get(self, request):
+
+        try:
+
+            lpos = LocalPurchaseOrder.objects.select_related(
+                "company",
+                "requested_by",
+                "approved_by"
+            ).prefetch_related(
+                "items"
+            ).all().order_by("-id")
+
+
+            # Search filter
+            search = request.GET.get("search", "").strip()
+
+            if search:
+                lpos = lpos.filter(
+                    Q(invoice__icontains=search) |
+                    Q(note__icontains=search) |
+                    Q(company__name__icontains=search) |
+                    Q(requested_by__name__icontains=search) |
+                    Q(approved_by__name__icontains=search) |
+                    Q(items__product__icontains=search) |
+                    Q(items__product_description__icontains=search)
+                ).distinct()
+
+
+
+            # Company filter
+            company_id = request.GET.get("company")
+
+            if company_id:
+                lpos = lpos.filter(
+                    company_id=company_id
+                )
+
+
+
+            # Requested by filter
+            requested_by = request.GET.get("requested_by")
+
+            if requested_by:
+                lpos = lpos.filter(
+                    requested_by_id=requested_by
+                )
+
+
+
+            # Approved by filter
+            approved_by = request.GET.get("approved_by")
+
+            if approved_by:
+                lpos = lpos.filter(
+                    approved_by_id=approved_by
+                )
+
+
+
+            # Date range filter
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+
+
+            if start_date and end_date:
+
+                lpos = lpos.filter(
+                    date__range=[
+                        start_date,
+                        end_date
+                    ]
+                )
+
+
+            elif start_date:
+
+                lpos = lpos.filter(
+                    date__gte=start_date
+                )
+
+
+            elif end_date:
+
+                lpos = lpos.filter(
+                    date__lte=end_date
+                )
+
+
+
+            # Pagination
+
+            paginator = StandardPagination()
+
+            paginated_lpos = paginator.paginate_queryset(
+                lpos,
+                request
+            )
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                paginated_lpos,
+                many=True
+            )
+
+
+            return paginator.get_paginated_response(
+                {
+                    "count": lpos.count(),
+                    "data": serializer.data
+                }
+            )
+
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "message": "Error fetching all LPO data",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

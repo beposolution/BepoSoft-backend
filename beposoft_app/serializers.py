@@ -4156,3 +4156,144 @@ class InternalMailThreadSerializer(
             if read_status
             else None
         )
+
+    
+
+    # --------------------------
+    # LOCAL PURCHASE---------------
+    # ----------------------
+
+
+class LocalPurchaseOrderItemSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = LocalPurchaseOrderItem
+        fields = [
+            "id",
+            "product",
+            "product_description",
+            "quantity",
+            "amount"
+        ]
+
+
+
+class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
+
+    items = LocalPurchaseOrderItemSerializer(
+        many=True
+    )
+
+    requested_by_name = serializers.CharField(
+        source="requested_by.name",
+        read_only=True
+    )
+
+    approved_by_name = serializers.CharField(
+        source="approved_by.name",
+        read_only=True
+    )
+
+    company_name = serializers.CharField(
+        source="company.name",
+        read_only=True
+    )
+
+
+    class Meta:
+        model = LocalPurchaseOrder
+
+        fields = [
+            "id",
+            "invoice",
+            "date",
+            "company",
+            "company_name",
+            "requested_by",
+            "requested_by_name",
+            "approved_by",
+            "approved_by_name",
+            "note",
+            "items",
+            "created_at",
+            "updated_at"
+        ]
+
+        read_only_fields = [
+            "requested_by"
+        ]
+
+
+    def create(self, validated_data):
+
+        items_data = validated_data.pop(
+            "items",
+            []
+        )
+
+        lpo = LocalPurchaseOrder.objects.create(
+            **validated_data
+        )
+
+
+        for item in items_data:
+            LocalPurchaseOrderItem.objects.create(
+                lpo=lpo,
+                **item
+            )
+
+
+        return lpo
+
+
+
+    def update(self, instance, validated_data):
+
+        items_data = validated_data.pop(
+            "items",
+            []
+        )
+
+
+        # update header
+
+        instance.date = validated_data.get(
+            "date",
+            instance.date
+        )
+
+        instance.company = validated_data.get(
+            "company",
+            instance.company
+        )
+
+        instance.approved_by = validated_data.get(
+            "approved_by",
+            instance.approved_by
+        )
+
+        instance.note = validated_data.get(
+            "note",
+            instance.note
+        )
+
+        instance.save()
+
+
+
+        # replace items
+
+        if items_data:
+
+            instance.items.all().delete()
+
+
+            for item in items_data:
+
+                LocalPurchaseOrderItem.objects.create(
+                    lpo=instance,
+                    **item
+                )
+
+
+        return instance

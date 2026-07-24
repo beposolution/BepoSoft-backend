@@ -427,6 +427,11 @@ urlpatterns = [
     path("api/main/categories/add/", MainCategoryListCreateView.as_view(), name="main-category-list-create"),
     path("api/main/categories/edit/<int:pk>/", MainCategoryDetailView.as_view(), name="main-category-detail"),
 
+    # local purchase
+    path("api/lpo/", MyLocalPurchaseOrderView.as_view()),
+    path("api/lpo/edit/<int:pk>/", LocalPurchaseOrderDetailView.as_view()),
+    path("api/lpo/all/", AllLocalPurchaseOrderView.as_view()),
+
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 
