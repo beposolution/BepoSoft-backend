@@ -2138,6 +2138,83 @@ class ProductSellerInvoiceItem(models.Model):
 
 
 
+
+# LOCAL PURCHASE
+
+
+class LocalPurchaseOrder(models.Model):
+    invoice = models.CharField(max_length=100, unique=True, editable=False, null=True, blank=True)
+    date = models.DateField()
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, related_name="local_purchase_orders")
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="requested_lpos")
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_lpos")
+    note = models.CharField(max_length=500, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def generate_invoice_number(self):
+
+        today = datetime.now().strftime("%d%m%Y")
+
+        last_lpo = LocalPurchaseOrder.objects.filter(
+            invoice__startswith=f"LPO-{today}"
+        ).order_by("-id").first()
+
+
+        if last_lpo and last_lpo.invoice:
+
+            last_number = int(
+                last_lpo.invoice.split("-")[-1]
+            )
+
+            new_number = last_number + 1
+
+        else:
+
+            new_number = 1
+
+
+        return f"LPO-{today}-{new_number:06d}"
+
+    def save(self, *args, **kwargs):
+
+        if not self.invoice:
+            self.invoice = self.generate_invoice_number()
+
+        super().save(*args, **kwargs)
+
+
+    def total_amount(self):
+        return sum(
+            item.amount for item in self.items.all()
+        )
+
+
+    def total_quantity(self):
+        return sum(
+            item.quantity for item in self.items.all()
+        )
+
+
+    def __str__(self):
+        return f"LPO - {self.invoice}"
+    
+
+
+class LocalPurchaseOrderItem(models.Model):
+
+    lpo = models.ForeignKey(LocalPurchaseOrder, on_delete=models.CASCADE, related_name="items")
+    product = models.CharField(max_length=500, null=True, blank=True)
+    product_description = models.CharField(max_length=500, null=True, blank=True)
+    quantity = models.PositiveIntegerField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+
+    def __str__(self):
+        return self.product
+
+
+
 # Employee exit form and clearance models
 class EmployeeExit(models.Model):
     REASON_CHOICES = [
