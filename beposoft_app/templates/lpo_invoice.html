@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
 
 <title>LPO Invoice</title>
@@ -38,9 +39,6 @@ body{
     background:white;
     border:1px solid #000;
     padding:20px;
-
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
 
 }
 
@@ -82,9 +80,6 @@ body{
     color:white !important;
     text-align:center;
     padding:8px;
-
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
 
 }
 
@@ -150,10 +145,8 @@ body{
 
     font-size:14px;
 
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-
 }
+
 
 
 .product-table td{
@@ -175,9 +168,6 @@ body{
 
     font-size:18px;
     font-weight:bold;
-
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
 
 }
 
@@ -221,11 +211,7 @@ body{
 
     font-size:14px;
 
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-
 }
-
 
 
 
@@ -260,9 +246,6 @@ body{
 
 
 
-/* PRINT MODE */
-
-
 @media print {
 
 
@@ -286,17 +269,6 @@ body{
         width:100%;
         border:1px solid black;
         margin:0;
-
-    }
-
-
-    .title,
-    .product-table th,
-    .total td,
-    .footer{
-
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
 
     }
 
@@ -342,13 +314,16 @@ Email : {{ company.email }}
 
 
 <p>
+
 <b>
 GSTIN : {{ company.gst }}
 </b>
+
 </p>
 
 
 </div>
+
 
 
 
@@ -378,7 +353,9 @@ LPO
 
 
 
-<!-- INVOICE DETAILS -->
+
+
+<!-- LPO DETAILS -->
 
 
 <table class="info-table">
@@ -390,10 +367,10 @@ LPO
 <td>
 
 <b>
-Invoice No :
+LPO No :
 </b>
 
-{{lpo.invoice}}
+{{ lpo.invoice }}
 
 </td>
 
@@ -403,10 +380,10 @@ Invoice No :
 
 
 <b>
-Invoice Date :
+LPO Date :
 </b>
 
-{{lpo.date|date:"d-m-Y"}}
+{{ lpo.date|date:"d-m-Y" }}
 
 
 </td>
@@ -416,6 +393,8 @@ Invoice Date :
 
 
 </table>
+
+
 
 
 
@@ -445,12 +424,7 @@ Product Description
 
 
 <th>
-QTY
-</th>
-
-
-<th>
-Amount
+Quantity
 </th>
 
 
@@ -458,6 +432,7 @@ Amount
 
 
 </thead>
+
 
 
 
@@ -473,8 +448,11 @@ Amount
 
 
 <td>
+
 {{forloop.counter}}
+
 </td>
+
 
 
 
@@ -497,19 +475,13 @@ Amount
 
 
 
+
 <td>
 
 {{item.quantity}}
 
 </td>
 
-
-
-<td>
-
-₹ {{item.amount}}
-
-</td>
 
 
 
@@ -523,12 +495,13 @@ Amount
 
 
 
+
 <tr class="total">
 
 
 <td colspan="2">
 
-TOTAL
+TOTAL QUANTITY
 
 </td>
 
@@ -540,21 +513,12 @@ TOTAL
 </td>
 
 
-
-<td>
-
-₹ {{lpo.total_amount}}
-
-</td>
-
-
-
 </tr>
 
 
 
-</tbody>
 
+</tbody>
 
 
 </table>
@@ -566,7 +530,9 @@ TOTAL
 
 
 
-<!-- SIGN -->
+
+<!-- SIGNATURE -->
+
 
 <div class="signature">
 
@@ -579,10 +545,16 @@ REQUESTED BY :
 <br><br>
 
 
+{% if lpo.requested_by %}
+
 {{lpo.requested_by.name}}
+
+{% endif %}
 
 
 </div>
+
+
 
 
 
@@ -596,6 +568,7 @@ APPROVED BY :
 <br><br>
 
 
+
 {% if lpo.approved_by %}
 
 {{lpo.approved_by.name}}
@@ -603,11 +576,13 @@ APPROVED BY :
 {% endif %}
 
 
-</div>
-
-
 
 </div>
+
+
+
+</div>
+
 
 
 
@@ -617,7 +592,7 @@ APPROVED BY :
 
 <div class="footer">
 
-This is a Computer Generated Invoice
+This is a Computer Generated LPO
 
 </div>
 
@@ -625,7 +600,9 @@ This is a Computer Generated Invoice
 
 
 
+
 </div>
+
 
 
 
@@ -643,6 +620,7 @@ This is a Computer Generated Invoice
 
 
 </div>
+
 
 
 
