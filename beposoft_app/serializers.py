@@ -4207,6 +4207,7 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             "id",
             "invoice",
             "date",
+            "status",
             "company",
             "company_name",
             "requested_by",

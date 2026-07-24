@@ -2143,10 +2143,16 @@ class ProductSellerInvoiceItem(models.Model):
 
 
 class LocalPurchaseOrder(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    )
     invoice = models.CharField(max_length=100, unique=True, editable=False, null=True, blank=True)
     date = models.DateField()
     company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, related_name="local_purchase_orders")
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="requested_lpos")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_lpos")
     note = models.CharField(max_length=500, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -28388,6 +28388,84 @@ class LocalPurchaseOrderDetailView(BaseTokenView):
             )
 
 
+
+class UpdateLPOStatusView(BaseTokenView):
+
+    def patch(self, request, pk):
+
+        try:
+
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+
+            lpo = get_object_or_404(
+                LocalPurchaseOrder,
+                id=pk
+            )
+
+
+            status_value = request.data.get(
+                "status"
+            )
+
+
+            if status_value not in [
+                "pending",
+                "approved",
+                "rejected"
+            ]:
+
+                return Response(
+                    {
+                        "message":
+                        "Invalid status"
+                    },
+                    status=400
+                )
+
+
+            lpo.status = status_value
+
+
+            # only when changing status
+            lpo.approved_by = user
+
+
+            lpo.save()
+
+
+            serializer = LocalPurchaseOrderSerializer(
+                lpo
+            )
+
+
+            return Response(
+                {
+                    "message":
+                    "LPO status updated successfully",
+                    "data":
+                    serializer.data
+                },
+                status=200
+            )
+
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "message":
+                    "Status update failed",
+                    "error":
+                    str(e)
+                },
+                status=500
+            )
+
+
 class AllLocalPurchaseOrderView(APIView):
 
     def get(self, request):
