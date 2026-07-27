@@ -4309,3 +4309,54 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
                 )
 
         return instance
+
+
+
+
+class CommissionReceiptSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.ReadOnlyField(source='created_by.name')
+    bank_name = serializers.ReadOnlyField(source='bank.name')
+    order_name = serializers.ReadOnlyField(source='order.invoice')
+
+    class Meta:
+        model = CommissionReceipt
+
+        fields = [
+            'id',
+            'order',
+            'order_name',
+            'payment_receipt',
+            'amount',
+            'bank',
+            'bank_name',
+            'transactionID',
+            'received_at',
+            'created_by',
+            'created_by_name',
+            'remark',
+            'created_at',
+            'updated_at',
+        ]
+
+        read_only_fields = [
+            'id',
+            'payment_receipt',
+            'created_by',
+            'created_by_name',
+            'order_name',
+        ]
+
+    def validate_amount(self, value):
+        try:
+            amount = float(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError(
+                "Amount must be a valid number."
+            )
+
+        if amount <= 0:
+            raise serializers.ValidationError(
+                "Amount must be greater than zero."
+            )
+
+        return value

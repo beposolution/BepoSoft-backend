@@ -1427,6 +1427,46 @@ class PaymentReceipt(models.Model):
 
     class Meta:
         db_table = "receipts"
+
+
+
+class CommissionReceipt(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='commission_payment')
+    payment_receipt = models.CharField(max_length=10, unique=True, editable=False)  # Combined ID
+    amount = models.CharField(max_length=100)
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE,related_name='commission_payments')
+    transactionID = models.CharField(max_length=50)
+    received_at = models.DateField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    remark = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.payment_receipt:
+            last_receipt = (
+                CommissionReceipt.objects
+                .order_by('-id')
+                .first()
+            )
+
+            next_id = last_receipt.id + 1 if last_receipt else 1
+
+            letter_index = (next_id - 1) % 26
+            receipt_letter = chr(65 + letter_index)
+
+            self.payment_receipt = (
+                f"COM-{str(next_id).zfill(4)}{receipt_letter}"
+            )
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Receipt #{self.payment_receipt} for Order: {self.order.invoice}"
+
+    class Meta:
+        db_table = "commission_receipts"
+        ordering = ['-id']
         
     
 

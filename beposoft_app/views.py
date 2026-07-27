@@ -14191,6 +14191,241 @@ class AdvanceAmountTransferImageDeleteView(BaseTokenView):
         )
 
 
+
+# Dealer Commission Receipts
+
+class CommissionReceiptListCreateView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            receipts = (
+                CommissionReceipt.objects
+                .select_related(
+                    'order',
+                    'order__customer',
+                    'bank',
+                    'created_by',
+                )
+                .all()
+                .order_by('-id')
+            )
+
+            # --------------------------------------------
+            # Search
+            # --------------------------------------------
+            search = request.query_params.get('search', '').strip()
+
+            if search:
+                receipts = receipts.filter(
+                    Q(order__invoice__icontains=search) |
+                    Q(remark__icontains=search) |
+                    Q(amount__icontains=search) |
+                    Q(payment_receipt__icontains=search) |
+                    Q(transactionID__icontains=search)
+                )
+
+            # --------------------------------------------
+            # Exact filters
+            # --------------------------------------------
+            order_id = request.query_params.get('order_id')
+            bank_id = request.query_params.get('bank_id')
+            created_by = request.query_params.get('created_by')
+            customer_id = request.query_params.get('customer_id')
+
+            if order_id:
+                receipts = receipts.filter(order_id=order_id)
+
+            if bank_id:
+                receipts = receipts.filter(bank_id=bank_id)
+
+            if created_by:
+                receipts = receipts.filter(created_by_id=created_by)
+
+            if customer_id:
+                receipts = receipts.filter(
+                    order__customer_id=customer_id
+                )
+
+            # --------------------------------------------
+            # Pagination
+            # --------------------------------------------
+            paginator = StandardPagination()
+
+            paginated_receipts = paginator.paginate_queryset(
+                receipts,
+                request
+            )
+
+            serializer = CommissionReceiptSerializer(
+                paginated_receipts,
+                many=True
+            )
+
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "data": serializer.data,
+                }
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = CommissionReceiptSerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+                receipt = serializer.save(
+                    created_by=auth_user
+                )
+
+                response_serializer = CommissionReceiptSerializer(
+                    receipt
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": (
+                            "Commission receipt created successfully."
+                        ),
+                        "data": response_serializer.data,
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed.",
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class CommissionReceiptDetailView(BaseTokenView):
+
+    def get_object(self, pk):
+        return get_object_or_404(
+            CommissionReceipt.objects.select_related(
+                'order',
+                'bank',
+                'created_by',
+            ),
+            pk=pk
+        )
+
+    def get(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            receipt = self.get_object(pk)
+
+            serializer = CommissionReceiptSerializer(receipt)
+
+            return Response(
+                {
+                    "status": "success",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @transaction.atomic
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            receipt = self.get_object(pk)
+
+            serializer = CommissionReceiptSerializer(
+                receipt,
+                data=request.data
+            )
+
+            if serializer.is_valid():
+                updated_receipt = serializer.save()
+
+                response_serializer = CommissionReceiptSerializer(
+                    updated_receipt
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": (
+                            "Commission receipt updated successfully."
+                        ),
+                        "data": response_serializer.data,
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed.",
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 # Bank Account Type Views
 
 class BankAccountTypeView(BaseTokenView):
