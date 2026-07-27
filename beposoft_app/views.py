@@ -28420,6 +28420,14 @@ class UpdateLPOStatusView(BaseTokenView):
                     status=400
                 )
 
+            if status_value == "confirmed" and lpo.status != "approved":
+                return Response(
+                    {
+                        "message": "Only an approved LPO can be confirmed"
+                    },
+                    status=400
+                )
+
             lpo.status = status_value
 
             if status_value == "approved":

@@ -4179,28 +4179,40 @@ class LocalPurchaseOrderItemSerializer(serializers.ModelSerializer):
 
 
 class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
-
     items = LocalPurchaseOrderItemSerializer(
-        many=True
+        many=True,
+        required=False
     )
 
     requested_by_name = serializers.CharField(
         source="requested_by.name",
-        read_only=True
+        read_only=True,
+        allow_null=True
     )
 
     approved_by_name = serializers.CharField(
         source="approved_by.name",
-        read_only=True
+        read_only=True,
+        allow_null=True
+    )
+
+    confirmed_by_name = serializers.CharField(
+        source="confirmed_by.name",
+        read_only=True,
+        allow_null=True
     )
 
     company_name = serializers.CharField(
         source="company.name",
-        read_only=True
+        read_only=True,
+        allow_null=True
     )
 
-    bank_name = serializers.CharField(source="bank.name", read_only=True)
-
+    bank_name = serializers.CharField(
+        source="bank.name",
+        read_only=True,
+        allow_null=True
+    )
 
     class Meta:
         model = LocalPurchaseOrder
@@ -4210,22 +4222,35 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             "invoice",
             "date",
             "status",
+
             "company",
             "company_name",
+
             "requested_by",
             "requested_by_name",
+
             "approved_by",
             "approved_by_name",
-            "note",
-            "items",
+
+            "confirmed_by",
+            "confirmed_by_name",
+
             "bank",
             "bank_name",
+
+            "note",
+            "items",
             "created_at",
-            "updated_at"
+            "updated_at",
         ]
 
         read_only_fields = [
-            "requested_by"
+            "invoice",
+            "requested_by",
+            "approved_by",
+            "confirmed_by",
+            "created_at",
+            "updated_at",
         ]
 
 
