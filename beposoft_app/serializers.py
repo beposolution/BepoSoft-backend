@@ -4253,9 +4253,7 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-
     def create(self, validated_data):
-
         items_data = validated_data.pop(
             "items",
             []
@@ -4265,27 +4263,19 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-
-        for item in items_data:
+        for item_data in items_data:
             LocalPurchaseOrderItem.objects.create(
                 lpo=lpo,
-                **item
+                **item_data
             )
-
 
         return lpo
 
-
-
     def update(self, instance, validated_data):
-
         items_data = validated_data.pop(
             "items",
-            []
+            None
         )
-
-
-        # update header
 
         instance.date = validated_data.get(
             "date",
@@ -4297,9 +4287,9 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             instance.company
         )
 
-        instance.approved_by = validated_data.get(
-            "approved_by",
-            instance.approved_by
+        instance.bank = validated_data.get(
+            "bank",
+            instance.bank
         )
 
         instance.note = validated_data.get(
@@ -4309,21 +4299,13 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
 
         instance.save()
 
-
-
-        # replace items
-
-        if items_data:
-
+        if items_data is not None:
             instance.items.all().delete()
 
-
-            for item in items_data:
-
+            for item_data in items_data:
                 LocalPurchaseOrderItem.objects.create(
                     lpo=instance,
-                    **item
+                    **item_data
                 )
-
 
         return instance
