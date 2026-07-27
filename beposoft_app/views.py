@@ -4471,6 +4471,18 @@ class CustomerOrderItems(BaseTokenView):
                 return Response({"status": "error", "message": "No order items found"}, status=status.HTTP_404_NOT_FOUND)
             
             grv_qs = GRVModel.objects.filter(order_id=order_id)
+
+            # Fetch commission receipts linked to this order.
+            # Only amount and payment_receipt are selected because these
+            # are the only CommissionReceipt fields required in this API.
+            commission_receipts = (
+                CommissionReceipt.objects
+                .filter(order_id=order_id)
+                .values(
+                    "amount",
+                    "payment_receipt"
+                )
+            )
             
             manage_staff_designation = order.manage_staff.designation
             orderSerilizer = OrderModelSerilizer(order, many=False)
@@ -4482,7 +4494,8 @@ class CustomerOrderItems(BaseTokenView):
                 {
                     "order": orderSerilizer.data, 
                     "items": serializer.data,
-                    "grv": grv_serializer.data 
+                    "grv": grv_serializer.data,
+                    "commission_receipts": list(commission_receipts)
                     }, 
                     status=status.HTTP_200_OK)
 
