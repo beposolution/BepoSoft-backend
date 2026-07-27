@@ -181,6 +181,8 @@ urlpatterns = [
     path("api/advance/transfer/create/", AdvanceAmountTransferListCreateView.as_view(), name="advance-transfer-list-create"),
     path("api/advance/transfer/update/<int:pk>/", AdvanceAmountTransferDetailView.as_view(), name="advance-transfer-detail"),
     path("api/advance/transfer/image/<int:image_id>/",AdvanceAmountTransferImageDeleteView.as_view(), name="advance-transfer-image-delete"),
+    path('api/commission/receipts/add/', CommissionReceiptListCreateView.as_view(), name='commission-receipt-list-create'),
+    path('api/commission/receipts/edit/<int:pk>/', CommissionReceiptDetailView.as_view(), name='commission-receipt-detail'),
     
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),
