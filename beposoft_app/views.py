@@ -28392,75 +28392,59 @@ class LocalPurchaseOrderDetailView(BaseTokenView):
 class UpdateLPOStatusView(BaseTokenView):
 
     def patch(self, request, pk):
-
         try:
-
             user, error_response = self.get_user_from_token(request)
 
             if error_response:
                 return error_response
-
 
             lpo = get_object_or_404(
                 LocalPurchaseOrder,
                 id=pk
             )
 
+            status_value = request.data.get("status")
 
-            status_value = request.data.get(
-                "status"
-            )
-
-
-            if status_value not in [
+            valid_statuses = [
                 "pending",
                 "approved",
-                "rejected"
-            ]:
+                "confirmed",
+                "rejected",
+            ]
 
+            if status_value not in valid_statuses:
                 return Response(
                     {
-                        "message":
-                        "Invalid status"
+                        "message": "Invalid status"
                     },
                     status=400
                 )
 
-
             lpo.status = status_value
 
+            if status_value == "approved":
+                lpo.approved_by = user
 
-            # only when changing status
-            lpo.approved_by = user
-
+            elif status_value == "confirmed":
+                lpo.confirmed_by = user
 
             lpo.save()
 
-
-            serializer = LocalPurchaseOrderSerializer(
-                lpo
-            )
-
+            serializer = LocalPurchaseOrderSerializer(lpo)
 
             return Response(
                 {
-                    "message":
-                    "LPO status updated successfully",
-                    "data":
-                    serializer.data
+                    "message": "LPO status updated successfully",
+                    "data": serializer.data
                 },
                 status=200
             )
 
-
         except Exception as e:
-
             return Response(
                 {
-                    "message":
-                    "Status update failed",
-                    "error":
-                    str(e)
+                    "message": "Status update failed",
+                    "error": str(e)
                 },
                 status=500
             )

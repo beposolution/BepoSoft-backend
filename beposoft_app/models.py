@@ -2146,6 +2146,7 @@ class LocalPurchaseOrder(models.Model):
     STATUS_CHOICES = (
         ("pending", "Pending"),
         ("approved", "Approved"),
+        ("confirmed", "Confirmed"),
         ("rejected", "Rejected"),
     )
     invoice = models.CharField(max_length=100, unique=True, editable=False, null=True, blank=True)
@@ -2154,6 +2155,8 @@ class LocalPurchaseOrder(models.Model):
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="requested_lpos")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_lpos")
+    confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="confirmed_lpos")
+    bank = models.ForeignKey(Bank, on_delete=models.SET_NULL, null=True, blank=True, related_name="bank_lpos")
     note = models.CharField(max_length=500, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
