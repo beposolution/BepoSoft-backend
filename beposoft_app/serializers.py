@@ -4199,6 +4199,8 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    bank_name = serializers.CharField(source="bank.name", read_only=True)
+
 
     class Meta:
         model = LocalPurchaseOrder
@@ -4216,6 +4218,8 @@ class LocalPurchaseOrderSerializer(serializers.ModelSerializer):
             "approved_by_name",
             "note",
             "items",
+            "bank",
+            "bank_name",
             "created_at",
             "updated_at"
         ]
