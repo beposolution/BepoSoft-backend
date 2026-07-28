@@ -439,6 +439,8 @@ urlpatterns = [
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 
+    path("api/products/rack/usability/<str:usability>/", ProductRackUsabilityReportView.as_view(), name="product-rack-usability-report"),
+
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
     path("api/internal/mails/<int:pk>/", InternalMailDetailView.as_view(), name="internal-mail-detail"),
