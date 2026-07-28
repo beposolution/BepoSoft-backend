@@ -28900,3 +28900,855 @@ class GenerateLPOInvoice(APIView):
                 },
                 status=500
             )
+
+
+# product stock report
+
+class ProductRackUsabilityReportView(BaseTokenView):
+    """
+    Product stock report based on rack_details usability.
+
+    URL:
+        /api/products/rack/usability/<str:usability>/
+
+    Supported usability values:
+        usable
+        damaged
+        partially_damaged
+        liquidation_stock
+        all
+
+    Query parameters:
+        start_date
+        end_date
+        search
+        product_id
+        warehouse_id
+        main_category_id
+        product_category_id
+        family_id
+        created_user_id
+        approved_user_id
+        product_type
+        purchase_type
+        approval_status
+        unit
+        color
+        size
+        rack_id
+        rack_name
+        column_name
+        min_stock
+        max_stock
+        min_purchase_rate
+        max_purchase_rate
+        min_selling_price
+        max_selling_price
+        min_landing_cost
+        max_landing_cost
+        min_retail_price
+        max_retail_price
+        min_final_price
+        max_final_price
+        tax
+        has_stock
+        ordering
+        page
+        page_size
+    """
+
+    VALID_USABILITY_TYPES = {
+        "usable",
+        "damaged",
+        "partially_damaged",
+        "liquidation_stock",
+        "all",
+    }
+
+    DEFAULT_PAGE_SIZE = 50
+    MAX_PAGE_SIZE = 500
+
+    def get(self, request, usability):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            usability = str(usability or "").strip().lower()
+
+            if usability not in self.VALID_USABILITY_TYPES:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid usability type.",
+                        "allowed_usability_types": sorted(
+                            self.VALID_USABILITY_TYPES
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            queryset = (
+                Products.objects
+                .select_related(
+                    "warehouse",
+                    "created_user",
+                    "product_approved_user",
+                    "product_category",
+                    "main_category",
+                )
+                .prefetch_related("family")
+                .all()
+            )
+
+            # ---------------------------------------------------------
+            # Query parameters
+            # ---------------------------------------------------------
+
+            search = request.GET.get("search", "").strip()
+            product_id = request.GET.get("product_id", "").strip()
+            warehouse_id = request.GET.get("warehouse_id", "").strip()
+            main_category_id = request.GET.get(
+                "main_category_id", ""
+            ).strip()
+            product_category_id = request.GET.get(
+                "product_category_id", ""
+            ).strip()
+            family_id = request.GET.get("family_id", "").strip()
+
+            created_user_id = request.GET.get(
+                "created_user_id", ""
+            ).strip()
+            approved_user_id = request.GET.get(
+                "approved_user_id", ""
+            ).strip()
+
+            product_type = request.GET.get("product_type", "").strip()
+            purchase_type = request.GET.get("purchase_type", "").strip()
+            approval_status = request.GET.get(
+                "approval_status", ""
+            ).strip()
+            unit = request.GET.get("unit", "").strip()
+            color = request.GET.get("color", "").strip()
+            size = request.GET.get("size", "").strip()
+            tax = request.GET.get("tax", "").strip()
+
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            min_stock = request.GET.get("min_stock", "").strip()
+            max_stock = request.GET.get("max_stock", "").strip()
+
+            min_purchase_rate = request.GET.get(
+                "min_purchase_rate", ""
+            ).strip()
+            max_purchase_rate = request.GET.get(
+                "max_purchase_rate", ""
+            ).strip()
+
+            min_selling_price = request.GET.get(
+                "min_selling_price", ""
+            ).strip()
+            max_selling_price = request.GET.get(
+                "max_selling_price", ""
+            ).strip()
+
+            min_landing_cost = request.GET.get(
+                "min_landing_cost", ""
+            ).strip()
+            max_landing_cost = request.GET.get(
+                "max_landing_cost", ""
+            ).strip()
+
+            min_retail_price = request.GET.get(
+                "min_retail_price", ""
+            ).strip()
+            max_retail_price = request.GET.get(
+                "max_retail_price", ""
+            ).strip()
+
+            min_final_price = request.GET.get(
+                "min_final_price", ""
+            ).strip()
+            max_final_price = request.GET.get(
+                "max_final_price", ""
+            ).strip()
+
+            has_stock = request.GET.get("has_stock", "").strip().lower()
+
+            rack_id = request.GET.get("rack_id", "").strip()
+            rack_name = request.GET.get("rack_name", "").strip()
+            column_name = request.GET.get("column_name", "").strip()
+
+            ordering = request.GET.get("ordering", "-id").strip()
+
+            # ---------------------------------------------------------
+            # General database filters
+            # ---------------------------------------------------------
+
+            if search:
+                queryset = queryset.filter(
+                    Q(name__icontains=search)
+                    | Q(hsn_code__icontains=search)
+                    | Q(variantID__icontains=search)
+                    | Q(groupID__icontains=search)
+                    | Q(color__icontains=search)
+                    | Q(size__icontains=search)
+                    | Q(warehouse__name__icontains=search)
+                    | Q(product_category__category_name__icontains=search)
+                    | Q(main_category__name__icontains=search)
+                    | Q(family__name__icontains=search)
+                )
+
+            if product_id:
+                queryset = queryset.filter(pk=product_id)
+
+            if warehouse_id:
+                queryset = queryset.filter(warehouse_id=warehouse_id)
+
+            if main_category_id:
+                queryset = queryset.filter(
+                    main_category_id=main_category_id
+                )
+
+            if product_category_id:
+                queryset = queryset.filter(
+                    product_category_id=product_category_id
+                )
+
+            if family_id:
+                queryset = queryset.filter(family__id=family_id)
+
+            if created_user_id:
+                queryset = queryset.filter(
+                    created_user_id=created_user_id
+                )
+
+            if approved_user_id:
+                queryset = queryset.filter(
+                    product_approved_user_id=approved_user_id
+                )
+
+            if product_type:
+                queryset = queryset.filter(type__iexact=product_type)
+
+            if purchase_type:
+                queryset = queryset.filter(
+                    purchase_type__iexact=purchase_type
+                )
+
+            if approval_status:
+                queryset = queryset.filter(
+                    approval_status__iexact=approval_status
+                )
+
+            if unit:
+                queryset = queryset.filter(unit__iexact=unit)
+
+            if color:
+                queryset = queryset.filter(color__icontains=color)
+
+            if size:
+                queryset = queryset.filter(size__icontains=size)
+
+            if tax:
+                try:
+                    queryset = queryset.filter(tax=float(tax))
+                except (TypeError, ValueError):
+                    return self.invalid_number_response("tax")
+
+            # ---------------------------------------------------------
+            # Date-range filters
+            # Uses Products.date
+            # ---------------------------------------------------------
+
+            if start_date:
+                parsed_start_date = self.parse_date(start_date)
+
+                if parsed_start_date is None:
+                    return self.invalid_date_response("start_date")
+
+                queryset = queryset.filter(date__gte=parsed_start_date)
+
+            if end_date:
+                parsed_end_date = self.parse_date(end_date)
+
+                if parsed_end_date is None:
+                    return self.invalid_date_response("end_date")
+
+                queryset = queryset.filter(date__lte=parsed_end_date)
+
+            if start_date and end_date:
+                parsed_start_date = self.parse_date(start_date)
+                parsed_end_date = self.parse_date(end_date)
+
+                if parsed_start_date > parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "start_date cannot be greater than end_date."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            # ---------------------------------------------------------
+            # Price filters
+            # ---------------------------------------------------------
+
+            queryset, error_response = self.apply_number_range_filter(
+                queryset=queryset,
+                field_name="purchase_rate",
+                minimum=min_purchase_rate,
+                maximum=max_purchase_rate,
+            )
+            if error_response:
+                return error_response
+
+            queryset, error_response = self.apply_number_range_filter(
+                queryset=queryset,
+                field_name="selling_price",
+                minimum=min_selling_price,
+                maximum=max_selling_price,
+            )
+            if error_response:
+                return error_response
+
+            queryset, error_response = self.apply_number_range_filter(
+                queryset=queryset,
+                field_name="landing_cost",
+                minimum=min_landing_cost,
+                maximum=max_landing_cost,
+            )
+            if error_response:
+                return error_response
+
+            queryset, error_response = self.apply_number_range_filter(
+                queryset=queryset,
+                field_name="retail_price",
+                minimum=min_retail_price,
+                maximum=max_retail_price,
+            )
+            if error_response:
+                return error_response
+
+            queryset, error_response = self.apply_number_range_filter(
+                queryset=queryset,
+                field_name="final_price",
+                minimum=min_final_price,
+                maximum=max_final_price,
+            )
+            if error_response:
+                return error_response
+
+            queryset = queryset.distinct()
+
+            # ---------------------------------------------------------
+            # Standard database ordering
+            # ---------------------------------------------------------
+
+            allowed_ordering_fields = {
+                "id",
+                "-id",
+                "name",
+                "-name",
+                "date",
+                "-date",
+                "purchase_rate",
+                "-purchase_rate",
+                "selling_price",
+                "-selling_price",
+                "landing_cost",
+                "-landing_cost",
+                "retail_price",
+                "-retail_price",
+                "final_price",
+                "-final_price",
+                "stock",
+                "-stock",
+                "damaged_stock",
+                "-damaged_stock",
+                "partially_damaged_stock",
+                "-partially_damaged_stock",
+                "liquidation_stock",
+                "-liquidation_stock",
+                "created_user__name",
+                "-created_user__name",
+                "warehouse__name",
+                "-warehouse__name",
+                "main_category__name",
+                "-main_category__name",
+                "product_category__category_name",
+                "-product_category__category_name",
+            }
+
+            rack_quantity_ordering = {
+                "rack_quantity",
+                "-rack_quantity",
+                "available_quantity",
+                "-available_quantity",
+                "locked_quantity",
+                "-locked_quantity",
+            }
+
+            if ordering not in (
+                allowed_ordering_fields | rack_quantity_ordering
+            ):
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid ordering field.",
+                        "allowed_ordering": sorted(
+                            allowed_ordering_fields
+                            | rack_quantity_ordering
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if ordering in allowed_ordering_fields:
+                queryset = queryset.order_by(ordering)
+
+            # ---------------------------------------------------------
+            # Process rack_details
+            # ---------------------------------------------------------
+
+            product_results = []
+
+            total_rack_stock = 0
+            total_rack_lock = 0
+            total_available_stock = 0
+            total_rack_entries = 0
+
+            usability_summary = {
+                "usable": 0,
+                "damaged": 0,
+                "partially_damaged": 0,
+                "liquidation_stock": 0,
+            }
+
+            for product in queryset:
+                selected_racks = []
+
+                for rack in product.rack_details or []:
+                    rack_usability = str(
+                        rack.get("usability") or ""
+                    ).strip().lower()
+
+                    if (
+                        usability != "all"
+                        and rack_usability != usability
+                    ):
+                        continue
+
+                    if rack_id:
+                        if str(rack.get("rack_id", "")) != str(rack_id):
+                            continue
+
+                    if rack_name:
+                        current_rack_name = str(
+                            rack.get("rack_name") or ""
+                        ).lower()
+
+                        if rack_name.lower() not in current_rack_name:
+                            continue
+
+                    if column_name:
+                        current_column_name = str(
+                            rack.get("column_name") or ""
+                        ).lower()
+
+                        if column_name.lower() not in current_column_name:
+                            continue
+
+                    rack_stock = self.to_integer(
+                        rack.get("rack_stock")
+                    )
+                    rack_lock = self.to_integer(
+                        rack.get("rack_lock")
+                    )
+                    available_stock = max(
+                        0,
+                        rack_stock - rack_lock,
+                    )
+
+                    selected_racks.append(
+                        {
+                            "rack_id": rack.get("rack_id"),
+                            "rack_name": rack.get("rack_name"),
+                            "column_name": rack.get("column_name"),
+                            "usability": rack_usability,
+                            "rack_stock": rack_stock,
+                            "rack_lock": rack_lock,
+                            "available_stock": available_stock,
+                        }
+                    )
+
+                # Do not show products without a matching rack.
+                if not selected_racks:
+                    continue
+
+                selected_rack_stock = sum(
+                    rack["rack_stock"] for rack in selected_racks
+                )
+                selected_rack_lock = sum(
+                    rack["rack_lock"] for rack in selected_racks
+                )
+                selected_available_stock = sum(
+                    rack["available_stock"]
+                    for rack in selected_racks
+                )
+
+                # Stock range applies to the selected usability/rack total.
+                if min_stock:
+                    try:
+                        if selected_rack_stock < int(min_stock):
+                            continue
+                    except (TypeError, ValueError):
+                        return self.invalid_number_response("min_stock")
+
+                if max_stock:
+                    try:
+                        if selected_rack_stock > int(max_stock):
+                            continue
+                    except (TypeError, ValueError):
+                        return self.invalid_number_response("max_stock")
+
+                if has_stock in {"true", "1", "yes"}:
+                    if selected_rack_stock <= 0:
+                        continue
+
+                elif has_stock in {"false", "0", "no"}:
+                    if selected_rack_stock > 0:
+                        continue
+
+                elif has_stock:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "has_stock must be true, false, 1, 0, "
+                                "yes or no."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                for rack in selected_racks:
+                    rack_type = rack["usability"]
+
+                    if rack_type in usability_summary:
+                        usability_summary[rack_type] += rack[
+                            "rack_stock"
+                        ]
+
+                total_rack_stock += selected_rack_stock
+                total_rack_lock += selected_rack_lock
+                total_available_stock += selected_available_stock
+                total_rack_entries += len(selected_racks)
+
+                image_url = None
+
+                if product.image:
+                    try:
+                        image_url = request.build_absolute_uri(
+                            product.image.url
+                        )
+                    except Exception:
+                        image_url = None
+
+                product_results.append(
+                    {
+                        "id": product.id,
+                        "name": product.name,
+                        "hsn_code": product.hsn_code,
+                        "variant_id": product.variantID,
+                        "group_id": product.groupID,
+                        "type": product.type,
+                        "unit": product.unit,
+                        "purchase_type": product.purchase_type,
+                        "approval_status": product.approval_status,
+                        "date": (
+                            product.date.isoformat()
+                            if product.date
+                            else None
+                        ),
+                        "color": product.color,
+                        "size": product.size,
+                        "image": image_url,
+                        "purchase_rate": product.purchase_rate,
+                        "selling_price": product.selling_price,
+                        "landing_cost": product.landing_cost,
+                        "retail_price": product.retail_price,
+                        "final_price": product.final_price,
+                        "tax": product.tax,
+                        "duty_charge": product.duty_charge,
+                        "warehouse": (
+                            {
+                                "id": product.warehouse.id,
+                                "name": product.warehouse.name,
+                                "location": product.warehouse.location,
+                            }
+                            if product.warehouse
+                            else None
+                        ),
+                        "main_category": (
+                            {
+                                "id": product.main_category.id,
+                                "name": product.main_category.name,
+                            }
+                            if product.main_category
+                            else None
+                        ),
+                        "product_category": (
+                            {
+                                "id": product.product_category.id,
+                                "name": (
+                                    product.product_category.category_name
+                                ),
+                            }
+                            if product.product_category
+                            else None
+                        ),
+                        "families": [
+                            {
+                                "id": family.id,
+                                "name": family.name,
+                            }
+                            for family in product.family.all()
+                        ],
+                        "created_user": (
+                            {
+                                "id": product.created_user.id,
+                                "name": product.created_user.name,
+                            }
+                            if product.created_user
+                            else None
+                        ),
+                        "approved_user": (
+                            {
+                                "id": product.product_approved_user.id,
+                                "name": (
+                                    product.product_approved_user.name
+                                ),
+                            }
+                            if product.product_approved_user
+                            else None
+                        ),
+                        "overall_stock": {
+                            "usable": product.stock or 0,
+                            "locked": product.locked_stock or 0,
+                            "damaged": product.damaged_stock or 0,
+                            "partially_damaged": (
+                                product.partially_damaged_stock or 0
+                            ),
+                            "liquidation_stock": (
+                                product.liquidation_stock or 0
+                            ),
+                        },
+                        "selected_usability": usability,
+                        "selected_rack_summary": {
+                            "rack_count": len(selected_racks),
+                            "rack_stock": selected_rack_stock,
+                            "rack_lock": selected_rack_lock,
+                            "available_stock": selected_available_stock,
+                        },
+                        "rack_details": selected_racks,
+                    }
+                )
+
+            # ---------------------------------------------------------
+            # Python ordering for calculated rack totals
+            # ---------------------------------------------------------
+
+            calculated_ordering_map = {
+                "rack_quantity": "rack_stock",
+                "-rack_quantity": "rack_stock",
+                "available_quantity": "available_stock",
+                "-available_quantity": "available_stock",
+                "locked_quantity": "rack_lock",
+                "-locked_quantity": "rack_lock",
+            }
+
+            if ordering in calculated_ordering_map:
+                summary_key = calculated_ordering_map[ordering]
+                reverse = ordering.startswith("-")
+
+                product_results.sort(
+                    key=lambda row: row[
+                        "selected_rack_summary"
+                    ][summary_key],
+                    reverse=reverse,
+                )
+
+            # ---------------------------------------------------------
+            # Pagination
+            # ---------------------------------------------------------
+
+            try:
+                page = int(request.GET.get("page", 1))
+            except (TypeError, ValueError):
+                page = 1
+
+            try:
+                page_size = int(
+                    request.GET.get(
+                        "page_size",
+                        self.DEFAULT_PAGE_SIZE,
+                    )
+                )
+            except (TypeError, ValueError):
+                page_size = self.DEFAULT_PAGE_SIZE
+
+            page = max(page, 1)
+            page_size = max(
+                1,
+                min(page_size, self.MAX_PAGE_SIZE),
+            )
+
+            total_products = len(product_results)
+            total_pages = (
+                total_products + page_size - 1
+            ) // page_size
+
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+
+            paginated_results = product_results[
+                start_index:end_index
+            ]
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "Product rack usability report fetched "
+                        "successfully."
+                    ),
+                    "filters": {
+                        "usability": usability,
+                        "start_date": start_date or None,
+                        "end_date": end_date or None,
+                        "search": search or None,
+                        "product_id": product_id or None,
+                        "warehouse_id": warehouse_id or None,
+                        "main_category_id": (
+                            main_category_id or None
+                        ),
+                        "product_category_id": (
+                            product_category_id or None
+                        ),
+                        "family_id": family_id or None,
+                        "rack_id": rack_id or None,
+                        "rack_name": rack_name or None,
+                        "column_name": column_name or None,
+                        "ordering": ordering,
+                    },
+                    "summary": {
+                        "total_products": total_products,
+                        "total_rack_entries": total_rack_entries,
+                        "total_rack_stock": total_rack_stock,
+                        "total_rack_lock": total_rack_lock,
+                        "total_available_stock": (
+                            total_available_stock
+                        ),
+                        "usability_stock": usability_summary,
+                    },
+                    "pagination": {
+                        "current_page": page,
+                        "page_size": page_size,
+                        "total_pages": total_pages,
+                        "total_records": total_products,
+                        "has_next": page < total_pages,
+                        "has_previous": page > 1,
+                    },
+                    "data": paginated_results,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as exception:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while fetching the "
+                        "product rack usability report."
+                    ),
+                    "errors": str(exception),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @staticmethod
+    def parse_date(value):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def to_integer(value):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def invalid_date_response(field_name):
+        return Response(
+            {
+                "status": "error",
+                "message": (
+                    f"Invalid {field_name}. Required format is "
+                    "YYYY-MM-DD."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @staticmethod
+    def invalid_number_response(field_name):
+        return Response(
+            {
+                "status": "error",
+                "message": f"{field_name} must be a valid number.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def apply_number_range_filter(
+        self,
+        queryset,
+        field_name,
+        minimum=None,
+        maximum=None,
+    ):
+        try:
+            if minimum not in ("", None):
+                queryset = queryset.filter(
+                    **{f"{field_name}__gte": float(minimum)}
+                )
+
+            if maximum not in ("", None):
+                queryset = queryset.filter(
+                    **{f"{field_name}__lte": float(maximum)}
+                )
+
+            return queryset, None
+
+        except (TypeError, ValueError):
+            return (
+                queryset,
+                Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            f"Invalid minimum or maximum value for "
+                            f"{field_name}."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                ),
+            )
