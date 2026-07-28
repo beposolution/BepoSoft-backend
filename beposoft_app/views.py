@@ -5611,6 +5611,24 @@ class CustomerOrderLedgerdata(BaseTokenView):
                 received_transfers, many=True
             )
 
+            # ---- COMMISSION RECEIPTS ----
+            commission_receipts = (
+                CommissionReceipt.objects
+                .filter(order__customer=customer)
+                .select_related(
+                    "order",
+                    "bank",
+                    "created_by",
+                    "order__customer",
+                )
+                .order_by("-received_at", "-id")
+            )
+
+            commission_serializer = CommissionReceiptSerializer(
+                commission_receipts,
+                many=True
+            )
+
             return Response(
                 {
                     "data": {
@@ -5619,6 +5637,7 @@ class CustomerOrderLedgerdata(BaseTokenView):
                         "refund_receipts": refund_serializer.data,
                         "advance_receipts": advance_serializer.data,
                         "payment_receipts": payment_serializer.data,
+                        "commission_receipts": commission_serializer.data,
                         "grv": grv_serializer.data,
                         "advance_transfers": advance_transfer_serializer.data,
                     }
