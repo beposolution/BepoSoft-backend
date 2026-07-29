@@ -25165,28 +25165,65 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
 
             data = []
 
-            # Normal attendance teams
-            teams = StaffAttendanceTeam.objects.prefetch_related(
-                "team_members__member"
-            ).select_related(
-                "team_leader"
-            ).all().order_by("-id")
+            # Fetch all attendance teams.
+            teams = (
+                StaffAttendanceTeam.objects
+                .prefetch_related("team_members__member")
+                .select_related("team_leader")
+                .all()
+                .order_by("-id")
+            )
 
+            # Filter by a specific team when provided.
             if team_id:
                 teams = teams.filter(id=team_id)
 
-            for team in teams:
-                member_ids = list(
-                    team.team_members.values_list("member_id", flat=True)
+            # ---------------------------------------------------------
+            # NEW:
+            # Find the number of attendance days in the selected range.
+            #
+            # We use distinct attendance dates instead of calendar days,
+            # so weekends or dates without attendance records are excluded.
+            # ---------------------------------------------------------
+            attendance_days_qs = StaffAttendance.objects.all()
+
+            if start_date:
+                attendance_days_qs = attendance_days_qs.filter(
+                    attendance_date__gte=start_date
                 )
 
+            if end_date:
+                attendance_days_qs = attendance_days_qs.filter(
+                    attendance_date__lte=end_date
+                )
+
+            attendance_days = (
+                attendance_days_qs
+                .values("attendance_date")
+                .distinct()
+                .count()
+            )
+
+            for team in teams:
+
+                # Get all member IDs assigned to this team.
+                member_ids = list(
+                    team.team_members.values_list(
+                        "member_id",
+                        flat=True
+                    )
+                )
+
+                # Count only approved team members.
                 approved_members_count = User.objects.filter(
                     approval_status="approved",
                     id__in=member_ids
                 ).count()
 
+                # Fetch attendance only for approved team members.
                 attendance_qs = StaffAttendance.objects.filter(
-                    staff_id__in=member_ids
+                    staff_id__in=member_ids,
+                    staff__approval_status="approved"
                 )
 
                 if start_date:
@@ -25199,39 +25236,157 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
                         attendance_date__lte=end_date
                     )
 
-                present_count = attendance_qs.filter(status="present").count()
-                absent_count = attendance_qs.filter(status="absent").count()
-                half_day_count = attendance_qs.filter(status="half_day").count()
-                total_count = present_count + absent_count + half_day_count
+                present_count = attendance_qs.filter(
+                    status="present"
+                ).count()
+
+                absent_count = attendance_qs.filter(
+                    status="absent"
+                ).count()
+
+                half_day_count = attendance_qs.filter(
+                    status="half_day"
+                ).count()
+
+                total_count = (
+                    present_count
+                    + absent_count
+                    + half_day_count
+                )
+
+               
+                # Effective attendance: Present  = 1, Half day = 0.5, Absent   = 0
+                attended_count = (
+                    present_count
+                    + (half_day_count * 0.5)
+                )
+          
+                # Formula:
+                # Total approved members × Attendance days
+                expected_attendance_count = (
+                    approved_members_count
+                    * attendance_days
+                )
+
+                
+                # Team attendance percentage for the selected date range.
+                # Formula:
+                # Effective attendance / Expected attendance × 100
+                attendance_percentage = (
+                    round(
+                        (
+                            attended_count
+                            / expected_attendance_count
+                        ) * 100,
+                        2
+                    )
+                    if expected_attendance_count > 0
+                    else 0.0
+                )
 
                 data.append({
                     "team_id": team.id,
                     "team_name": team.team_name,
-                    "team_leader": team.team_leader.id if team.team_leader else None,
-                    "team_leader_name": team.team_leader.name if team.team_leader else None,
-                    # "members_count": team.team_members.count(),
+
+                    "team_leader": (
+                        team.team_leader.id
+                        if team.team_leader
+                        else None
+                    ),
+
+                    "team_leader_name": (
+                        team.team_leader.name
+                        if team.team_leader
+                        else None
+                    ),
+
                     "members_count": approved_members_count,
+                    "attendance_days": attendance_days,
+                    "expected_attendance_count": (
+                        expected_attendance_count
+                    ),
+
                     "present_count": present_count,
                     "absent_count": absent_count,
                     "half_day_count": half_day_count,
                     "total_count": total_count,
+                    "attended_count": attended_count,
+                    "attendance_percentage": attendance_percentage,
                 })
 
-            total_team_members = StaffAttendanceTeamMembers.objects.count()
+            # Calculate summary from filtered team data.
+            total_team_members = sum(
+                item["members_count"]
+                for item in data
+            )
+
+            total_present = sum(
+                item["present_count"]
+                for item in data
+            )
+
+            total_absent = sum(
+                item["absent_count"]
+                for item in data
+            )
+
+            total_half_day = sum(
+                item["half_day_count"]
+                for item in data
+            )
+
+            grand_total = sum(
+                item["total_count"]
+                for item in data
+            )
+
+            total_attended_count = (
+                total_present
+                + (total_half_day * 0.5)
+            )
+
+            total_expected_attendance = (
+                total_team_members
+                * attendance_days
+            )
+
+            # Overall attendance percentage.
+            summary_attendance_percentage = (
+                round(
+                    (
+                        total_attended_count
+                        / total_expected_attendance
+                    ) * 100,
+                    2
+                )
+                if total_expected_attendance > 0
+                else 0.0
+            )
 
             summary = {
                 "total_teams": len(data),
-                # "total_members": sum(item["members_count"] for item in data),
                 "total_members": total_team_members,
-                "total_present": sum(item["present_count"] for item in data),
-                "total_absent": sum(item["absent_count"] for item in data),
-                "total_half_day": sum(item["half_day_count"] for item in data),
-                "grand_total": sum(item["total_count"] for item in data),
+                "attendance_days": attendance_days,
+                "expected_attendance_count": (
+                    total_expected_attendance
+                ),
+
+                "total_present": total_present,
+                "total_absent": total_absent,
+                "total_half_day": total_half_day,
+                "grand_total": grand_total,
+                "total_attended_count": total_attended_count,
+                "attendance_percentage": (
+                    summary_attendance_percentage
+                ),
             }
 
             return Response({
                 "status": "success",
-                "message": "Team-wise staff attendance count fetched successfully",
+                "message": (
+                    "Team-wise staff attendance count "
+                    "fetched successfully"
+                ),
                 "filters": {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -25244,7 +25399,10 @@ class StaffAttendanceTeamWiseCountView(BaseTokenView):
         except Exception as e:
             return Response({
                 "status": "error",
-                "message": "An error occurred while fetching team-wise attendance count",
+                "message": (
+                    "An error occurred while fetching "
+                    "team-wise attendance count"
+                ),
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
