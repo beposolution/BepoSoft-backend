@@ -10,7 +10,7 @@ from .serializers import *
 from .models import User
 from django.contrib.auth.hashers import check_password, make_password
 from datetime import datetime, timedelta, time, date
-from django.db.models import Q, CharField, Prefetch, Value
+from django.db.models import Q, CharField, Prefetch, Value, Exists, OuterRef
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 from django.contrib.auth import authenticate
 from django.conf import settings
@@ -29910,3 +29910,494 @@ class ProductRackUsabilityReportView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST,
                 ),
             )
+        
+
+
+class ShippingOrdersWithProductCountView(BaseTokenView):
+
+    PENDING_STATUSES = [
+        "Waiting For Confirmation",
+        "To Print",
+        "Packing under progress",
+        "Packed",
+        "Ready to ship",
+    ]
+
+    DISPATCHED_STATUSES = [
+        "Shipped",
+    ]
+
+    ALL_ALLOWED_STATUSES = (
+        PENDING_STATUSES + DISPATCHED_STATUSES
+    )
+
+    def get(self, request):
+        try:
+            auth_user, error_response = (
+                self.get_user_from_token(request)
+            )
+
+            if error_response:
+                return error_response
+
+            start_date = request.GET.get(
+                "start_date",
+                "",
+            ).strip()
+
+            end_date = request.GET.get(
+                "end_date",
+                "",
+            ).strip()
+
+            search = request.GET.get(
+                "search",
+                "",
+            ).strip()
+
+            product_id = request.GET.get(
+                "product_id",
+                "",
+            ).strip()
+
+            customer_id = request.GET.get(
+                "customer_id",
+                "",
+            ).strip()
+
+            manage_staff_id = request.GET.get(
+                "manage_staff_id",
+                "",
+            ).strip()
+
+
+            date_validation_response = (
+                self.validate_date_filters(
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            )
+
+            if date_validation_response:
+                return date_validation_response
+
+
+            id_validation_response = (
+                self.validate_id_filters(
+                    product_id=product_id,
+                    customer_id=customer_id,
+                    manage_staff_id=manage_staff_id,
+                )
+            )
+
+            if id_validation_response:
+                return id_validation_response
+
+
+            orders = Order.objects.filter(
+                status__in=self.ALL_ALLOWED_STATUSES
+            )
+
+            # order_date must be stored as YYYY-MM-DD.
+
+            if start_date:
+                orders = orders.filter(
+                    order_date__gte=start_date
+                )
+
+            if end_date:
+                orders = orders.filter(
+                    order_date__lte=end_date
+                )
+
+            if product_id:
+                selected_product_exists = (
+                    OrderItem.objects.filter(
+                        order_id=OuterRef("pk"),
+                        product_id=int(product_id),
+                    )
+                )
+
+                orders = orders.annotate(
+                    contains_selected_product=Exists(
+                        selected_product_exists
+                    )
+                ).filter(
+                    contains_selected_product=True
+                )
+
+
+            if customer_id:
+                orders = orders.filter(
+                    customer_id=int(customer_id)
+                )
+
+
+            if manage_staff_id:
+                orders = orders.filter(
+                    manage_staff_id=int(
+                        manage_staff_id
+                    )
+                )
+
+
+            if search:
+                matching_product_exists = (
+                    OrderItem.objects.filter(
+                        order_id=OuterRef("pk"),
+                        product__name__icontains=search,
+                    )
+                )
+
+                orders = orders.annotate(
+                    product_matches_search=Exists(
+                        matching_product_exists
+                    )
+                ).filter(
+                    Q(invoice__icontains=search)
+                    | Q(
+                        customer__name__icontains=search
+                    )
+                    | Q(
+                        customer__phone__icontains=search
+                    )
+                    | Q(
+                        manage_staff__name__icontains=search
+                    )
+                    | Q(
+                        company__name__icontains=search
+                    )
+                    | Q(
+                        product_matches_search=True
+                    )
+                )
+
+            orders = orders.distinct()
+
+
+            pending_orders = orders.filter(
+                status__in=self.PENDING_STATUSES
+            )
+
+            dispatched_orders = orders.filter(
+                status__in=self.DISPATCHED_STATUSES
+            )
+
+
+            overall_summary = self.build_summary(
+                orders
+            )
+
+            pending_summary = self.build_summary(
+                pending_orders
+            )
+
+            dispatched_summary = self.build_summary(
+                dispatched_orders
+            )
+
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "Shipping order summary "
+                        "fetched successfully."
+                    ),
+                    "filters": {
+                        "start_date": (
+                            start_date or None
+                        ),
+                        "end_date": (
+                            end_date or None
+                        ),
+                        "product_id": (
+                            int(product_id)
+                            if product_id
+                            else None
+                        ),
+                        "customer_id": (
+                            int(customer_id)
+                            if customer_id
+                            else None
+                        ),
+                        "manage_staff_id": (
+                            int(manage_staff_id)
+                            if manage_staff_id
+                            else None
+                        ),
+                        "search": search or None,
+                    },
+                    "summary": {
+                        "overall": overall_summary,
+                        "pending": pending_summary,
+                        "dispatched": (
+                            dispatched_summary
+                        ),
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as exception:
+            logger.exception(
+                "Error while fetching shipping summary: %s",
+                str(exception),
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while fetching "
+                        "the shipping order summary."
+                    ),
+                    "errors": str(exception),
+                },
+                status=(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR
+                ),
+            )
+
+
+    def validate_date_filters(
+        self,
+        start_date,
+        end_date,
+    ):
+        date_format = "%Y-%m-%d"
+
+        try:
+            parsed_start_date = (
+                datetime.strptime(
+                    start_date,
+                    date_format,
+                ).date()
+                if start_date
+                else None
+            )
+
+            parsed_end_date = (
+                datetime.strptime(
+                    end_date,
+                    date_format,
+                ).date()
+                if end_date
+                else None
+            )
+
+        except ValueError:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "start_date and end_date must "
+                        "use YYYY-MM-DD format."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if (
+            parsed_start_date
+            and parsed_end_date
+            and parsed_start_date > parsed_end_date
+        ):
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "start_date cannot be after "
+                        "end_date."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return None
+
+
+    def validate_id_filters(
+        self,
+        product_id,
+        customer_id,
+        manage_staff_id,
+    ):
+        id_filters = {
+            "product_id": product_id,
+            "customer_id": customer_id,
+            "manage_staff_id": manage_staff_id,
+        }
+
+        for field_name, field_value in (
+            id_filters.items()
+        ):
+            if not field_value:
+                continue
+
+            if not field_value.isdigit():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            f"{field_name} must be a "
+                            "valid positive integer."
+                        ),
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+            if int(field_value) <= 0:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            f"{field_name} must be "
+                            "greater than zero."
+                        ),
+                    },
+                    status=(
+                        status.HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+        return None
+
+
+    def build_summary(self, orders):
+        order_ids = list(
+            orders.values_list(
+                "id",
+                flat=True,
+            ).distinct()
+        )
+
+
+        order_summary = orders.aggregate(
+            total_orders=Count(
+                "id",
+                distinct=True,
+            ),
+            total_amount=Coalesce(
+                Sum("total_amount"),
+                0.0,
+                output_field=FloatField(),
+            ),
+        )
+
+        item_summary = (
+            OrderItem.objects.filter(
+                order_id__in=order_ids
+            ).aggregate(
+                total_product_quantity=Coalesce(
+                    Sum("quantity"),
+                    0,
+                    output_field=IntegerField(),
+                ),
+                total_distinct_products=Count(
+                    "product_id",
+                    distinct=True,
+                ),
+            )
+        )
+
+
+        status_wise_orders = (
+            orders.values("status")
+            .annotate(
+                order_count=Count(
+                    "id",
+                    distinct=True,
+                ),
+                total_amount=Coalesce(
+                    Sum("total_amount"),
+                    0.0,
+                    output_field=FloatField(),
+                ),
+            )
+            .order_by("status")
+        )
+
+        status_wise_summary = []
+
+        for status_order in status_wise_orders:
+            current_status = status_order["status"]
+
+            status_order_ids = list(
+                orders.filter(
+                    status=current_status
+                ).values_list(
+                    "id",
+                    flat=True,
+                ).distinct()
+            )
+
+            status_item_summary = (
+                OrderItem.objects.filter(
+                    order_id__in=status_order_ids
+                ).aggregate(
+                    total_product_quantity=Coalesce(
+                        Sum("quantity"),
+                        0,
+                        output_field=IntegerField(),
+                    ),
+                    total_distinct_products=Count(
+                        "product_id",
+                        distinct=True,
+                    ),
+                )
+            )
+
+            status_wise_summary.append(
+                {
+                    "status": current_status,
+                    "order_count": (
+                        status_order["order_count"]
+                    ),
+                    "total_amount": round(
+                        float(
+                            status_order[
+                                "total_amount"
+                            ]
+                            or 0
+                        ),
+                        2,
+                    ),
+                    "total_product_quantity": (
+                        status_item_summary[
+                            "total_product_quantity"
+                        ]
+                    ),
+                    "total_distinct_products": (
+                        status_item_summary[
+                            "total_distinct_products"
+                        ]
+                    ),
+                }
+            )
+
+        return {
+            "total_orders": (
+                order_summary["total_orders"]
+            ),
+            "total_amount": round(
+                float(
+                    order_summary["total_amount"]
+                    or 0
+                ),
+                2,
+            ),
+            "total_product_quantity": (
+                item_summary[
+                    "total_product_quantity"
+                ]
+            ),
+            "total_distinct_products": (
+                item_summary[
+                    "total_distinct_products"
+                ]
+            ),
+            "status_wise": status_wise_summary,
+        }

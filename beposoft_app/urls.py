@@ -440,6 +440,7 @@ urlpatterns = [
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 
     path("api/products/rack/usability/<str:usability>/", ProductRackUsabilityReportView.as_view(), name="product-rack-usability-report"),
+    path("api/orders/shipping/product/count/", ShippingOrdersWithProductCountView.as_view(), name="shipping-orders-product-count"),
 
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
