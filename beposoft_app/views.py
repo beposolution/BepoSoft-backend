@@ -5309,29 +5309,243 @@ class CreateReceiptAgainstInvoice(BaseTokenView):
             return Response({"errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+
+
 class AllReceiptsView(APIView):
     def get(self, request):
-        # Fetch all and annotate with type
-        advance_receipts = [
-            {**receipt, "receipt_type": "advance"} 
-            for receipt in AdvanceReceiptSerializer(AdvanceReceipt.objects.all(), many=True).data
-        ]
-        bank_receipts = [
-            {**receipt, "receipt_type": "bank"} 
-            for receipt in BankReceiptSerializer(BankReceipt.objects.all(), many=True).data
-        ]
-        payment_receipts = [
-            {**receipt, "receipt_type": "payment"} 
-            for receipt in PaymentRecieptSerializers(PaymentReceipt.objects.all(), many=True).data
-        ]
+        try:
+            search = request.GET.get("search", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            bank = request.GET.get("bank", "").strip()
+            customer = request.GET.get("customer", "").strip()
+            order = request.GET.get("order", "").strip()
+            start_date_value = request.GET.get("start_date", "").strip()
+            end_date_value = request.GET.get("end_date", "").strip()
 
-        # Combine and sort by ID descending
-        all_receipts = advance_receipts + bank_receipts + payment_receipts
-        sorted_receipts = sorted(all_receipts, key=lambda x: x["id"], reverse=True)
+            advance_queryset = AdvanceReceipt.objects.select_related(
+                "customer",
+                "bank",
+                "created_by",
+            ).all()
 
-        return Response({
-            "receipts": sorted_receipts
-        }, status=status.HTTP_200_OK)
+            bank_queryset = BankReceipt.objects.select_related(
+                "bank",
+                "created_by",
+            ).all()
+
+            payment_queryset = PaymentReceipt.objects.select_related(
+                "order",
+                "customer",
+                "bank",
+                "created_by",
+            ).all()
+
+            if created_by:
+                advance_queryset = advance_queryset.filter(
+                    created_by_id=created_by
+                )
+                bank_queryset = bank_queryset.filter(
+                    created_by_id=created_by
+                )
+                payment_queryset = payment_queryset.filter(
+                    created_by_id=created_by
+                )
+
+            if bank:
+                advance_queryset = advance_queryset.filter(bank_id=bank)
+                bank_queryset = bank_queryset.filter(bank_id=bank)
+                payment_queryset = payment_queryset.filter(bank_id=bank)
+
+            if customer:
+                advance_queryset = advance_queryset.filter(
+                    customer_id=customer
+                )
+                payment_queryset = payment_queryset.filter(
+                    customer_id=customer
+                )
+
+                # Customer filter means bank-only receipts do not match.
+                bank_queryset = bank_queryset.none()
+
+            if order:
+                payment_queryset = payment_queryset.filter(order_id=order)
+
+                # Advance and bank receipts do not have an order field.
+                advance_queryset = advance_queryset.none()
+                bank_queryset = bank_queryset.none()
+
+            start_date = None
+            end_date = None
+
+            if start_date_value:
+                start_date = parse_date(start_date_value)
+
+                if not start_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "Invalid start_date. "
+                                "Use YYYY-MM-DD format."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            if end_date_value:
+                end_date = parse_date(end_date_value)
+
+                if not end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "Invalid end_date. "
+                                "Use YYYY-MM-DD format."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            if start_date and end_date and start_date > end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "start_date cannot be greater than end_date."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if start_date:
+                advance_queryset = advance_queryset.filter(
+                    received_at__gte=start_date
+                )
+                bank_queryset = bank_queryset.filter(
+                    received_at__gte=start_date
+                )
+                payment_queryset = payment_queryset.filter(
+                    received_at__gte=start_date
+                )
+
+            if end_date:
+                advance_queryset = advance_queryset.filter(
+                    received_at__lte=end_date
+                )
+                bank_queryset = bank_queryset.filter(
+                    received_at__lte=end_date
+                )
+                payment_queryset = payment_queryset.filter(
+                    received_at__lte=end_date
+                )
+
+            if search:
+                advance_queryset = advance_queryset.annotate(
+                    amount_as_text=Cast("amount", output_field=CharField())
+                ).filter(
+                    Q(payment_receipt__icontains=search)
+                    | Q(remark__icontains=search)
+                    | Q(transactionID__icontains=search)
+                    | Q(amount_as_text__icontains=search)
+                )
+
+                bank_queryset = bank_queryset.annotate(
+                    amount_as_text=Cast("amount", output_field=CharField())
+                ).filter(
+                    Q(payment_receipt__icontains=search)
+                    | Q(remark__icontains=search)
+                    | Q(transactionID__icontains=search)
+                    | Q(amount_as_text__icontains=search)
+                )
+
+                payment_queryset = payment_queryset.filter(
+                    Q(payment_receipt__icontains=search)
+                    | Q(remark__icontains=search)
+                    | Q(transactionID__icontains=search)
+                    | Q(amount__icontains=search)
+                )
+
+            advance_receipts = [
+                {
+                    **receipt,
+                    "receipt_type": "advance",
+                }
+                for receipt in AdvanceReceiptSerializer(
+                    advance_queryset,
+                    many=True,
+                ).data
+            ]
+
+            bank_receipts = [
+                {
+                    **receipt,
+                    "receipt_type": "bank",
+                }
+                for receipt in BankReceiptSerializer(
+                    bank_queryset,
+                    many=True,
+                ).data
+            ]
+
+            payment_receipts = [
+                {
+                    **receipt,
+                    "receipt_type": "payment",
+                }
+                for receipt in PaymentRecieptSerializers(
+                    payment_queryset,
+                    many=True,
+                ).data
+            ]
+
+            all_receipts = (
+                advance_receipts
+                + bank_receipts
+                + payment_receipts
+            )
+
+            sorted_receipts = sorted(
+                all_receipts,
+                key=lambda receipt: (
+                    receipt.get("received_at") or "",
+                    receipt.get("id") or 0,
+                ),
+                reverse=True,
+            )
+
+            paginator = StandardPagination()
+            paginated_receipts = paginator.paginate_queryset(
+                sorted_receipts,
+                request,
+                view=self,
+            )
+
+            return paginator.get_paginated_response(
+                {
+                    "message": "Receipts fetched successfully",
+                    "filters": {
+                        "search": search or None,
+                        "created_by": created_by or None,
+                        "bank": bank or None,
+                        "customer": customer or None,
+                        "order": order or None,
+                        "start_date": start_date_value or None,
+                        "end_date": end_date_value or None,
+                    },
+                    "receipts": paginated_receipts,
+                }
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching receipts.",
+                    "error": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
         
