@@ -280,6 +280,7 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
     variantIDs = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     product_category_name = serializers.SerializerMethodField()
+    available_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
@@ -288,6 +289,14 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
     def get_product_category_name(self, obj):
         """Return category name safely, even if null."""
         return obj.product_category.category_name if obj.product_category else None
+
+
+    def get_available_stock(self, obj): 
+        """ Available stock = total usable stock - locked stock. """ 
+        stock = obj.stock or 0 
+        locked_stock = obj.locked_stock or 0 
+
+        return stock - locked_stock
 
     def get_variantIDs(self, obj):
         """
