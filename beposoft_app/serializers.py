@@ -327,6 +327,10 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
 
                 if variant.name not in seen_attributes:
                     seen_attributes.add(variant.name)
+
+                    stock = variant.stock or 0 
+                    locked_stock = variant.locked_stock or 0
+
                     variant_list.append({
                         "id": variant.pk,
                         "groupID": variant.groupID,
@@ -336,6 +340,7 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "liquidation_stock": variant.liquidation_stock,
                         "damaged_stock": variant.damaged_stock,
                         "locked_stock":variant.locked_stock,
+                        "available_stock": stock - locked_stock,
                         
                         "image": selected_image, # Image URL handling
                         "color":variant.color if variant.color else None,
