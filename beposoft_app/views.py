@@ -2231,228 +2231,159 @@ class CreateOrder2(BaseTokenView):
             if error_response:
                 return error_response
 
-            # Get payment receipt images
+            # Payment receipt images
             payment_images = request.FILES.getlist("images")
 
             if not payment_images:
                 return Response(
                     {
                         "status": "error",
-                        "message": "At least one payment image is required",
+                        "message": "At least one payment image is required"
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Fetch authenticated user's cart items
-            cart_items = (
-                BeposoftCart.objects
-                .filter(user=authUser)
-                .select_related("product")
-            )
-
+            # Fetch cart items
+            cart_items = BeposoftCart.objects.filter(user=authUser)
             if not cart_items.exists():
                 return Response(
-                    {
-                        "status": "error",
-                        "message": "Cart is empty",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"status": "error", "message": "Cart is empty"},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Validate order data
-            serializer = OrderSerializer(
-                data=request.data,
-                context={"request": request},
-            )
-
+            # Validate order serializer (SAME AS OLD CODE)
+            serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response(
                     {
                         "status": "error",
                         "message": "Validation failed",
-                        "errors": serializer.errors,
+                        "errors": serializer.errors
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Aggregate cart items product-wise
+            # Aggregate cart → product-wise quantity
             product_data = {}
             product_ids = set()
 
             for item in cart_items:
                 product = item.product
-                product_id = product.id
+                product_ids.add(product.id)
 
-                product_ids.add(product_id)
-
-                item_quantity = Decimal(str(item.quantity or 0))
-                item_discount = Decimal(str(item.discount or 0))
-                product_tax = Decimal(str(product.tax or 0))
-                item_rate = Decimal(str(item.price or 0))
-
-                if product_id not in product_data:
-                    product_data[product_id] = {
+                if product.id not in product_data:
+                    product_data[product.id] = {
                         "product": product,
-                        "quantity": item_quantity,
-                        "discount": item_discount,
-                        "tax": product_tax,
-                        "rate": item_rate,
+                        "quantity": Decimal(item.quantity),
+                        "discount": Decimal(item.discount or 0),
+                        "tax": Decimal(product.tax or 0),
+                        "rate": Decimal(item.price or 0),
                         "description": item.note,
                     }
                 else:
-                    product_data[product_id]["quantity"] += item_quantity
-                    product_data[product_id]["discount"] += item_discount
+                    product_data[product.id]["quantity"] += Decimal(item.quantity)
+                    product_data[product.id]["discount"] += Decimal(item.discount or 0)
 
-            # Lock database product rows only during this transaction.
-            #
-            # select_for_update() does not increase product.locked_stock.
-            # It only prevents concurrent transactions from changing these
-            # product rows until the current transaction finishes.
-            products = (
-                Products.objects
-                .select_for_update()
-                .filter(id__in=product_ids)
+            # Lock product rows & validate stock
+            products = Products.objects.select_for_update().filter(
+                id__in=product_ids
             )
-
-            product_map = {
-                product.id: product
-                for product in products
-            }
+            product_map = {p.id: p for p in products}
 
             stock_errors = []
 
-            # Validate available stock
             for product_id, data in product_data.items():
                 product = product_map.get(product_id)
 
                 if not product:
-                    stock_errors.append(
-                        {
-                            "product_id": product_id,
-                            "message": "Product not found",
-                        }
-                    )
+                    stock_errors.append({
+                        "product_id": product_id,
+                        "message": "Product not found"
+                    })
                     continue
 
                 requested_qty = int(data["quantity"])
-
-                current_stock = int(product.stock or 0)
-                current_locked_stock = int(product.locked_stock or 0)
-                available_stock = current_stock - current_locked_stock
-
-                if requested_qty <= 0:
-                    stock_errors.append(
-                        {
-                            "product_id": product.id,
-                            "product_name": product.name,
-                            "requested_quantity": requested_qty,
-                            "available_stock": available_stock,
-                            "message": "Quantity must be greater than zero.",
-                        }
-                    )
-                    continue
+                available_stock = product.stock - product.locked_stock
 
                 if requested_qty > available_stock:
-                    stock_errors.append(
-                        {
-                            "product_id": product.id,
-                            "product_name": product.name,
-                            "requested_quantity": requested_qty,
-                            "available_stock": available_stock,
-                            "message": (
-                                f"Out of stock. Only "
-                                f"{available_stock} available."
-                            ),
-                        }
-                    )
+                    stock_errors.append({
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "requested_quantity": requested_qty,
+                        "available_stock": available_stock,
+                        "message": f"Out of stock. Only {available_stock} available."
+                    })
 
-            # Stop order creation when stock validation fails
+            # Stop order creation if stock fails
             if stock_errors:
                 return Response(
                     {
                         "status": "error",
                         "error_code": "OUT_OF_STOCK",
                         "message": "Some products are out of stock",
-                        "errors": stock_errors,
+                        "errors": stock_errors
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Create order
+            # CREATE ORDER (EXACTLY LIKE OLD CODE)
             order = serializer.save()
 
-            # Save payment receipt images
+            # Save payment receipt images against created order
             saved_payment_images = []
 
             for image in payment_images:
                 payment_image = OrderPaymentImages.objects.create(
                     order=order,
-                    image=image,
+                    image=image
                 )
-
                 saved_payment_images.append(payment_image)
 
-            # Prepare order items.
-            #
-            # We use bulk_create() because OrderItem.objects.create()
-            # calls the custom OrderItem.save() method.
-            #
-            # Your custom OrderItem.save() method increases:
-            # product.locked_stock += quantity
-            #
-            # bulk_create() inserts the rows directly and does not call
-            # OrderItem.save(), so this API will not add the order
-            # quantities to product.locked_stock.
-            order_items = []
-
+            # Lock stock & create order items
             for product_id, data in product_data.items():
                 product = product_map[product_id]
-                quantity = int(data["quantity"])
+                qty = int(data["quantity"])
 
-                order_items.append(
-                    OrderItem(
-                        order=order,
-                        product=product,
-                        quantity=quantity,
-                        discount=data["discount"],
-                        tax=int(data["tax"]),
-                        rate=data["rate"],
-                        description=data["description"],
-                    )
+                # Products.objects.filter(id=product.id).update(
+                #     locked_stock=F("locked_stock") + qty
+                # )
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=qty,
+                    discount=data["discount"],
+                    tax=data["tax"],
+                    rate=data["rate"],
+                    description=data["description"],
                 )
 
-            # Create all order items without running OrderItem.save()
-            OrderItem.objects.bulk_create(order_items)
-
-            # Clear authenticated user's cart
+            # Clear cart
             cart_items.delete()
 
             return Response(
                 {
                     "status": "success",
-                    "message": (
-                        "Order and payment images created successfully"
-                    ),
-                    "data": OrderSerializer(
-                        order,
-                        context={"request": request},
-                    ).data,
+                    "message": "Order and payment images created successfully",
+                    "data": OrderSerializer(order).data
                 },
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_201_CREATED
             )
 
         except Exception as e:
-            logger.exception(
-                "Unexpected error during order creation"
+            logger.error(
+                "Unexpected error during order creation",
+                exc_info=True
             )
+            traceback.print_exc()
 
             return Response(
                 {
                     "status": "error",
                     "message": "An unexpected error occurred",
-                    "errors": str(e),
+                    "errors": str(e)
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
