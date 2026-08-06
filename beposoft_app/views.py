@@ -6248,7 +6248,7 @@ class PerfomaInvoiceDetailView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class PerformaOrderStaffNew(BaseTokenView):
+class PerformaOrderStaff(BaseTokenView):
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -6275,7 +6275,7 @@ class PerformaOrderStaffNew(BaseTokenView):
 
 
 
-class PerformaOrderStaff(BaseTokenView):
+class PerformaOrderStaffNew(BaseTokenView):
     def get(self, request):
         try:
             auth_user, error_response = self.get_user_from_token(request)
