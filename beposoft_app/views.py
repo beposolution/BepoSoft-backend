@@ -6151,6 +6151,84 @@ class PerfomaInvoiceListView(BaseTokenView):
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class PerfomaInvoiceListViewNew(BaseTokenView):
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            manage_staff = request.GET.get("manage_staff", "").strip()
+            customer = request.GET.get("customer", "").strip()
+            company = request.GET.get("company", "").strip()
+
+            orders = (
+                PerfomaInvoiceOrder.objects
+                .select_related(
+                    "manage_staff",
+                    "warehouses_obj",
+                    "company",
+                    "customer",
+                    "billing_address",
+                    "family",
+                    "state",
+                )
+                .all()
+                .order_by("-order_date", "-id")
+            )
+
+            if search:
+                orders = orders.filter(invoice__icontains=search)
+
+            if start_date:
+                orders = orders.filter(order_date__gte=start_date)
+
+            if end_date:
+                orders = orders.filter(order_date__lte=end_date)
+
+            if manage_staff:
+                orders = orders.filter(manage_staff_id=manage_staff)
+
+            if customer:
+                orders = orders.filter(customer_id=customer)
+
+            if company:
+                orders = orders.filter(company_id=company)
+
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(orders, request)
+
+            serializer = PerfomaInvoiceProductsSerializers(
+                paginated_orders,
+                many=True,
+                context={"request": request},
+            )
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except DatabaseError as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred",
+                    "error": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
         
 class PerfomaInvoiceDetailView(BaseTokenView):
     def get(self, request, invoice):
@@ -6170,7 +6248,7 @@ class PerfomaInvoiceDetailView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class PerformaOrderStaff(BaseTokenView):
+class PerformaOrderStaffNew(BaseTokenView):
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
@@ -6194,6 +6272,99 @@ class PerformaOrderStaff(BaseTokenView):
                 "message": "An error occurred",
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class PerformaOrderStaff(BaseTokenView):
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            customer = request.GET.get("customer", "").strip()
+            company = request.GET.get("company", "").strip()
+
+            perfoma_orders = (
+                PerfomaInvoiceOrder.objects
+                .select_related(
+                    "manage_staff",
+                    "warehouses_obj",
+                    "company",
+                    "customer",
+                    "billing_address",
+                    "family",
+                    "state",
+                )
+                .filter(manage_staff=auth_user)
+                .order_by("-order_date", "-id")
+            )
+
+            # Search by invoice number
+            if search:
+                perfoma_orders = perfoma_orders.filter(
+                    invoice__icontains=search
+                )
+
+            # Date range filter
+            if start_date:
+                perfoma_orders = perfoma_orders.filter(
+                    order_date__gte=start_date
+                )
+
+            if end_date:
+                perfoma_orders = perfoma_orders.filter(
+                    order_date__lte=end_date
+                )
+
+            # Customer filter
+            if customer:
+                perfoma_orders = perfoma_orders.filter(
+                    customer_id=customer
+                )
+
+            # Company filter
+            if company:
+                perfoma_orders = perfoma_orders.filter(
+                    company_id=company
+                )
+
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(
+                perfoma_orders,
+                request
+            )
+
+            serializer = PerformaOrderListSerilaizer(
+                paginated_orders,
+                many=True,
+                context={"request": request},
+            )
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except DatabaseError as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred",
+                    "errors": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class CreateCompnayDetailsView(BaseTokenView):

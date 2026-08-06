@@ -188,8 +188,10 @@ urlpatterns = [
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),
     path('api/perfoma/invoices/',PerfomaInvoiceListView.as_view()),
+    path('api/perfoma/invoices/new/',PerfomaInvoiceListViewNew.as_view()),
     path('api/perfoma/<str:invoice>/invoice/',PerfomaInvoiceDetailView.as_view()),
     path('api/performa/invoice/staff/',PerformaOrderStaff.as_view()),
+    path('api/performa/invoice/staff/new/',PerformaOrderStaffNew.as_view()),
     path('performainvoice/<str:invoice_number>/', GeneratePerformaInvoice, name='generate_invoice'),
     
     
