@@ -2231,6 +2231,9 @@ class CreateOrder2(BaseTokenView):
             if error_response:
                 return error_response
 
+            # Get performa id
+            performa_id = request.data.get("performa_id")
+
             # Payment receipt images
             payment_images = request.FILES.getlist("images")
 
@@ -2360,6 +2363,10 @@ class CreateOrder2(BaseTokenView):
 
             # Clear cart
             cart_items.delete()
+
+            # Delete used performa after successful order creation
+            if performa_id:
+                PerfomaInvoiceOrder.objects.filter(id=performa_id).delete()
 
             return Response(
                 {
