@@ -193,6 +193,10 @@ urlpatterns = [
     path('api/performa/invoice/staff/',PerformaOrderStaff.as_view()),
     path('api/performa/invoice/staff/new/',PerformaOrderStaffNew.as_view()),
     path('performainvoice/<str:invoice_number>/', GeneratePerformaInvoice, name='generate_invoice'),
+
+    path('api/perfoma/order/<int:order_id>/item/<int:item_id>/delete/', PerfomaInvoiceOrderItemDeleteView.as_view()),
+    path('api/perfoma/order/<int:order_id>/item/<int:item_id>/update/', PerfomaInvoiceOrderItemUpdateView.as_view()),
+    path('api/perfoma/order/<int:pk>/update/', PerfomaInvoiceOrderUpdateView.as_view()),
     
     
     path('api/warehouse/data/',WarehouseDataView.as_view()),

@@ -4374,3 +4374,71 @@ class CommissionReceiptSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+
+
+# PERFORMA INVOICE UPDATE SERIALIZERS
+
+class PerfomaInvoiceOrderItemUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PerfomaInvoiceOrderItem
+        fields = [
+            "product",
+            "description",
+            "rate",
+            "tax",
+            "discount",
+            "quantity",
+        ]
+
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Quantity must be greater than 0."
+            )
+        return value
+
+    def validate_rate(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Rate cannot be negative."
+            )
+        return value
+
+    def validate_discount(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "Discount cannot be negative."
+            )
+        return value
+
+
+class PerfomaInvoiceOrderUpdateSerializer(serializers.ModelSerializer):
+
+    warehouse_id = serializers.PrimaryKeyRelatedField(
+        source="warehouses_obj",
+        queryset=WareHouse.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = PerfomaInvoiceOrder
+
+        fields = [
+            "manage_staff",
+            "warehouse_id",
+            "company",
+            "customer",
+            "billing_address",
+            "order_date",
+            "family",
+            "state",
+            "code_charge",
+            "shipping_mode",
+            "shipping_charge",
+            "status",
+            "total_amount",
+            "note",
+        ]

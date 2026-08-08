@@ -30900,3 +30900,233 @@ class ShippingOrdersWithProductCountView(BaseTokenView):
             ),
             "status_wise": status_wise_summary,
         }
+
+
+
+# ============================================================
+# PERFORMA INVOICE - RECALCULATE TOTAL
+# ============================================================
+
+def recalculate_performa_total(order):
+    """
+    Recalculate performa subtotal from remaining order items.
+
+    This follows the existing Performa invoice calculation:
+        item total = rate * quantity
+
+    Shipping charge is kept separately in shipping_charge.
+    """
+
+    total = Decimal("0.00")
+
+    items = PerfomaInvoiceOrderItem.objects.filter(order=order)
+
+    for item in items:
+        rate = Decimal(str(item.rate or 0))
+        quantity = Decimal(str(item.quantity or 0))
+
+        total += rate * quantity
+
+    order.total_amount = float(total)
+    order.save(update_fields=["total_amount"])
+
+    return order.total_amount
+
+
+#  DELETE PERFORMA ORDER ITEM
+
+class PerfomaInvoiceOrderItemDeleteView(BaseTokenView):
+
+    @transaction.atomic
+    def delete(self, request, order_id, item_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            order = get_object_or_404(
+                PerfomaInvoiceOrder,
+                id=order_id
+            )
+
+            item = get_object_or_404(
+                PerfomaInvoiceOrderItem,
+                id=item_id,
+                order=order
+            )
+
+            product_name = item.product.name if item.product else None
+
+            item.delete()
+
+            # Recalculate order total after deleting product
+            new_total = recalculate_performa_total(order)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Performa order item deleted successfully",
+                    "data": {
+                        "order_id": order.id,
+                        "invoice": order.invoice,
+                        "deleted_item_id": item_id,
+                        "product_name": product_name,
+                        "total_amount": new_total
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error deleting Performa order item"
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+#  UPDATE PERFORMA ORDER ITEM
+
+class PerfomaInvoiceOrderItemUpdateView(BaseTokenView):
+
+    @transaction.atomic
+    def put(self, request, order_id, item_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            order = get_object_or_404(
+                PerfomaInvoiceOrder,
+                id=order_id
+            )
+
+            item = get_object_or_404(
+                PerfomaInvoiceOrderItem,
+                id=item_id,
+                order=order
+            )
+
+            serializer = PerfomaInvoiceOrderItemUpdateSerializer(
+                item,
+                data=request.data,
+                partial=True
+            )
+
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Validation failed",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            updated_item = serializer.save()
+
+            # Recalculate Performa total
+            new_total = recalculate_performa_total(order)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Performa order item updated successfully",
+                    "data": {
+                        "item": PerfomaInvoiceOrderItemUpdateSerializer(
+                            updated_item
+                        ).data,
+                        "total_amount": new_total
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error updating Performa order item"
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# UPDATE PERFORMA ORDER DETAILS
+
+class PerfomaInvoiceOrderUpdateView(BaseTokenView):
+
+    @transaction.atomic
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            order = get_object_or_404(
+                PerfomaInvoiceOrder,
+                id=pk
+            )
+
+            serializer = PerfomaInvoiceOrderUpdateSerializer(
+                order,
+                data=request.data,
+                partial=True
+            )
+
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Validation failed",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            updated_order = serializer.save()
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Performa order details updated successfully",
+                    "data": PerfomaInvoiceProductsSerializers(
+                        updated_order,
+                        context={
+                            "request": request,
+                            "manage_staff_designation":
+                                updated_order.manage_staff.designation
+                        }
+                    ).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error updating Performa order"
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
