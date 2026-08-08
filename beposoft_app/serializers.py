@@ -4442,3 +4442,38 @@ class PerfomaInvoiceOrderUpdateSerializer(serializers.ModelSerializer):
             "total_amount",
             "note",
         ]
+
+
+class PerfomaInvoiceOrderItemAddSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PerfomaInvoiceOrderItem
+        fields = [
+            "product",
+            "description",
+            "rate",
+            "tax",
+            "discount",
+            "quantity",
+        ]
+
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Quantity must be greater than 0."
+            )
+        return value
+
+    def validate_rate(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Rate cannot be negative."
+            )
+        return value
+
+    def validate_discount(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "Discount cannot be negative."
+            )
+        return value
