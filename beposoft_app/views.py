@@ -31130,3 +31130,70 @@ class PerfomaInvoiceOrderUpdateView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class PerfomaInvoiceOrderItemAddView(BaseTokenView):
+
+    @transaction.atomic
+    def post(self, request, order_id):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # Get existing Performa
+            order = get_object_or_404(
+                PerfomaInvoiceOrder,
+                id=order_id
+            )
+
+            serializer = PerfomaInvoiceOrderItemAddSerializer(
+                data=request.data
+            )
+
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Validation failed",
+                        "errors": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create product under this Performa
+            item = serializer.save(order=order)
+
+            # Recalculate parent Performa total
+            new_total = recalculate_performa_total(order)
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Product added to Performa successfully",
+                    "data": {
+                        "item": PerfomaInvoiceOrderItemAddSerializer(
+                            item
+                        ).data,
+                        "order_id": order.id,
+                        "invoice": order.invoice,
+                        "total_amount": new_total
+                    }
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error adding product to Performa"
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Something went wrong",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
