@@ -188,19 +188,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # EMAIL CONFIGURATION
 
-# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_BACKEND = "beposoft_app.email_backend.CustomSMTPEmailBackend"
 
-EMAIL_HOST = "sg2plzcpnl509181.prod.sin2.secureserver.net"
+EMAIL_HOST = "psage.in"
 EMAIL_PORT = 465
 
 EMAIL_USE_SSL = True
 EMAIL_USE_TLS = False
 
 EMAIL_HOST_USER = "mail@psage.in"
-EMAIL_HOST_PASSWORD = "Mail.psage.in_57"
+EMAIL_HOST_PASSWORD = "mail@Jery"
 
 DEFAULT_FROM_EMAIL = "mail@psage.in"
-EMAIL_TIMEOUT = 30
 
+EMAIL_TIMEOUT = 30
 
