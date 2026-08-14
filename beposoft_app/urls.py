@@ -437,6 +437,11 @@ urlpatterns = [
     path("api/main/categories/add/", MainCategoryListCreateView.as_view(), name="main-category-list-create"),
     path("api/main/categories/edit/<int:pk>/", MainCategoryDetailView.as_view(), name="main-category-detail"),
 
+    # orders data new api's
+    path("api/orders/family/date/summary/<str:start_date>/<str:end_date>/", FamilyWiseOrderDateRangeSummaryView.as_view()),
+    path("api/orders/family/<int:family_id>/staff/summary/<str:start_date>/<str:end_date>/", FamilyStaffWiseOrderDateRangeSummaryView.as_view()),
+    path("api/orders/staff/<int:staff_id>/summary/<str:start_date>/<str:end_date>/", StaffOrderDateRangeDetailView.as_view()),
+
     # local purchase
     path("api/lpo/", MyLocalPurchaseOrderView.as_view()),
     path("api/lpo/edit/<int:pk>/", LocalPurchaseOrderDetailView.as_view()),
