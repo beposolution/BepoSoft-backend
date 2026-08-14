@@ -31197,3 +31197,513 @@ class PerfomaInvoiceOrderItemAddView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+# new api's for order data
+
+class FamilyWiseOrderDateRangeSummaryView(BaseTokenView):
+
+    def get(self, request, start_date, end_date):
+        try:
+            # --------------------------------------------------
+            # AUTHENTICATION
+            # --------------------------------------------------
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------------------
+            # VALIDATE DATE FORMAT
+            # Expected format: YYYY-MM-DD
+            # --------------------------------------------------
+            try:
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # --------------------------------------------------
+            # VALIDATE DATE RANGE
+            # --------------------------------------------------
+            if start > end:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Convert back to YYYY-MM-DD strings
+            # because Order.order_date is CharField
+            start_date_str = start.strftime("%Y-%m-%d")
+            end_date_str = end.strftime("%Y-%m-%d")
+
+            # --------------------------------------------------
+            # BASE QUERYSET
+            # Exclude Invoice Rejected
+            # Apply date range
+            # --------------------------------------------------
+            orders = Order.objects.filter(
+                order_date__gte=start_date_str,
+                order_date__lte=end_date_str
+            ).exclude(
+                status="Invoice Rejected"
+            )
+
+            # --------------------------------------------------
+            # OVERALL SUMMARY
+            # --------------------------------------------------
+            overall_summary = orders.aggregate(
+                total_orders=Count("id"),
+                total_amount=Sum("total_amount")
+            )
+
+            overall_total_orders = overall_summary["total_orders"] or 0
+            overall_total_amount = overall_summary["total_amount"] or 0
+
+            # --------------------------------------------------
+            # FAMILY-WISE SUMMARY
+            # --------------------------------------------------
+            family_summary = (
+                orders
+                .values(
+                    "family_id",
+                    "family__name"
+                )
+                .annotate(
+                    total_orders=Count("id"),
+                    total_amount=Sum("total_amount")
+                )
+                .order_by("family__name")
+            )
+
+            # --------------------------------------------------
+            # FORMAT FAMILY DATA
+            # --------------------------------------------------
+            family_data = []
+
+            for item in family_summary:
+                family_data.append({
+                    "family_id": item["family_id"],
+                    "family_name": item["family__name"],
+                    "total_orders": item["total_orders"] or 0,
+                    "total_amount": round(
+                        float(item["total_amount"] or 0),
+                        2
+                    )
+                })
+
+            # --------------------------------------------------
+            # RESPONSE
+            # --------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+
+                    "date_range": {
+                        "start_date": start_date_str,
+                        "end_date": end_date_str
+                    },
+
+                    "summary": {
+                        "total_orders": overall_total_orders,
+                        "total_amount": round(
+                            float(overall_total_amount),
+                            2
+                        )
+                    },
+
+                    "family_wise": family_data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching order summary.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class FamilyStaffWiseOrderDateRangeSummaryView(BaseTokenView):
+
+    def get(self, request, family_id, start_date, end_date):
+        try:
+            # --------------------------------------------------
+            # AUTHENTICATION
+            # --------------------------------------------------
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------------------
+            # VALIDATE FAMILY
+            # --------------------------------------------------
+            family = Family.objects.filter(id=family_id).first()
+
+            if not family:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Family not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # --------------------------------------------------
+            # VALIDATE DATE FORMAT
+            # --------------------------------------------------
+            try:
+                start = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                end = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+            except ValueError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # --------------------------------------------------
+            # VALIDATE DATE RANGE
+            # --------------------------------------------------
+            if start > end:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            start_date_str = start.strftime("%Y-%m-%d")
+            end_date_str = end.strftime("%Y-%m-%d")
+
+            # --------------------------------------------------
+            # BASE QUERYSET
+            # Selected family
+            # Selected date range
+            # Exclude Invoice Rejected
+            # --------------------------------------------------
+            orders = Order.objects.filter(
+                family_id=family_id,
+                order_date__gte=start_date_str,
+                order_date__lte=end_date_str
+            ).exclude(
+                status="Invoice Rejected"
+            )
+
+            # --------------------------------------------------
+            # OVERALL SUMMARY
+            # --------------------------------------------------
+            summary = orders.aggregate(
+                total_orders=Count("id"),
+                total_amount=Sum("total_amount")
+            )
+
+            total_orders = summary["total_orders"] or 0
+            total_amount = summary["total_amount"] or 0
+
+            # --------------------------------------------------
+            # STAFF-WISE SUMMARY
+            # --------------------------------------------------
+            staff_summary = (
+                orders
+                .values(
+                    "manage_staff_id",
+                    "manage_staff__eid",
+                    "manage_staff__staff_id",
+                    "manage_staff__name",
+                    "manage_staff__designation",
+                    "manage_staff__department_id",
+                    "manage_staff__department_id__name"
+                )
+                .annotate(
+                    total_orders=Count("id"),
+                    total_amount=Sum("total_amount")
+                )
+                .order_by("-total_amount")
+            )
+
+            # --------------------------------------------------
+            # FORMAT STAFF DATA
+            # --------------------------------------------------
+            staff_data = []
+
+            for item in staff_summary:
+                staff_data.append({
+                    "staff_id": item["manage_staff_id"],
+                    "eid": item["manage_staff__eid"],
+                    "employee_staff_id": item["manage_staff__staff_id"],
+                    "staff_name": item["manage_staff__name"],
+                    "designation": item["manage_staff__designation"],
+
+                    "department": {
+                        "id": item["manage_staff__department_id"],
+                        "name": item["manage_staff__department_id__name"],
+                    },
+
+                    "total_orders": item["total_orders"] or 0,
+
+                    "total_amount": round(
+                        float(item["total_amount"] or 0),
+                        2
+                    )
+                })
+
+            # --------------------------------------------------
+            # RESPONSE
+            # --------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+
+                    "family": {
+                        "family_id": family.id,
+                        "family_name": family.name
+                    },
+
+                    "date_range": {
+                        "start_date": start_date_str,
+                        "end_date": end_date_str
+                    },
+
+                    "summary": {
+                        "total_orders": total_orders,
+                        "total_amount": round(
+                            float(total_amount),
+                            2
+                        )
+                    },
+
+                    "staff_wise": staff_data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching staff-wise order summary.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class StaffOrderDateRangeDetailView(BaseTokenView):
+
+    def get(self, request, staff_id, start_date, end_date):
+        try:
+            # --------------------------------------------------
+            # AUTHENTICATION
+            # --------------------------------------------------
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------------------
+            # VALIDATE STAFF
+            # staff_id here refers to User primary key
+            # --------------------------------------------------
+            staff = User.objects.select_related(
+                "family",
+                "department_id",
+                "supervisor_id"
+            ).filter(id=staff_id).first()
+
+            if not staff:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Staff not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # --------------------------------------------------
+            # VALIDATE DATE FORMAT
+            # --------------------------------------------------
+            try:
+                start = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                end = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+            except ValueError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # --------------------------------------------------
+            # VALIDATE DATE RANGE
+            # --------------------------------------------------
+            if start > end:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            start_date_str = start.strftime("%Y-%m-%d")
+            end_date_str = end.strftime("%Y-%m-%d")
+
+            # --------------------------------------------------
+            # FILTER ORDERS
+            # --------------------------------------------------
+            orders = (
+                Order.objects
+                .filter(
+                    manage_staff_id=staff_id,
+                    order_date__gte=start_date_str,
+                    order_date__lte=end_date_str
+                )
+                .exclude(
+                    status="Invoice Rejected"
+                )
+                .order_by("-order_date", "-id")
+            )
+
+            # --------------------------------------------------
+            # STAFF SUMMARY
+            # --------------------------------------------------
+            summary = orders.aggregate(
+                total_orders=Count("id"),
+                total_amount=Sum("total_amount")
+            )
+
+            total_orders = summary["total_orders"] or 0
+            total_amount = summary["total_amount"] or 0
+
+            # --------------------------------------------------
+            # ORDER DETAILS
+            # Use values() so no serializer is required
+            # --------------------------------------------------
+            order_queryset = orders.values(
+                "id",
+                "invoice",
+                "order_date",
+                "status",
+                "total_amount"
+            )
+
+            order_data = []
+
+            for order in order_queryset:
+                order_data.append({
+                    "order_id": order["id"],
+                    "invoice_number": order["invoice"],
+                    "order_date": order["order_date"],
+                    "status": order["status"],
+                    "amount": round(
+                        float(order["total_amount"] or 0),
+                        2
+                    )
+                })
+
+            # --------------------------------------------------
+            # RESPONSE
+            # --------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+
+                    "staff": {
+                        "id": staff.id,
+                        "eid": staff.eid,
+                        "staff_id": staff.staff_id,
+                        "name": staff.name,
+                        "designation": staff.designation,
+
+                        "department": {
+                            "id": (
+                                staff.department_id.id
+                                if staff.department_id
+                                else None
+                            ),
+                            "name": (
+                                staff.department_id.name
+                                if staff.department_id
+                                else None
+                            )
+                        },
+
+                        "family": {
+                            "id": (
+                                staff.family.id
+                                if staff.family
+                                else None
+                            ),
+                            "name": (
+                                staff.family.name
+                                if staff.family
+                                else None
+                            )
+                        }
+                    },
+
+                    "date_range": {
+                        "start_date": start_date_str,
+                        "end_date": end_date_str
+                    },
+
+                    "summary": {
+                        "total_orders": total_orders,
+                        "total_amount": round(
+                            float(total_amount),
+                            2
+                        )
+                    },
+
+                    "orders": order_data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching staff order details.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
