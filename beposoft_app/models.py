@@ -744,8 +744,9 @@ class Order(models.Model):
         ('Packed', 'Packed'),
         ('Ready to ship', 'Ready to ship'),
         ('Pre Booked', 'Pre Booked'),
+        ('Return From Delivery', 'Return From Delivery'),
     ], default='pending')
-
+    delivery_return_reason = models.TextField(default="", blank=True, null=True)
     total_amount = models.FloatField()
     bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="bank")
     note = models.TextField(default="")
