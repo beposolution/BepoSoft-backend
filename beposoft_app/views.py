@@ -7468,13 +7468,15 @@ class OrderStatusCount(APIView):
             required_statuses = [
                 "Invoice Created",
                 "Invoice Approved",
+                "Pre Booked",
                 "Waiting For Confirmation",
                 "To Print",
-                "Invoice Rejected",
                 "Packing under progress",
                 "Packed",
                 "Ready to ship",
+                "Return From Delivery",
                 "Shipped",
+                "Invoice Rejected",
             ]
 
             today = now().date()
@@ -7515,12 +7517,21 @@ class OrderStatusCount(APIView):
             )
             last_30_days_data = normalize(last_30_days_raw)
 
+            # All Time
+            all_raw = (
+                queryset
+                .values("status")
+                .annotate(count=Count("id"))
+            )
+            all_data = normalize(all_raw)
+
             return Response(
                 {
                     "success": True,
                     "today": today_data,
                     "current_month": current_month_data,
                     "last_30_days": last_30_days_data,
+                    "all": all_data,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -31521,18 +31532,11 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
 
     def get(self, request, staff_id, start_date, end_date):
         try:
-            # --------------------------------------------------
-            # AUTHENTICATION
-            # --------------------------------------------------
             auth_user, error_response = self.get_user_from_token(request)
 
             if error_response:
                 return error_response
 
-            # --------------------------------------------------
-            # VALIDATE STAFF
-            # staff_id here refers to User primary key
-            # --------------------------------------------------
             staff = User.objects.select_related(
                 "family",
                 "department_id",
@@ -31548,9 +31552,6 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # --------------------------------------------------
-            # VALIDATE DATE FORMAT
-            # --------------------------------------------------
             try:
                 start = datetime.strptime(
                     start_date,
@@ -31571,9 +31572,6 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # --------------------------------------------------
-            # VALIDATE DATE RANGE
-            # --------------------------------------------------
             if start > end:
                 return Response(
                     {
@@ -31586,9 +31584,6 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
             start_date_str = start.strftime("%Y-%m-%d")
             end_date_str = end.strftime("%Y-%m-%d")
 
-            # --------------------------------------------------
-            # FILTER ORDERS
-            # --------------------------------------------------
             orders = (
                 Order.objects
                 .filter(
@@ -31602,9 +31597,7 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
                 .order_by("-order_date", "-id")
             )
 
-            # --------------------------------------------------
             # STAFF SUMMARY
-            # --------------------------------------------------
             summary = orders.aggregate(
                 total_orders=Count("id"),
                 total_amount=Sum("total_amount")
@@ -31613,10 +31606,7 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
             total_orders = summary["total_orders"] or 0
             total_amount = summary["total_amount"] or 0
 
-            # --------------------------------------------------
-            # ORDER DETAILS
-            # Use values() so no serializer is required
-            # --------------------------------------------------
+            
             order_queryset = orders.values(
                 "id",
                 "invoice",
