@@ -31698,3 +31698,88 @@ class StaffOrderDateRangeDetailView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class MyOrderSummaryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            today = timezone.localdate()
+            today_str = today.strftime("%Y-%m-%d")
+
+            all_orders = Order.objects.filter(
+                manage_staff=user
+            ).exclude(
+                status="Invoice Rejected"
+            )
+
+            all_orders_count = all_orders.count()
+
+            all_orders_total = all_orders.aggregate(
+                total=Sum("total_amount")
+            )["total"] or 0
+
+            today_orders = all_orders.filter(
+                order_date__startswith=today_str
+            )
+
+            today_orders_count = today_orders.count()
+
+            today_orders_total = today_orders.aggregate(
+                total=Sum("total_amount")
+            )["total"] or 0
+
+            invoice_created_orders = all_orders.filter(
+                status="Invoice Created"
+            )
+
+            invoice_created_count = invoice_created_orders.count()
+
+            invoice_created_total = invoice_created_orders.aggregate(
+                total=Sum("total_amount")
+            )["total"] or 0
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Order summary fetched successfully",
+
+                    "user": {
+                        "id": user.id,
+                        "name": user.name
+                    },
+
+                    "all_orders": {
+                        "count": all_orders_count,
+                        "total_amount": float(all_orders_total)
+                    },
+
+                    "today_orders": {
+                        "date": today_str,
+                        "count": today_orders_count,
+                        "total_amount": float(today_orders_total)
+                    },
+
+                    "invoice_created": {
+                        "count": invoice_created_count,
+                        "total_amount": float(invoice_created_total)
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching order summary",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

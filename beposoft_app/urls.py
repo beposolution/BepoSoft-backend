@@ -212,6 +212,7 @@ urlpatterns = [
     path('warehouse/update-checked-by/<str:shipped_date>/', WarehouseUpdateCheckedByView.as_view(), name='update-checked-by'),
     path('api/orders/monthly/<int:year>/<int:month>/', OrderListByMonthView.as_view(), name='orders-by-month'),
     path('api/orders/status/count/', OrderStatusCount.as_view(), name='orders-count-status'),
+    path('api/my/order/summary/', MyOrderSummaryView.as_view()),
 
 
     path('api/grv/data/',GRVaddView.as_view()),
