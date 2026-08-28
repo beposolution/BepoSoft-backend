@@ -1844,6 +1844,36 @@ class StaffOrderUpdateItem(models.Model):
         return f"{self.category} - {self.quantity}"
     
 
+
+# point system
+
+class ProductPointSystem(models.Model):
+    POINT_TYPE_CHOICES = [
+        ("product", "Product"),
+        ("md", "MD"),
+        ("sd", "SD"),
+        ("new_conversions", "New Conversions"),
+        ("new_customers", "New Customers"),
+        ("new_lead", "New Lead"),
+    ]
+    point_type = models.CharField(max_length=50, choices=POINT_TYPE_CHOICES)
+    product = models.ForeignKey(Products, on_delete=models.CASCADE, null=True, blank=True)
+    quantity = models.PositiveIntegerField(null=True, blank=True)
+    point = models.DecimalField(max_digits=10, decimal_places=2)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_point_system"
+
+    def __str__(self):
+        if self.point_type == "product" and self.product:
+            return f"{self.product.name} - {self.point} points"
+
+        return f"{self.get_point_type_display()} - {self.point} points"
+    
+
 # Sales Team, Team members, and their daily reports
 
 class SalesTeam(models.Model):
@@ -2070,6 +2100,7 @@ class BdmOrderSelectionItem(models.Model):
 
     def __str__(self):
         return f"{self.order.id}"
+
     
 # Seller related models
 
