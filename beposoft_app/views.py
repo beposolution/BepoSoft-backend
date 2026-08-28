@@ -31783,3 +31783,260 @@ class MyOrderSummaryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# point system
+
+class ProductPointSystemView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = ProductPointSystemSerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+
+                point_system = serializer.save(
+                    created_by=user
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Point system created successfully",
+                        "data": ProductPointSystemSerializer(
+                            point_system
+                        ).data,
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error creating point system: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating point system",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            search = request.GET.get(
+                "search",
+                ""
+            ).strip()
+
+            point_type = request.GET.get(
+                "point_type",
+                ""
+            ).strip()
+
+            point_systems = ProductPointSystem.objects.select_related(
+                "product",
+                "created_by"
+            ).all().order_by("-id")
+
+            # SEARCH
+            if search:
+                point_systems = point_systems.filter(
+                    Q(point_type__icontains=search) |
+                    Q(product__name__icontains=search) |
+                    Q(quantity__icontains=search) |
+                    Q(point__icontains=search)
+                )
+
+            # OPTIONAL POINT TYPE FILTER
+            if point_type:
+                point_systems = point_systems.filter(
+                    point_type=point_type
+                )
+
+            paginator = StandardPagination()
+
+            result_page = paginator.paginate_queryset(
+                point_systems,
+                request
+            )
+
+            serializer = ProductPointSystemSerializer(
+                result_page,
+                many=True
+            )
+
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "message": "Point systems fetched successfully",
+                    "data": serializer.data,
+                }
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error fetching point systems: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching point systems",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class ProductPointSystemDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            try:
+                point_system = ProductPointSystem.objects.select_related(
+                    "product",
+                    "created_by"
+                ).get(pk=pk)
+
+            except ProductPointSystem.DoesNotExist:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Point system not found",
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = ProductPointSystemSerializer(
+                point_system
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Point system fetched successfully",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error fetching point system: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching point system",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def put(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            try:
+                point_system = ProductPointSystem.objects.get(
+                    pk=pk
+                )
+
+            except ProductPointSystem.DoesNotExist:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Point system not found",
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = ProductPointSystemSerializer(
+                point_system,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+
+                point_system = serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Point system updated successfully",
+                        "data": ProductPointSystemSerializer(
+                            point_system
+                        ).data,
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error updating point system: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating point system",
+                    "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

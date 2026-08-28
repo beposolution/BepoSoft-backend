@@ -4477,3 +4477,105 @@ class PerfomaInvoiceOrderItemAddSerializer(serializers.ModelSerializer):
                 "Discount cannot be negative."
             )
         return value
+
+
+
+# point system
+
+class ProductPointSystemSerializer(serializers.ModelSerializer):
+
+    product_name = serializers.CharField(
+        source="product.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    created_by_name = serializers.CharField(
+        source="created_by.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    point_type_name = serializers.CharField(
+        source="get_point_type_display",
+        read_only=True
+    )
+
+    class Meta:
+        model = ProductPointSystem
+
+        fields = [
+            "id",
+            "point_type",
+            "point_type_name",
+            "product",
+            "product_name",
+            "quantity",
+            "point",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "created_by",
+            "created_by_name",
+            "point_type_name",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, data):
+
+        # For PUT/PATCH, take existing value if not passed
+        point_type = data.get(
+            "point_type",
+            getattr(self.instance, "point_type", None)
+        )
+
+        product = data.get(
+            "product",
+            getattr(self.instance, "product", None)
+        )
+
+        quantity = data.get(
+            "quantity",
+            getattr(self.instance, "quantity", None)
+        )
+
+        point = data.get(
+            "point",
+            getattr(self.instance, "point", None)
+        )
+
+        if point is not None and point < 0:
+            raise serializers.ValidationError({
+                "point": "Point cannot be negative."
+            })
+
+        # PRODUCT TYPE
+        if point_type == "product":
+
+            if not product:
+                raise serializers.ValidationError({
+                    "product": "Product is required when point type is product."
+                })
+
+            if quantity is None:
+                raise serializers.ValidationError({
+                    "quantity": "Quantity is required when point type is product."
+                })
+
+            if quantity <= 0:
+                raise serializers.ValidationError({
+                    "quantity": "Quantity must be greater than 0."
+                })
+
+        else:
+            # MD / SD / Leads etc. do not need product & quantity
+            data["product"] = None
+            data["quantity"] = None
+
+        return data
