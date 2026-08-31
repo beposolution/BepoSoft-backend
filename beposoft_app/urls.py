@@ -143,6 +143,7 @@ urlpatterns = [
     path('api/shipping/<int:pk>/order/',ShippingManagementView.as_view(),name = "shipping-management"),
     path('api/add/order/<int:pk>/product/',ExistedOrderAddProducts.as_view()),
     path('api/remove/order/<int:pk>/item/',RemoveExistsOrderItems.as_view()),
+    path('api/shipping/status/history/', OrderStatusHistoryView.as_view()),
     
 
     path('api/staff/customers/',StaffCustomersView.as_view(),name="staff-customers"),

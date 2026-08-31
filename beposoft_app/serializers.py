@@ -4579,3 +4579,51 @@ class ProductPointSystemSerializer(serializers.ModelSerializer):
             data["quantity"] = None
 
         return data
+
+
+
+class OrderStatusHistorySerializer(serializers.ModelSerializer):
+
+    order_id = serializers.IntegerField(
+        source="order.id",
+        read_only=True
+    )
+
+    invoice = serializers.CharField(
+        source="order.invoice",
+        read_only=True
+    )
+
+    changed_user_id = serializers.IntegerField(
+        source="changed_by.id",
+        read_only=True,
+        allow_null=True
+    )
+
+    changed_user_name = serializers.CharField(
+        source="changed_by.name",
+        read_only=True,
+        allow_null=True
+    )
+
+    changed_user_eid = serializers.CharField(
+        source="changed_by.eid",
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = OrderStatusHistory
+        fields = [
+            "id",
+            "order",
+            "order_id",
+            "invoice",
+            "previous_status",
+            "current_status",
+            "changed_by",
+            "changed_user_id",
+            "changed_user_name",
+            "changed_user_eid",
+            "changed_at",
+        ]
