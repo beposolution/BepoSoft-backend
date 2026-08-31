@@ -4648,6 +4648,16 @@ class ShippingManagementView(BaseTokenView):
                     serializer.save()
 
 
+                     # NEW: store status change history
+                    if old_status != new_status:
+                        OrderStatusHistory.objects.create(
+                            order=order,
+                            previous_status=old_status,
+                            current_status=new_status,
+                            changed_by=authUser
+                        )
+
+
                     return Response({"status": "success", "message": "Order updated successfully"},
                                     status=status.HTTP_200_OK)
 
@@ -32037,6 +32047,181 @@ class ProductPointSystemDetailView(BaseTokenView):
                     "status": "error",
                     "message": "An error occurred while updating point system",
                     "errors": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class OrderStatusHistoryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------
+            # QUERY PARAMETERS
+            # --------------------------------------
+
+            search = request.GET.get("search", "").strip()
+            date_filter = request.GET.get("date", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            changed_user = request.GET.get("changed_user", "").strip()
+
+            # --------------------------------------
+            # BASE QUERYSET
+            # --------------------------------------
+
+            queryset = (
+                OrderStatusHistory.objects
+                .select_related(
+                    "order",
+                    "changed_by"
+                )
+                .all()
+                .order_by("-changed_at", "-id")
+            )
+
+            # --------------------------------------
+            # SEARCH BY INVOICE
+            # --------------------------------------
+
+            if search:
+                queryset = queryset.filter(
+                    order__invoice__icontains=search
+                )
+
+            # --------------------------------------
+            # EXACT DATE FILTER
+            # Example:
+            # ?date=2026-08-31
+            # --------------------------------------
+
+            if date_filter:
+                try:
+                    parsed_date = datetime.strptime(
+                        date_filter,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date=parsed_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # START DATE
+            # --------------------------------------
+
+            if start_date:
+                try:
+                    parsed_start_date = datetime.strptime(
+                        start_date,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date__gte=parsed_start_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # END DATE
+            # --------------------------------------
+
+            if end_date:
+                try:
+                    parsed_end_date = datetime.strptime(
+                        end_date,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date__lte=parsed_end_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # CHANGED USER FILTER
+            #
+            # Supports:
+            # ?changed_user=12
+            #
+            # OR:
+            # ?changed_user=Savio
+            # --------------------------------------
+
+            if changed_user:
+
+                if changed_user.isdigit():
+
+                    queryset = queryset.filter(
+                        changed_by_id=int(changed_user)
+                    )
+
+                else:
+
+                    queryset = queryset.filter(
+                        changed_by__name__icontains=changed_user
+                    )
+
+            # --------------------------------------
+            # PAGINATION
+            # --------------------------------------
+
+            paginator = StandardPagination()
+
+            paginated_queryset = paginator.paginate_queryset(
+                queryset,
+                request
+            )
+
+            serializer = OrderStatusHistorySerializer(
+                paginated_queryset,
+                many=True
+            )
+
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "message": "Order status history fetched successfully",
+                    "data": serializer.data
+                }
+            )
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

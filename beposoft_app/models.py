@@ -869,6 +869,25 @@ class Order(models.Model):
         return f"{invoice} - {customer}"
 
 
+
+class OrderStatusHistory(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="status_history")
+    previous_status = models.CharField(max_length=100, null=True, blank=True)
+    current_status = models.CharField(max_length=100)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="order_status_changes")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "OrderStatusHistory"
+        ordering = ["-changed_at", "-id"]
+
+    def __str__(self):
+        return (
+            f"{self.order.invoice} : "
+            f"{self.previous_status} -> {self.current_status}"
+        )
+
+
 class WarehouseOrder(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name="warehouse_orders")
     warehouses = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True, blank=True, related_name="requesting_warehouse")
