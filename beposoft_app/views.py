@@ -32225,3 +32225,188 @@ class OrderStatusHistoryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class OrderStatusHistorySummaryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------
+            # QUERY PARAMETERS
+            # --------------------------------------
+
+            date_filter = request.GET.get("date", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            # --------------------------------------
+            # BASE QUERYSET
+            # --------------------------------------
+
+            queryset = OrderStatusHistory.objects.all()
+
+            # --------------------------------------
+            # EXACT DATE FILTER
+            #
+            # Example:
+            # ?date=2026-08-31
+            # --------------------------------------
+
+            if date_filter:
+                try:
+                    parsed_date = datetime.strptime(
+                        date_filter,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date=parsed_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # START DATE FILTER
+            #
+            # Example:
+            # ?start_date=2026-08-01
+            # --------------------------------------
+
+            if start_date:
+                try:
+                    parsed_start_date = datetime.strptime(
+                        start_date,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date__gte=parsed_start_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # END DATE FILTER
+            #
+            # Example:
+            # ?end_date=2026-08-31
+            # --------------------------------------
+
+            if end_date:
+                try:
+                    parsed_end_date = datetime.strptime(
+                        end_date,
+                        "%Y-%m-%d"
+                    ).date()
+
+                    queryset = queryset.filter(
+                        changed_at__date__lte=parsed_end_date
+                    )
+
+                except ValueError:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date format. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # VALIDATE DATE RANGE
+            # --------------------------------------
+
+            if start_date and end_date:
+                parsed_start_date = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                parsed_end_date = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                if parsed_start_date > parsed_end_date:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "start_date cannot be greater than end_date."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # --------------------------------------
+            # TOTAL HISTORY COUNT
+            # --------------------------------------
+
+            total_count = queryset.count()
+
+            # --------------------------------------
+            # COUNT BY CURRENT STATUS
+            # --------------------------------------
+
+            status_counts_queryset = (
+                queryset
+                .values("current_status")
+                .annotate(count=Count("id"))
+                .order_by("current_status")
+            )
+
+            status_counts = {}
+
+            for item in status_counts_queryset:
+                status_name = item["current_status"]
+
+                status_counts[status_name] = item["count"]
+
+            # --------------------------------------
+            # RESPONSE
+            # --------------------------------------
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Order status history summary fetched successfully",
+                    "filters": {
+                        "date": date_filter if date_filter else None,
+                        "start_date": start_date if start_date else None,
+                        "end_date": end_date if end_date else None,
+                    },
+                    "data": {
+                        "total_count": total_count,
+                        "status_counts": status_counts
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

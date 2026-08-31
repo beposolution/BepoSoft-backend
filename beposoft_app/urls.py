@@ -144,6 +144,7 @@ urlpatterns = [
     path('api/add/order/<int:pk>/product/',ExistedOrderAddProducts.as_view()),
     path('api/remove/order/<int:pk>/item/',RemoveExistsOrderItems.as_view()),
     path('api/shipping/status/history/', OrderStatusHistoryView.as_view()),
+    path('api/shipping/status/history/summary/', OrderStatusHistorySummaryView.as_view()),
     
 
     path('api/staff/customers/',StaffCustomersView.as_view(),name="staff-customers"),
