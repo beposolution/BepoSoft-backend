@@ -20052,6 +20052,49 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
                 total_amount=Sum('invoice__total_amount')
             )['total_amount'] or 0
 
+
+            # ============================================================
+            # SALES TEAM DAILY REPORT SUMMARY
+            # ============================================================
+
+            daily_reports = SalesTeamDailyReport.objects.filter(
+                created_by=authUser
+            )
+
+            # Apply same state filter
+            if state:
+                daily_reports = daily_reports.filter(
+                    state__name__icontains=state
+                )
+
+            # Apply same district filter
+            if district:
+                daily_reports = daily_reports.filter(
+                    district__name__icontains=district
+                )
+
+            # Apply same date filters
+            if parsed_start_date:
+                daily_reports = daily_reports.filter(
+                    created_at__date__gte=parsed_start_date
+                )
+
+            if parsed_end_date:
+                daily_reports = daily_reports.filter(
+                    created_at__date__lte=parsed_end_date
+                )
+
+
+            daily_report_summary = daily_reports.aggregate(
+                new_leads=Sum('new_leads'),
+                md=Sum('md'),
+                sd=Sum('sd'),
+                unbilled=Sum('unbilled'),
+                billed=Sum('billed'),
+                new_customers=Sum('new_customers'),
+                new_conversions=Sum('new_conversions'),
+            )
+
             summary = {
                 "total_reports": total_reports,
                 "active_count": active_count,
@@ -20064,6 +20107,13 @@ class SalesTeamMemberDailyReportView(BaseTokenView):
                 "total_call_duration": total_call_duration,
                 "call_duration_average_8hrs": call_duration_average_8hrs,
                 "total_amount": float(total_amount),
+                "new_leads": daily_report_summary["new_leads"] or 0,
+                "md": daily_report_summary["md"] or 0,
+                "sd": daily_report_summary["sd"] or 0,
+                "unbilled": daily_report_summary["unbilled"] or 0,
+                "billed": daily_report_summary["billed"] or 0,
+                "new_customers": daily_report_summary["new_customers"] or 0,
+                "new_conversions": daily_report_summary["new_conversions"] or 0,    
             }
 
             paginator = StandardPagination()
