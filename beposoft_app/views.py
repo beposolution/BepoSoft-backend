@@ -31795,6 +31795,23 @@ class MyOrderSummaryView(BaseTokenView):
                 total=Sum("total_amount")
             )["total"] or 0
 
+
+            first_day_of_month = today.replace(day=1)
+            first_day_of_month_str = first_day_of_month.strftime("%Y-%m-%d")
+
+            current_month_orders = all_orders.filter(
+                order_date__range=[
+                    first_day_of_month_str,
+                    today_str
+                ]
+            )
+
+            current_month_orders_count = current_month_orders.count()
+
+            current_month_orders_total = current_month_orders.aggregate(
+                total=Sum("total_amount")
+            )["total"] or 0
+
             invoice_created_orders = all_orders.filter(
                 status="Invoice Created"
             )
@@ -31818,6 +31835,13 @@ class MyOrderSummaryView(BaseTokenView):
                     "all_orders": {
                         "count": all_orders_count,
                         "total_amount": float(all_orders_total)
+                    },
+
+                    "current_month_orders": {
+                        "start_date": first_day_of_month.strftime("%Y-%m-%d"),
+                        "end_date": today_str,
+                        "count": current_month_orders_count,
+                        "total_amount": float(current_month_orders_total)
                     },
 
                     "today_orders": {
