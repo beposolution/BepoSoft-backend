@@ -2318,7 +2318,7 @@ class LocalPurchaseOrderItem(models.Model):
 # vehicle
 
 class Vehicle(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100, null=True, blank=True)
     registration_number = models.CharField(
         max_length=50,
         null=True,
