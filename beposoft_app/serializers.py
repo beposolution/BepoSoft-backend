@@ -4627,3 +4627,91 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
             "changed_user_eid",
             "changed_at",
         ]
+
+
+# vehicle and vehicle km entry serializers
+
+class VehicleSerializer(serializers.ModelSerializer):
+    createed_by_name = serializers.CharField(
+        source="createed_by.name",
+        read_only=True
+    )
+
+    class Meta:
+        model = Vehicle
+
+        fields = [
+            "id",
+            "name",
+            "registration_number",
+            "createed_by",
+            "createed_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "createed_by",
+            "createed_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class VehicleKMEntrySerializer(serializers.ModelSerializer):
+    vehicle_name = serializers.CharField(source="vehicle.name", read_only=True)
+    registration_number = serializers.CharField(source="vehicle.registration_number", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.name", read_only=True)
+    
+    class Meta:
+        model = VehicleKMEntry
+    
+        fields = [
+            "id",
+            "date",
+            "vehicle",
+            "vehicle_name",
+            "registration_number",
+            "starting_km",
+            "end_km",
+            "used_km",
+            "petrol",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+            ]
+    
+        read_only_fields = [
+            "id",
+            "vehicle_name",
+            "registration_number",
+            "used_km",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+            ]
+    
+        def validate(self, attrs):
+            starting_km = attrs.get(
+                "starting_km",
+                getattr(self.instance, "starting_km", None)
+            )
+    
+            end_km = attrs.get(
+                "end_km",
+                getattr(self.instance, "end_km", None)
+            )
+    
+            if (
+                starting_km is not None
+                and end_km is not None
+                and end_km < starting_km
+            ):
+                raise serializers.ValidationError({
+                    "end_km": "End KM cannot be less than Starting KM."
+                })
+    
+            return attrs

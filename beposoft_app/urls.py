@@ -452,6 +452,11 @@ urlpatterns = [
     path("api/lpo/all/", AllLocalPurchaseOrderView.as_view()),
     path("api/lpo/invoice/<int:pk>/", GenerateLPOInvoice.as_view()),
 
+    path("api/vehicles/", VehicleView.as_view()),
+    path("api/vehicles/<int:pk>/", VehicleDetailView.as_view()),
+    path("api/vehicle/km/entry/", VehicleKMEntryView.as_view()),
+    path("api/vehicle/km/entry/<int:pk>/", VehicleKMEntryDetailView.as_view()),
+
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
 
