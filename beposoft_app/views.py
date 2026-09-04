@@ -32484,3 +32484,348 @@ class OrderStatusHistorySummaryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+class VehicleKMEntryView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = VehicleKMEntrySerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+                serializer.save(
+                    created_by=authUser
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle KM entry created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating vehicle KM entry",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            entries = VehicleKMEntry.objects.select_related(
+                "created_by"
+            ).all().order_by("-id")
+
+            serializer = VehicleKMEntrySerializer(
+                entries,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Vehicle KM entries fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching vehicle KM entries",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class VehicleKMEntryDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            entry = get_object_or_404(
+                VehicleKMEntry,
+                pk=pk
+            )
+
+            serializer = VehicleKMEntrySerializer(
+                entry
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Vehicle KM entry fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching vehicle KM entry",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            entry = get_object_or_404(
+                VehicleKMEntry,
+                pk=pk
+            )
+
+            serializer = VehicleKMEntrySerializer(
+                entry,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle KM entry updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating vehicle KM entry",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class VehicleView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = VehicleSerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+                serializer.save(
+                    createed_by=authUser
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle created successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating vehicle",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            vehicles = Vehicle.objects.select_related(
+                "createed_by"
+            ).all().order_by("-id")
+
+            serializer = VehicleSerializer(
+                vehicles,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Vehicles fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching vehicles",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class VehicleDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            vehicle = get_object_or_404(
+                Vehicle,
+                pk=pk
+            )
+
+            serializer = VehicleSerializer(
+                vehicle
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Vehicle fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching vehicle",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            vehicle = get_object_or_404(
+                Vehicle,
+                pk=pk
+            )
+
+            serializer = VehicleSerializer(
+                vehicle,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating vehicle",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -2312,6 +2312,90 @@ class LocalPurchaseOrderItem(models.Model):
 
     def __str__(self):
         return self.product
+    
+
+
+# vehicle
+
+class Vehicle(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    registration_number = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        unique=True
+    )
+    createed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_vehicles")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "vehicle"
+
+
+class VehicleKMEntry(models.Model):
+    date = models.DateField()
+
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="km_entries"
+    )
+
+    starting_km = models.PositiveIntegerField(
+        default=0
+    )
+
+    end_km = models.PositiveIntegerField(
+        default=0
+    )
+
+    used_km = models.PositiveIntegerField(
+        default=0,
+        editable=False
+    )
+
+    petrol = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vehicle_km_entries"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def save(self, *args, **kwargs):
+        # Automatically calculate Used KM
+        if self.starting_km is not None and self.end_km is not None:
+            self.used_km = max(
+                self.end_km - self.starting_km,
+                0
+            )
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.vehicle.name} - {self.date}"
+
+    class Meta:
+        db_table = "vehicle_km_entry"
+        ordering = ["-id"]
 
 
 
