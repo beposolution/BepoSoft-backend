@@ -2325,6 +2325,8 @@ class Vehicle(models.Model):
         blank=True,
         unique=True
     )
+    model = models.CharField(max_length=100, null=True, blank=True)
+    image = models.ImageField(upload_to='vehicle_images/', null=True, blank=True)
     createed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_vehicles")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

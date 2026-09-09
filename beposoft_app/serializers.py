@@ -4644,6 +4644,8 @@ class VehicleSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "registration_number",
+            "model",
+            "image",
             "createed_by",
             "createed_by_name",
             "created_at",
