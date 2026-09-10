@@ -4717,3 +4717,56 @@ class VehicleKMEntrySerializer(serializers.ModelSerializer):
                 })
     
             return attrs
+
+
+
+class VehicleServiceHistorySerializer(serializers.ModelSerializer):
+
+    vehicle_name = serializers.CharField(
+        source="vehicle.name",
+        read_only=True
+    )
+
+    registration_number = serializers.CharField(
+        source="vehicle.registration_number",
+        read_only=True
+    )
+
+    vehicle_model = serializers.CharField(
+        source="vehicle.model",
+        read_only=True
+    )
+
+    created_by_name = serializers.CharField(
+        source="created_by.name",
+        read_only=True
+    )
+
+    class Meta:
+        model = VehicleServiceHistory
+
+        fields = [
+            "id",
+            "vehicle",
+            "vehicle_name",
+            "registration_number",
+            "vehicle_model",
+            "service_date",
+            "service_type",
+            "service_center",
+            "odometer_km",
+            "service_cost",
+            "description",
+            "next_service_date",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]

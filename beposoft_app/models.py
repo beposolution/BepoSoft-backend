@@ -2338,6 +2338,78 @@ class Vehicle(models.Model):
         db_table = "vehicle"
 
 
+class VehicleServiceHistory(models.Model):
+
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="service_history"
+    )
+
+    service_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    service_type = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True
+    )
+
+    service_center = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True
+    )
+
+    odometer_km = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    service_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    description = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    next_service_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_vehicle_services"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def __str__(self):
+        vehicle_name = self.vehicle.name if self.vehicle else "Vehicle"
+        return f"{vehicle_name} - {self.service_date}"
+
+    class Meta:
+        db_table = "vehicle_service_history"
+        ordering = ["-id"]
+
+
 class VehicleKMEntry(models.Model):
     date = models.DateField()
 

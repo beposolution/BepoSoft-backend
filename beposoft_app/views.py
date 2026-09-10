@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError, transaction
 from decimal import Decimal, InvalidOperation
-from django.db.models import Sum
+from django.db.models import Sum, Min, Max
 from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Q
@@ -32541,34 +32541,454 @@ class VehicleKMEntryView(BaseTokenView):
             if error_response:
                 return error_response
 
-            entries = VehicleKMEntry.objects.select_related(
-                "created_by"
-            ).all().order_by("-id")
+            search = request.GET.get("search", "").strip()
+            vehicle_id = request.GET.get("vehicle_id", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
 
-            serializer = VehicleKMEntrySerializer(
-                entries,
-                many=True
+            entries = (
+                VehicleKMEntry.objects
+                .select_related(
+                    "vehicle",
+                    "created_by"
+                )
+                .all()
+                .order_by("-date", "-id")
             )
 
-            return Response(
+            if search:
+                entries = entries.filter(
+                    Q(vehicle__name__icontains=search) |
+                    Q(vehicle__registration_number__icontains=search) |
+                    Q(vehicle__model__icontains=search) |
+                    Q(created_by__name__icontains=search)
+                )
+
+            if vehicle_id:
+                entries = entries.filter(
+                    vehicle_id=vehicle_id
+                )
+
+            if created_by:
+                entries = entries.filter(
+                    created_by_id=created_by
+                )
+
+            if start_date:
+                entries = entries.filter(
+                    date__gte=start_date
+                )
+
+            if end_date:
+                entries = entries.filter(
+                    date__lte=end_date
+                )
+
+            overall_summary = entries.aggregate(
+                total_entries=Count("id"),
+                total_used_km=Sum("used_km"),
+                total_petrol=Sum("petrol"),
+                first_entry_date=Min("date"),
+                latest_entry_date=Max("date"),
+            )
+
+            vehicle_ids = list(
+                entries
+                .values_list("vehicle_id", flat=True)
+                .distinct()
+            )
+
+            vehicle_summaries = []
+
+            for vid in vehicle_ids:
+
+                vehicle_entries = entries.filter(
+                    vehicle_id=vid
+                )
+
+                vehicle_obj = (
+                    Vehicle.objects
+                    .filter(id=vid)
+                    .first()
+                )
+
+                if not vehicle_obj:
+                    continue
+
+                vehicle_summary = vehicle_entries.aggregate(
+                    total_entries=Count("id"),
+                    total_used_km=Sum("used_km"),
+                    total_petrol=Sum("petrol"),
+                    first_entry_date=Min("date"),
+                    latest_entry_date=Max("date"),
+                )
+
+                first_entry = (
+                    vehicle_entries
+                    .order_by("date", "id")
+                    .first()
+                )
+
+                latest_entry = (
+                    vehicle_entries
+                    .order_by("-date", "-id")
+                    .first()
+                )
+
+                vehicle_summaries.append(
+                    {
+                        "vehicle_id": vehicle_obj.id,
+                        "vehicle_name": vehicle_obj.name,
+                        "registration_number": (
+                            vehicle_obj.registration_number
+                        ),
+                        "vehicle_model": vehicle_obj.model,
+
+                        "total_entries": (
+                            vehicle_summary["total_entries"] or 0
+                        ),
+
+                        "total_used_km": (
+                            vehicle_summary["total_used_km"] or 0
+                        ),
+
+                        "total_petrol": (
+                            vehicle_summary["total_petrol"] or 0
+                        ),
+
+                        "first_entry_date": (
+                            vehicle_summary["first_entry_date"]
+                        ),
+
+                        "latest_entry_date": (
+                            vehicle_summary["latest_entry_date"]
+                        ),
+
+                        "initial_starting_km": (
+                            first_entry.starting_km
+                            if first_entry
+                            else 0
+                        ),
+
+                        "current_km": (
+                            latest_entry.end_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_starting_km": (
+                            latest_entry.starting_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_end_km": (
+                            latest_entry.end_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_used_km": (
+                            latest_entry.used_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_petrol": (
+                            latest_entry.petrol
+                            if latest_entry
+                            else 0
+                        ),
+                    }
+                )
+
+            paginator = StandardPagination()
+
+            paginated_entries = paginator.paginate_queryset(
+                entries,
+                request
+            )
+
+            serializer = VehicleKMEntrySerializer(
+                paginated_entries,
+                many=True,
+                context={"request": request}
+            )
+
+            return paginator.get_paginated_response(
                 {
                     "status": "success",
-                    "message": "Vehicle KM entries fetched successfully",
+
+                    "message": (
+                        "Vehicle KM entries fetched successfully"
+                    ),
+
+                    "filters": {
+                        "search": search or None,
+                        "vehicle_id": vehicle_id or None,
+                        "created_by": created_by or None,
+                        "start_date": start_date or None,
+                        "end_date": end_date or None,
+                    },
+
+                    "summary": {
+                        "total_entries": (
+                            overall_summary["total_entries"] or 0
+                        ),
+
+                        "total_used_km": (
+                            overall_summary["total_used_km"] or 0
+                        ),
+
+                        "total_petrol": (
+                            overall_summary["total_petrol"] or 0
+                        ),
+
+                        "first_entry_date": (
+                            overall_summary["first_entry_date"]
+                        ),
+
+                        "latest_entry_date": (
+                            overall_summary["latest_entry_date"]
+                        ),
+                    },
+
+                    "vehicle_summary": vehicle_summaries,
                     "data": serializer.data
-                },
-                status=status.HTTP_200_OK
+                }
             )
 
         except Exception as e:
             return Response(
                 {
                     "status": "error",
-                    "message": "An error occurred while fetching vehicle KM entries",
+                    "message": (
+                        "An error occurred while fetching "
+                        "vehicle KM entries"
+                    ),
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class VehicleSingleKMData(BaseTokenView):
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            vehicle_id = request.GET.get("vehicle_id", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            # --------------------------------------------------
+            # Validate vehicle_id
+            # --------------------------------------------------
+
+            if not vehicle_id:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "vehicle_id is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # --------------------------------------------------
+            # Get vehicle
+            # --------------------------------------------------
+
+            try:
+                vehicle = Vehicle.objects.get(id=vehicle_id)
+
+            except Vehicle.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Vehicle not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # --------------------------------------------------
+            # Base queryset
+            # --------------------------------------------------
+
+            entries = (
+                VehicleKMEntry.objects
+                .select_related(
+                    "vehicle",
+                    "created_by"
+                )
+                .filter(vehicle_id=vehicle_id)
+                .order_by("-date", "-id")
+            )
+
+            # --------------------------------------------------
+            # Date filters
+            # --------------------------------------------------
+
+            if start_date:
+                entries = entries.filter(
+                    date__gte=start_date
+                )
+
+            if end_date:
+                entries = entries.filter(
+                    date__lte=end_date
+                )
+
+            # --------------------------------------------------
+            # Summary
+            # Calculated before pagination
+            # --------------------------------------------------
+
+            summary_data = entries.aggregate(
+                total_entries=Count("id"),
+                total_used_km=Sum("used_km"),
+                total_petrol=Sum("petrol"),
+                first_entry_date=Min("date"),
+                latest_entry_date=Max("date"),
+            )
+
+            # --------------------------------------------------
+            # First entry
+            # --------------------------------------------------
+
+            first_entry = (
+                entries
+                .order_by("date", "id")
+                .first()
+            )
+
+            # --------------------------------------------------
+            # Latest entry
+            # --------------------------------------------------
+
+            latest_entry = (
+                entries
+                .order_by("-date", "-id")
+                .first()
+            )
+
+            # --------------------------------------------------
+            # Pagination
+            # --------------------------------------------------
+
+            paginator = StandardPagination()
+
+            paginated_entries = paginator.paginate_queryset(
+                entries,
+                request
+            )
+
+            serializer = VehicleKMEntrySerializer(
+                paginated_entries,
+                many=True,
+                context={"request": request}
+            )
+
+            # --------------------------------------------------
+            # Response
+            # --------------------------------------------------
+
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "message": "Vehicle KM entries fetched successfully",
+
+                    "vehicle": {
+                        "id": vehicle.id,
+                        "name": vehicle.name,
+                        "registration_number": vehicle.registration_number,
+                        "model": vehicle.model,
+                    },
+
+                    "filters": {
+                        "vehicle_id": vehicle.id,
+                        "start_date": start_date or None,
+                        "end_date": end_date or None,
+                    },
+
+                    "summary": {
+                        "total_entries": (
+                            summary_data["total_entries"] or 0
+                        ),
+
+                        "total_used_km": (
+                            summary_data["total_used_km"] or 0
+                        ),
+
+                        "total_petrol": (
+                            summary_data["total_petrol"] or 0
+                        ),
+
+                        "first_entry_date": (
+                            summary_data["first_entry_date"]
+                        ),
+
+                        "latest_entry_date": (
+                            summary_data["latest_entry_date"]
+                        ),
+
+                        "initial_starting_km": (
+                            first_entry.starting_km
+                            if first_entry
+                            else 0
+                        ),
+
+                        "current_km": (
+                            latest_entry.end_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_starting_km": (
+                            latest_entry.starting_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_end_km": (
+                            latest_entry.end_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_used_km": (
+                            latest_entry.used_km
+                            if latest_entry
+                            else 0
+                        ),
+
+                        "latest_petrol": (
+                            latest_entry.petrol
+                            if latest_entry
+                            else 0
+                        ),
+                    },
+
+                    "data": serializer.data
+                }
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while fetching "
+                        "vehicle KM entries"
+                    ),
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 
 class VehicleKMEntryDetailView(BaseTokenView):
@@ -32825,6 +33245,374 @@ class VehicleDetailView(BaseTokenView):
                 {
                     "status": "error",
                     "message": "An error occurred while updating vehicle",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class VehicleServiceHistoryView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            serializer = VehicleServiceHistorySerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+
+                service_history = serializer.save(
+                    created_by=authUser
+                )
+
+                response_serializer = VehicleServiceHistorySerializer(
+                    service_history
+                )
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle service history created successfully",
+                        "data": response_serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating vehicle service history",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------------------
+            # Query parameters
+            # --------------------------------------------------
+
+            search = request.GET.get("search", "").strip()
+            created_by = request.GET.get("created_by", "").strip()
+            vehicle = request.GET.get("vehicle", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            # --------------------------------------------------
+            # Base Vehicle queryset
+            # --------------------------------------------------
+
+            vehicles = Vehicle.objects.all().order_by("-id")
+
+            # --------------------------------------------------
+            # Vehicle filters
+            # --------------------------------------------------
+
+            if search:
+                vehicles = vehicles.filter(
+                    Q(name__icontains=search) |
+                    Q(registration_number__icontains=search) |
+                    Q(model__icontains=search)
+                )
+
+            if vehicle:
+                vehicles = vehicles.filter(id=vehicle)
+
+            # --------------------------------------------------
+            # Pagination - Vehicle wise
+            # --------------------------------------------------
+
+            paginator = StandardPagination()
+
+            paginated_vehicles = paginator.paginate_queryset(
+                vehicles,
+                request
+            )
+
+            response_data = []
+
+            # --------------------------------------------------
+            # Build Vehicle-wise Service Data
+            # --------------------------------------------------
+
+            for vehicle_obj in paginated_vehicles:
+
+                service_history = (
+                    VehicleServiceHistory.objects
+                    .select_related(
+                        "vehicle",
+                        "created_by"
+                    )
+                    .filter(vehicle=vehicle_obj)
+                    .order_by("-service_date", "-id")
+                )
+
+                # ----------------------------------------------
+                # Service filters
+                # ----------------------------------------------
+
+                if created_by:
+                    service_history = service_history.filter(
+                        created_by_id=created_by
+                    )
+
+                if start_date:
+                    service_history = service_history.filter(
+                        service_date__gte=start_date
+                    )
+
+                if end_date:
+                    service_history = service_history.filter(
+                        service_date__lte=end_date
+                    )
+
+                # ----------------------------------------------
+                # Summary
+                # ----------------------------------------------
+
+                summary = service_history.aggregate(
+                    total_services=Count("id"),
+
+                    total_service_cost=Coalesce(
+                        Sum("service_cost"),
+                        Value(0),
+                        output_field=DecimalField(
+                            max_digits=12,
+                            decimal_places=2
+                        )
+                    ),
+
+                    latest_service_date=Max("service_date"),
+
+                    latest_odometer_km=Max("odometer_km"),
+                )
+
+                # ----------------------------------------------
+                # Latest service
+                # ----------------------------------------------
+
+                latest_service = (
+                    service_history
+                    .order_by("-service_date", "-id")
+                    .first()
+                )
+
+                # ----------------------------------------------
+                # Next service
+                # ----------------------------------------------
+
+                next_service = (
+                    service_history
+                    .exclude(next_service_date__isnull=True)
+                    .order_by("-service_date", "-id")
+                    .first()
+                )
+
+                # ----------------------------------------------
+                # Serialize histories
+                # ----------------------------------------------
+
+                service_serializer = VehicleServiceHistorySerializer(
+                    service_history,
+                    many=True,
+                    context={"request": request}
+                )
+
+                vehicle_serializer = VehicleSerializer(
+                    vehicle_obj,
+                    context={"request": request}
+                )
+
+                response_data.append({
+                    "vehicle": vehicle_serializer.data,
+
+                    "summary": {
+                        "total_services": summary["total_services"],
+
+                        "total_service_cost": summary[
+                            "total_service_cost"
+                        ],
+
+                        "latest_service_date": (
+                            latest_service.service_date
+                            if latest_service
+                            else None
+                        ),
+
+                        "latest_service_type": (
+                            latest_service.service_type
+                            if latest_service
+                            else None
+                        ),
+
+                        "latest_service_center": (
+                            latest_service.service_center
+                            if latest_service
+                            else None
+                        ),
+
+                        "latest_odometer_km": (
+                            latest_service.odometer_km
+                            if latest_service
+                            else None
+                        ),
+
+                        "next_service_date": (
+                            next_service.next_service_date
+                            if next_service
+                            else None
+                        ),
+                    },
+
+                    "service_history": service_serializer.data,
+                })
+
+            # --------------------------------------------------
+            # Response
+            # --------------------------------------------------
+
+            return paginator.get_paginated_response({
+                "status": "success",
+
+                "message": (
+                    "Vehicle-wise service history "
+                    "fetched successfully"
+                ),
+
+                "filters": {
+                    "search": search or None,
+                    "created_by": created_by or None,
+                    "vehicle": vehicle or None,
+                    "start_date": start_date or None,
+                    "end_date": end_date or None,
+                },
+
+                "data": response_data
+            })
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while fetching "
+                        "vehicle service history"
+                    ),
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class VehicleServiceHistoryDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            service_history = get_object_or_404(
+                VehicleServiceHistory.objects.select_related(
+                    "vehicle",
+                    "created_by"
+                ),
+                pk=pk
+            )
+
+            serializer = VehicleServiceHistorySerializer(
+                service_history
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Vehicle service history fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching vehicle service history",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            service_history = get_object_or_404(
+                VehicleServiceHistory,
+                pk=pk
+            )
+
+            serializer = VehicleServiceHistorySerializer(
+                service_history,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message": "Vehicle service history updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating vehicle service history",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

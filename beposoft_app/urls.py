@@ -455,7 +455,10 @@ urlpatterns = [
     path("api/vehicles/", VehicleView.as_view()),
     path("api/vehicles/<int:pk>/", VehicleDetailView.as_view()),
     path("api/vehicle/km/entry/", VehicleKMEntryView.as_view()),
+    path("api/vehicle/km/entry/single/", VehicleSingleKMData.as_view()),
     path("api/vehicle/km/entry/<int:pk>/", VehicleKMEntryDetailView.as_view()),
+    path("api/vehicle/service/history/", VehicleServiceHistoryView.as_view()),
+    path("api/vehicle/service/history/edit/<int:pk>/", VehicleServiceHistoryDetailView.as_view()),
 
     # comparison api
     path("api/orders/comparison/report/", OrderComparisonReportView.as_view()),
