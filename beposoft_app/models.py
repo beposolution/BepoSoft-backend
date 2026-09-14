@@ -2795,3 +2795,107 @@ class InternalMailReadStatus(models.Model):
             f"{self.user.name} - "
             f"{'Read' if self.is_read else 'Unread'}"
         )
+
+
+
+# staff salary data
+
+class StaffSalary(models.Model):
+    staff = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="salary_detail"
+    )
+
+    salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_staff_salaries"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        db_table = "StaffSalary"
+
+    def __str__(self):
+        return f"{self.staff.name} - {self.salary}"
+
+
+class StaffSalaryIncrement(models.Model):
+    salary = models.ForeignKey(
+        StaffSalary,
+        on_delete=models.CASCADE,
+        related_name="increments"
+    )
+
+    year = models.PositiveIntegerField()
+
+    previous_salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    increment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    new_salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    remarks = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_salary_increments"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        db_table = "StaffSalaryIncrement"
+        ordering = ["-year", "-id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["salary", "year"],
+                name="unique_staff_salary_increment_year"
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.salary.staff.name} - "
+            f"{self.year} - "
+            f"{self.increment_amount}"
+        )

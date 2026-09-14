@@ -4770,3 +4770,99 @@ class VehicleServiceHistorySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+# salary data serializers
+
+class StaffSalaryIncrementSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(
+        source="created_by.name",
+        read_only=True
+    )
+
+    class Meta:
+        model = StaffSalaryIncrement
+
+        fields = [
+            "id",
+            "year",
+            "previous_salary",
+            "increment_amount",
+            "new_salary",
+            "remarks",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "previous_salary",
+            "new_salary",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class StaffSalarySerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(
+        source="staff.name",
+        read_only=True
+    )
+
+    staff_eid = serializers.CharField(
+        source="staff.eid",
+        read_only=True
+    )
+
+    staff_id_number = serializers.CharField(
+        source="staff.staff_id",
+        read_only=True
+    )
+
+    designation = serializers.CharField(
+        source="staff.designation",
+        read_only=True
+    )
+
+    department_name = serializers.CharField(
+        source="staff.department_id.name",
+        read_only=True
+    )
+
+    created_by_name = serializers.CharField(
+        source="created_by.name",
+        read_only=True
+    )
+
+    increments = StaffSalaryIncrementSerializer(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = StaffSalary
+
+        fields = [
+            "id",
+            "staff",
+            "staff_name",
+            "staff_eid",
+            "staff_id_number",
+            "designation",
+            "department_name",
+            "salary",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+            "increments",
+        ]
+
+        read_only_fields = [
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
