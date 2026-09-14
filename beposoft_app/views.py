@@ -33617,3 +33617,433 @@ class VehicleServiceHistoryDetailView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+
+# salary disbursement view
+
+class StaffSalaryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            staff_id = request.GET.get("staff")
+
+            salaries = StaffSalary.objects.select_related(
+                "staff",
+                "staff__department_id",
+                "created_by"
+            ).prefetch_related(
+                "increments",
+                "increments__created_by"
+            ).all().order_by("-id")
+
+            if staff_id:
+                salaries = salaries.filter(
+                    staff_id=staff_id
+                )
+
+            serializer = StaffSalarySerializer(
+                salaries,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching staff salary details.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def post(self, request):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            staff_id = request.data.get("staff")
+            salary_amount = request.data.get("salary")
+
+            # -------------------------
+            # Staff validation
+            # -------------------------
+
+            if not staff_id:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Staff is required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            staff = User.objects.filter(
+                id=staff_id
+            ).first()
+
+            if not staff:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Staff not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # -------------------------
+            # Salary validation
+            # -------------------------
+
+            if salary_amount is None:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Salary is required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                salary_amount = Decimal(
+                    str(salary_amount)
+                )
+
+            except (
+                InvalidOperation,
+                ValueError,
+                TypeError
+            ):
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid salary amount."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if salary_amount < 0:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Salary cannot be negative."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # -------------------------
+            # Only one salary record
+            # per staff
+            # -------------------------
+
+            if StaffSalary.objects.filter(
+                staff=staff
+            ).exists():
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Salary already exists for this staff. "
+                            "Use the update API to add an increment."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # -------------------------
+            # Create salary
+            # -------------------------
+
+            with transaction.atomic():
+
+                salary = StaffSalary.objects.create(
+                    staff=staff,
+                    salary=salary_amount,
+                    created_by=authUser
+                )
+
+            serializer = StaffSalarySerializer(
+                salary
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Staff salary created successfully.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while creating staff salary.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class StaffSalaryDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            salary = StaffSalary.objects.select_related(
+                "staff",
+                "staff__department_id",
+                "created_by"
+            ).prefetch_related(
+                "increments",
+                "increments__created_by"
+            ).filter(
+                pk=pk
+            ).first()
+
+            if not salary:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Staff salary record not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = StaffSalarySerializer(
+                salary
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching salary details.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def put(self, request, pk):
+        try:
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # ----------------------------------
+            # Lock salary row during increment
+            # ----------------------------------
+
+            with transaction.atomic():
+
+                salary_detail = StaffSalary.objects.select_for_update().filter(
+                    pk=pk
+                ).first()
+
+                if not salary_detail:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Staff salary record not found."
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                increment_amount = request.data.get(
+                    "increment_amount"
+                )
+
+                increment_year = request.data.get(
+                    "year"
+                )
+
+                remarks = request.data.get(
+                    "remarks"
+                )
+
+                # ----------------------------------
+                # Increment amount validation
+                # ----------------------------------
+
+                if increment_amount is None:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Increment amount is required."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                try:
+                    increment_amount = Decimal(
+                        str(increment_amount)
+                    )
+
+                except (
+                    InvalidOperation,
+                    ValueError,
+                    TypeError
+                ):
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid increment amount."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if increment_amount <= 0:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "Increment amount must be greater than zero."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # ----------------------------------
+                # Year validation
+                # ----------------------------------
+
+                if not increment_year:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Increment year is required."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                try:
+                    increment_year = int(
+                        increment_year
+                    )
+
+                except (
+                    ValueError,
+                    TypeError
+                ):
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid increment year."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # ----------------------------------
+                # Only one increment per year
+                # ----------------------------------
+
+                existing_increment = StaffSalaryIncrement.objects.filter(
+                    salary=salary_detail,
+                    year=increment_year
+                ).exists()
+
+                if existing_increment:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                f"Increment for {increment_year} "
+                                f"already exists for this staff."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # ----------------------------------
+                # Calculate new salary
+                # ----------------------------------
+
+                previous_salary = (
+                    salary_detail.salary or Decimal("0.00")
+                )
+
+                new_salary = (
+                    previous_salary +
+                    increment_amount
+                )
+
+                # ----------------------------------
+                # Create increment history
+                # ----------------------------------
+
+                StaffSalaryIncrement.objects.create(
+                    salary=salary_detail,
+                    year=increment_year,
+                    previous_salary=previous_salary,
+                    increment_amount=increment_amount,
+                    new_salary=new_salary,
+                    remarks=remarks,
+                    created_by=authUser
+                )
+
+                # ----------------------------------
+                # Update current salary
+                # ----------------------------------
+
+                salary_detail.salary = new_salary
+
+                salary_detail.save(
+                    update_fields=[
+                        "salary",
+                        "updated_at"
+                    ]
+                )
+
+            salary_detail.refresh_from_db()
+
+            serializer = StaffSalarySerializer(
+                salary_detail
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Salary increment added successfully.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while updating salary.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

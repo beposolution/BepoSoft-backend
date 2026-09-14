@@ -466,9 +466,13 @@ urlpatterns = [
     path("api/products/rack/usability/<str:usability>/", ProductRackUsabilityReportView.as_view(), name="product-rack-usability-report"),
     path("api/orders/shipping/product/count/", ShippingOrdersWithProductCountView.as_view(), name="shipping-orders-product-count"),
 
-    # point syatem
+    # point system
     path("api/product/point/system/", ProductPointSystemView.as_view()),
     path("api/product/point/system/edit/<int:pk>/", ProductPointSystemDetailView.as_view()),
+
+    # salary api
+    path("api/staff/salary/", StaffSalaryView.as_view()),
+    path("api/staff/salary/update/<int:pk>/", StaffSalaryDetailView.as_view()),
 
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
