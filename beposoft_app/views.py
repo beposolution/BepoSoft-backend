@@ -35032,21 +35032,21 @@ class StaffMonthlySalaryView(BaseTokenView):
             if error_response:
                 return error_response
 
-            staff_id = request.query_params.get(
-                "staff_id"
-            )
+            staff_id = request.query_params.get("staff_id")
+            month = request.query_params.get("month")
+            year = request.query_params.get("year")
 
-            month = request.query_params.get(
-                "month"
-            )
-
-            year = request.query_params.get(
-                "year"
-            )
+            # -----------------------------------------------------
+            # GET SAVED MONTHLY SALARY RECORDS
+            # -----------------------------------------------------
 
             queryset = StaffMonthlySalary.objects.select_related(
                 "staff"
             ).all()
+
+            # -----------------------------------------------------
+            # OPTIONAL FILTERS
+            # -----------------------------------------------------
 
             if staff_id:
                 queryset = queryset.filter(
@@ -35066,20 +35066,285 @@ class StaffMonthlySalaryView(BaseTokenView):
             queryset = queryset.order_by(
                 "-year",
                 "-month",
-                "-id"
+                "staff__name"
             )
 
-            serializer = StaffMonthlySalarySerializer(
-                queryset,
-                many=True
-            )
+            salary_data = []
+
+            # -----------------------------------------------------
+            # CALCULATE EACH STAFF SALARY
+            # -----------------------------------------------------
+
+            for monthly_record in queryset:
+
+                # -------------------------------------------------
+                # GET STAFF BASE SALARY
+                # -------------------------------------------------
+
+                staff_salary = StaffSalary.objects.filter(
+                    staff=monthly_record.staff
+                ).first()
+
+                if not staff_salary:
+                    continue
+
+                monthly_salary = Decimal(
+                    str(staff_salary.salary or 0)
+                )
+
+                # -------------------------------------------------
+                # SALARY CALCULATION DAYS
+                # Existing calculation uses 30 days
+                # -------------------------------------------------
+
+                salary_calculation_days = Decimal("30")
+
+                # -------------------------------------------------
+                # PER DAY SALARY
+                # -------------------------------------------------
+
+                per_day_salary = (
+                    monthly_salary /
+                    salary_calculation_days
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # SAVED ATTENDANCE DATA
+                # -------------------------------------------------
+
+                present = Decimal(
+                    str(monthly_record.present or 0)
+                )
+
+                absent = Decimal(
+                    str(monthly_record.absent or 0)
+                )
+
+                half_day = Decimal(
+                    str(monthly_record.half_day or 0)
+                )
+
+                paid_leaves = Decimal(
+                    str(monthly_record.paid_leaves or 0)
+                )
+
+                # -------------------------------------------------
+                # PAID LEAVE ADJUSTMENT
+                # -------------------------------------------------
+
+                deductible_absent_days = max(
+                    Decimal("0"),
+                    absent - paid_leaves
+                )
+
+                # -------------------------------------------------
+                # ABSENT DEDUCTION
+                # -------------------------------------------------
+
+                absent_deduction = (
+                    deductible_absent_days *
+                    per_day_salary
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # ATTENDANCE HALF DAY DEDUCTION
+                # -------------------------------------------------
+
+                half_day_deduction = (
+                    half_day *
+                    per_day_salary *
+                    Decimal("0.5")
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # PAYABLE SALARY BEFORE ADDITIONAL DETAILS
+                # -------------------------------------------------
+
+                attendance_payable_salary = (
+                    monthly_salary
+                    - absent_deduction
+                    - half_day_deduction
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # BONUS
+                # -------------------------------------------------
+
+                bonus = Decimal(
+                    str(monthly_record.bonus or 0)
+                )
+
+                # -------------------------------------------------
+                # INCENTIVES
+                # -------------------------------------------------
+
+                incentives = Decimal(
+                    str(monthly_record.incentives or 0)
+                )
+
+                # -------------------------------------------------
+                # FINES
+                # -------------------------------------------------
+
+                fines = Decimal(
+                    str(monthly_record.fines or 0)
+                )
+
+                # -------------------------------------------------
+                # LATE COMES
+                #
+                # 3 late comes = 0.5 day salary deduction
+                #
+                # 0,1,2 = 0 day
+                # 3,4,5 = 0.5 day
+                # 6,7,8 = 1 day
+                # 9,10,11 = 1.5 days
+                # -------------------------------------------------
+
+                late_comes = int(
+                    monthly_record.late_comes or 0
+                )
+
+                completed_late_groups = (
+                    late_comes // 3
+                )
+
+                late_leave_days = (
+                    Decimal(
+                        completed_late_groups
+                    ) *
+                    Decimal("0.5")
+                )
+
+                # -------------------------------------------------
+                # LATE COME SALARY DEDUCTION
+                # -------------------------------------------------
+
+                late_come_deduction = (
+                    late_leave_days *
+                    per_day_salary
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # FINAL SALARY
+                #
+                # Attendance Payable Salary
+                # + Bonus
+                # + Incentives
+                # - Fines
+                # - Late Come Deduction
+                # -------------------------------------------------
+
+                final_salary = (
+                    attendance_payable_salary
+                    + bonus
+                    + incentives
+                    - fines
+                    - late_come_deduction
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                # -------------------------------------------------
+                # SERIALIZER DATA
+                # -------------------------------------------------
+
+                serializer = StaffMonthlySalarySerializer(
+                    monthly_record
+                )
+
+                record_data = dict(
+                    serializer.data
+                )
+
+                # -------------------------------------------------
+                # CALCULATED RESPONSE DATA
+                # -------------------------------------------------
+
+                record_data["monthly_salary"] = str(
+                    monthly_salary.quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP
+                    )
+                )
+
+                record_data[
+                    "salary_calculation_days"
+                ] = 30
+
+                record_data["per_day_salary"] = str(
+                    per_day_salary
+                )
+
+                record_data[
+                    "deductible_absent_days"
+                ] = str(
+                    deductible_absent_days
+                )
+
+                record_data["absent_deduction"] = str(
+                    absent_deduction
+                )
+
+                record_data[
+                    "half_day_deduction"
+                ] = str(
+                    half_day_deduction
+                )
+
+                record_data[
+                    "attendance_payable_salary"
+                ] = str(
+                    attendance_payable_salary
+                )
+
+                record_data[
+                    "late_leave_days"
+                ] = str(
+                    late_leave_days
+                )
+
+                record_data[
+                    "late_come_deduction"
+                ] = str(
+                    late_come_deduction
+                )
+
+                record_data["final_salary"] = str(
+                    final_salary
+                )
+
+                salary_data.append(
+                    record_data
+                )
+
+            # -----------------------------------------------------
+            # RESPONSE
+            # -----------------------------------------------------
 
             return Response(
                 {
                     "status": "success",
                     "message":
                         "Monthly salary data fetched successfully",
-                    "data": serializer.data
+                    "count": len(salary_data),
+                    "data": salary_data
                 },
                 status=status.HTTP_200_OK
             )
