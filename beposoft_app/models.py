@@ -2900,3 +2900,78 @@ class StaffSalaryIncrement(models.Model):
             f"{self.year} - "
             f"{self.increment_amount}"
         )
+
+
+class StaffMonthlySalary(models.Model):
+    staff = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="monthly_salary_records"
+    )
+
+    month = models.PositiveIntegerField()
+    year = models.PositiveIntegerField()
+
+    present = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0
+    )
+
+    absent = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0
+    )
+
+    half_day = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0
+    )
+
+    paid_leaves = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0
+    )
+
+    bonus = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    incentives = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    late_comes = models.PositiveIntegerField(
+        default=0
+    )
+
+    fines = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    note = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "StaffMonthlySalary"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["staff", "month", "year"],
+                name="unique_staff_month_year_salary"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.staff.name} - {self.month}/{self.year}"

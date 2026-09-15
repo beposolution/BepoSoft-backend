@@ -34962,3 +34962,141 @@ class StaffMonthlySalaryCalculationView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class StaffMonthlySalaryView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(
+                request
+            )
+
+            if error_response:
+                return error_response
+
+            serializer = StaffMonthlySalarySerializer(
+                data=request.data
+            )
+
+            if serializer.is_valid():
+                monthly_salary = serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message":
+                            "Monthly salary data saved successfully",
+                        "data":
+                            StaffMonthlySalarySerializer(
+                                monthly_salary
+                            ).data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "Failed to save monthly salary data",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error saving monthly salary data: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "An error occurred while saving "
+                        "monthly salary data",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(
+                request
+            )
+
+            if error_response:
+                return error_response
+
+            staff_id = request.query_params.get(
+                "staff_id"
+            )
+
+            month = request.query_params.get(
+                "month"
+            )
+
+            year = request.query_params.get(
+                "year"
+            )
+
+            queryset = StaffMonthlySalary.objects.select_related(
+                "staff"
+            ).all()
+
+            if staff_id:
+                queryset = queryset.filter(
+                    staff_id=staff_id
+                )
+
+            if month:
+                queryset = queryset.filter(
+                    month=month
+                )
+
+            if year:
+                queryset = queryset.filter(
+                    year=year
+                )
+
+            queryset = queryset.order_by(
+                "-year",
+                "-month",
+                "-id"
+            )
+
+            serializer = StaffMonthlySalarySerializer(
+                queryset,
+                many=True
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message":
+                        "Monthly salary data fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error fetching monthly salary data: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "An error occurred while fetching "
+                        "monthly salary data",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
