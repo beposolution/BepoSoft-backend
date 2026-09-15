@@ -16,7 +16,8 @@ from django.contrib.auth import authenticate
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError, transaction
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from calendar import monthrange
 from django.db.models import Sum, Min, Max
 from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
@@ -34510,6 +34511,452 @@ class StaffSalaryIncrementEditView(BaseTokenView):
                     "message": (
                         "An error occurred while editing "
                         "salary increment."
+                    ),
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+# salary calculations
+
+
+class StaffMonthlySalaryCalculationView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            # ---------------------------------------------------------
+            # AUTHENTICATION
+            # ---------------------------------------------------------
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # ---------------------------------------------------------
+            # QUERY PARAMETERS
+            # ---------------------------------------------------------
+            staff_id = request.GET.get("staff_id")
+            year = request.GET.get("year")
+            month = request.GET.get("month")
+
+            # ---------------------------------------------------------
+            # VALIDATION
+            # ---------------------------------------------------------
+            if not staff_id:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "staff_id is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not year:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "year is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not month:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "month is required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                staff_id = int(staff_id)
+                year = int(year)
+                month = int(month)
+
+            except (TypeError, ValueError):
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "staff_id, year and month must be valid integers"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if month < 1 or month > 12:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "month must be between 1 and 12"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # GET STAFF
+            # ---------------------------------------------------------
+            try:
+                staff = User.objects.select_related(
+                    "department_id"
+                ).get(pk=staff_id)
+
+            except User.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Staff not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # ---------------------------------------------------------
+            # GET CURRENT SALARY
+            # ---------------------------------------------------------
+            try:
+                salary_detail = StaffSalary.objects.get(
+                    staff=staff
+                )
+
+            except StaffSalary.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Salary has not been added for this staff"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            monthly_salary = Decimal(salary_detail.salary)
+
+            # ---------------------------------------------------------
+            # GET PAID LEAVES
+            # ---------------------------------------------------------
+            paid_leaves = staff.paid_leaves or 0
+
+            # ---------------------------------------------------------
+            # GET ATTENDANCE FOR SELECTED MONTH
+            # ---------------------------------------------------------
+            attendance_queryset = StaffAttendance.objects.filter(
+                staff=staff,
+                attendance_date__year=year,
+                attendance_date__month=month,
+                approval_status="approved"
+            )
+
+            # ---------------------------------------------------------
+            # ATTENDANCE COUNTS
+            # ---------------------------------------------------------
+            attendance_counts = attendance_queryset.aggregate(
+                present_count=Count(
+                    "id",
+                    filter=Q(status="present")
+                ),
+                absent_count=Count(
+                    "id",
+                    filter=Q(status="absent")
+                ),
+                half_day_count=Count(
+                    "id",
+                    filter=Q(status="half_day")
+                ),
+            )
+
+            present_count = (
+                attendance_counts["present_count"] or 0
+            )
+
+            absent_count = (
+                attendance_counts["absent_count"] or 0
+            )
+
+            half_day_count = (
+                attendance_counts["half_day_count"] or 0
+            )
+
+            # ---------------------------------------------------------
+            # PAID LEAVE CALCULATION
+            #
+            # Paid leave is applied against FULL ABSENT days.
+            #
+            # Example:
+            # Absent = 5
+            # Paid Leave = 2
+            #
+            # Paid Absence = 2
+            # Deductible Absence = 3
+            # ---------------------------------------------------------
+
+            paid_leave_used = min(
+                absent_count,
+                paid_leaves
+            )
+
+            deductible_absent_days = max(
+                absent_count - paid_leave_used,
+                0
+            )
+
+            remaining_paid_leaves = max(
+                paid_leaves - paid_leave_used,
+                0
+            )
+
+            # ---------------------------------------------------------
+            # SALARY CALCULATION
+            #
+            # Salary is ALWAYS calculated using 30 days.
+            # ---------------------------------------------------------
+            salary_days = Decimal("30")
+
+            per_day_salary = (
+                monthly_salary / salary_days
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # ---------------------------------------------------------
+            # ABSENT DEDUCTION
+            #
+            # IMPORTANT:
+            # Only absences remaining AFTER paid leave are deducted.
+            # ---------------------------------------------------------
+            absent_deduction = (
+                per_day_salary
+                * Decimal(deductible_absent_days)
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # ---------------------------------------------------------
+            # HALF DAY DEDUCTION
+            #
+            # Half days are NOT adjusted against paid leave.
+            # Every half day = 0.5 salary day.
+            # ---------------------------------------------------------
+            half_day_deduction = (
+                per_day_salary
+                * Decimal(half_day_count)
+                * Decimal("0.5")
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # ---------------------------------------------------------
+            # TOTAL DEDUCTION
+            # ---------------------------------------------------------
+            total_deduction = (
+                absent_deduction
+                + half_day_deduction
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # ---------------------------------------------------------
+            # PAYABLE SALARY
+            # ---------------------------------------------------------
+            payable_salary = (
+                monthly_salary
+                - total_deduction
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # Prevent negative salary
+            if payable_salary < Decimal("0.00"):
+                payable_salary = Decimal("0.00")
+
+            # ---------------------------------------------------------
+            # TOTAL ATTENDANCE RECORDS
+            # ---------------------------------------------------------
+            total_attendance_records = (
+                attendance_queryset.count()
+            )
+
+            # ---------------------------------------------------------
+            # PAYABLE DAYS
+            #
+            # Paid leave days are salary-paid days.
+            # Therefore only deductible absence + half days reduce
+            # payable days.
+            # ---------------------------------------------------------
+            payable_days = (
+                Decimal("30")
+                - Decimal(deductible_absent_days)
+                - (
+                    Decimal(half_day_count)
+                    * Decimal("0.5")
+                )
+            )
+
+            if payable_days < Decimal("0"):
+                payable_days = Decimal("0")
+
+            # ---------------------------------------------------------
+            # ACTUAL CALENDAR DAYS
+            #
+            # Only informational.
+            # Salary is still calculated using 30 days.
+            # ---------------------------------------------------------
+            actual_calendar_days = monthrange(
+                year,
+                month
+            )[1]
+
+            # ---------------------------------------------------------
+            # RESPONSE
+            # ---------------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Monthly salary calculated successfully",
+
+                    "data": {
+
+                        # -------------------------------------------------
+                        # STAFF
+                        # -------------------------------------------------
+                        "staff": {
+                            "id": staff.id,
+                            "eid": staff.eid,
+                            "staff_id": staff.staff_id,
+                            "name": staff.name,
+                            "designation": staff.designation,
+                            "department": (
+                                staff.department_id.name
+                                if staff.department_id
+                                else None
+                            ),
+                        },
+
+                        # -------------------------------------------------
+                        # SALARY
+                        # -------------------------------------------------
+                        "salary": {
+                            "salary_id": salary_detail.id,
+
+                            "monthly_salary": str(
+                                monthly_salary.quantize(
+                                    Decimal("0.01"),
+                                    rounding=ROUND_HALF_UP
+                                )
+                            ),
+
+                            "salary_calculation_days": 30,
+
+                            "per_day_salary": str(
+                                per_day_salary
+                            ),
+                        },
+
+                        # -------------------------------------------------
+                        # ATTENDANCE
+                        # -------------------------------------------------
+                        "attendance": {
+                            "year": year,
+                            "month": month,
+
+                            "calendar_days": (
+                                actual_calendar_days
+                            ),
+
+                            "present": (
+                                present_count
+                            ),
+
+                            "absent": (
+                                absent_count
+                            ),
+
+                            "half_day": (
+                                half_day_count
+                            ),
+
+                            "total_attendance_records": (
+                                total_attendance_records
+                            ),
+
+                            "payable_days": str(
+                                payable_days.quantize(
+                                    Decimal("0.00"),
+                                    rounding=ROUND_HALF_UP
+                                )
+                            ),
+                        },
+
+                        # -------------------------------------------------
+                        # PAID LEAVE
+                        # -------------------------------------------------
+                        "paid_leave": {
+
+                            # Paid leave assigned to this staff
+                            "allowed": (
+                                paid_leaves
+                            ),
+
+                            # Paid leave actually used against absence
+                            "used": (
+                                paid_leave_used
+                            ),
+
+                            # Balance after this month's calculation
+                            "remaining": (
+                                remaining_paid_leaves
+                            ),
+
+                            # Absence remaining after paid leave
+                            "deductible_absent_days": (
+                                deductible_absent_days
+                            ),
+                        },
+
+                        # -------------------------------------------------
+                        # DEDUCTIONS
+                        # -------------------------------------------------
+                        "deductions": {
+
+                            "absent_deduction": str(
+                                absent_deduction
+                            ),
+
+                            "half_day_deduction": str(
+                                half_day_deduction
+                            ),
+
+                            "total_deduction": str(
+                                total_deduction
+                            ),
+                        },
+
+                        # -------------------------------------------------
+                        # FINAL SALARY
+                        # -------------------------------------------------
+                        "payable_salary": str(
+                            payable_salary
+                        ),
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error calculating staff monthly salary: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": (
+                        "An error occurred while calculating salary"
                     ),
                     "errors": str(e)
                 },
