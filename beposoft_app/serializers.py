@@ -4866,3 +4866,69 @@ class StaffSalarySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+class StaffMonthlySalarySerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(
+        source="staff.name",
+        read_only=True
+    )
+
+    staff_id = serializers.CharField(
+        source="staff.staff_id",
+        read_only=True
+    )
+
+    class Meta:
+        model = StaffMonthlySalary
+        fields = [
+            "id",
+            "staff",
+            "staff_name",
+            "staff_id",
+            "month",
+            "year",
+            "present",
+            "absent",
+            "half_day",
+            "paid_leaves",
+            "bonus",
+            "incentives",
+            "late_comes",
+            "fines",
+            "note",
+        ]
+
+    def validate_month(self, value):
+        if value < 1 or value > 12:
+            raise serializers.ValidationError(
+                "Month must be between 1 and 12."
+            )
+
+        return value
+
+    def validate(self, data):
+        staff = data.get("staff")
+        month = data.get("month")
+        year = data.get("year")
+
+        queryset = StaffMonthlySalary.objects.filter(
+            staff=staff,
+            month=month,
+            year=year
+        )
+
+        if self.instance:
+            queryset = queryset.exclude(
+                pk=self.instance.pk
+            )
+
+        if queryset.exists():
+            raise serializers.ValidationError({
+                "message":
+                    "Monthly salary data already exists "
+                    "for this staff, month and year."
+            })
+
+        return data
