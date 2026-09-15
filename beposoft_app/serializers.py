@@ -63,7 +63,7 @@ class UserSerializer(serializers.ModelSerializer):
             'allocated_states', 'gender', 'marital_status',
             'driving_license', 'driving_license_exp_date',
             'employment_status', 'designation', 'grade', 'address',
-            'state', 'country', 'join_date', 'confirmation_date',
+            'state', 'country', 'join_date', 'confirmation_date', 'paid_leaves',
             'termination_date', 'supervisor_id', 'department_id', 'is_manager',
             'warehouse_id', 'country_code', 'signatur_up', 'emergency_contact_name1', 'emergency_contact_number1',
             'approval_status', 'family', 'created_at', 'updated_at',
