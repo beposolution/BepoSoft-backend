@@ -35365,3 +35365,135 @@ class StaffMonthlySalaryView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class StaffMonthlySalaryDetailView(BaseTokenView):
+
+    def get(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(
+                request
+            )
+
+            if error_response:
+                return error_response
+
+            try:
+                monthly_salary = (
+                    StaffMonthlySalary.objects
+                    .select_related("staff")
+                    .get(pk=pk)
+                )
+
+            except StaffMonthlySalary.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message":
+                            "Monthly salary record not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = StaffMonthlySalarySerializer(
+                monthly_salary
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message":
+                        "Monthly salary data fetched successfully",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error fetching monthly salary data: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "An error occurred while fetching "
+                        "monthly salary data",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def put(self, request, pk):
+        try:
+            user, error_response = self.get_user_from_token(
+                request
+            )
+
+            if error_response:
+                return error_response
+
+            try:
+                monthly_salary = (
+                    StaffMonthlySalary.objects
+                    .select_related("staff")
+                    .get(pk=pk)
+                )
+
+            except StaffMonthlySalary.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "message":
+                            "Monthly salary record not found"
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = StaffMonthlySalarySerializer(
+                monthly_salary,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                return Response(
+                    {
+                        "status": "success",
+                        "message":
+                            "Monthly salary data updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "Unable to update monthly salary data",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Error updating monthly salary data: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message":
+                        "An error occurred while updating "
+                        "monthly salary data",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
