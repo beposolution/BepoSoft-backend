@@ -477,6 +477,7 @@ urlpatterns = [
     path("api/staff/salary/increment/edit/<int:pk>/", StaffSalaryIncrementEditView.as_view()),
     path("api/staff/salary/calculate/", StaffMonthlySalaryCalculationView.as_view()),
     path("api/staff/monthly/salary/", StaffMonthlySalaryView.as_view()),
+    path("api/staff/monthly/salary/<int:pk>/", StaffMonthlySalaryDetailView.as_view()),
 
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
