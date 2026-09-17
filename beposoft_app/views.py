@@ -35940,51 +35940,113 @@ class FamilyOrderHourlyDetailView(BaseTokenView):
             )
 
             # ---------------------------------------------------------
-            # ORDER DETAILS
+            # ORDER DETAILS - GROUPED HOURLY
             # ---------------------------------------------------------
-            order_details = []
+            hourly_data_map = {}
+
+            for hour in range(24):
+                next_hour = (hour + 1) % 24
+                hour_label = f"{hour:02d}:00-{next_hour:02d}:00"
+
+                hourly_data_map[hour] = {
+                    "hour": hour_label,
+                    "orders": 0,
+                    "data": []
+                }
+
 
             for order in paginated_orders:
 
-                order_details.append(
-                    {
-                        "id": order.id,
-                        "invoice": order.invoice,
+                # Convert created_at to current timezone
+                local_created_at = (
+                    timezone.localtime(order.created_at)
+                    if order.created_at
+                    else None
+                )
 
-                        "customer": {
-                            "id": order.customer.id if order.customer else None,
-                            "name": order.customer.name if order.customer else None
-                        },
+                order_hour = (
+                    local_created_at.hour
+                    if local_created_at
+                    else None
+                )
 
-                        "manage_staff": {
-                            "id": (
-                                order.manage_staff.id
-                                if order.manage_staff
-                                else None
-                            ),
-                            "name": (
-                                order.manage_staff.name
-                                if order.manage_staff
-                                else None
-                            )
-                        },
+                order_data = {
+                    "id": order.id,
+                    "invoice": order.invoice,
 
-                        "amount": float(order.total_amount or 0),
-
-                        "company": {
-                            "id": order.company.id if order.company else None,
-                            "name": order.company.name if order.company else None
-                        },
-
-                        "status": order.status,
-
-                        "created_at": (
-                            timezone.localtime(order.created_at).isoformat()
-                            if order.created_at
+                    "customer": {
+                        "id": (
+                            order.customer.id
+                            if order.customer
+                            else None
+                        ),
+                        "name": (
+                            order.customer.name
+                            if order.customer
                             else None
                         )
-                    }
+                    },
+
+                    "manage_staff": {
+                        "id": (
+                            order.manage_staff.id
+                            if order.manage_staff
+                            else None
+                        ),
+                        "name": (
+                            order.manage_staff.name
+                            if order.manage_staff
+                            else None
+                        )
+                    },
+
+                    "amount": float(order.total_amount or 0),
+
+                    "company": {
+                        "id": (
+                            order.company.id
+                            if order.company
+                            else None
+                        ),
+                        "name": (
+                            order.company.name
+                            if order.company
+                            else None
+                        )
+                    },
+
+                    "status": order.status,
+
+                    "created_at": (
+                        local_created_at.isoformat()
+                        if local_created_at
+                        else None
+                    )
+                }
+
+                if order_hour is not None:
+                    hourly_data_map[order_hour]["data"].append(
+                        order_data
+                    )
+
+
+            # ---------------------------------------------------------
+            # SET ACTUAL TOTAL ORDER COUNT FOR EACH HOUR
+            # ---------------------------------------------------------
+            for hour in range(24):
+                hourly_data_map[hour]["orders"] = hourly_map.get(
+                    hour,
+                    0
                 )
+
+
+            # ---------------------------------------------------------
+            # CONVERT TO LIST
+            # ---------------------------------------------------------
+            hourly_order_details = [
+                hourly_data_map[hour]
+                for hour in range(24)
+            ]
 
             # ---------------------------------------------------------
             # PAGINATION DETAILS
@@ -36020,7 +36082,7 @@ class FamilyOrderHourlyDetailView(BaseTokenView):
 
                     "pagination": pagination_data,
 
-                    "data": order_details
+                    "data": hourly_order_details
                 },
                 status=status.HTTP_200_OK
             )
