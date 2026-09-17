@@ -31,7 +31,7 @@ from django.shortcuts import render
 from rest_framework.pagination import PageNumberPagination
 from bepocart.models import *
 from django.core.files.base import ContentFile
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, ExtractHour
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import Cast, NullIf
 from django.db.models.functions import TruncDate
@@ -35493,6 +35493,549 @@ class StaffMonthlySalaryDetailView(BaseTokenView):
                     "message":
                         "An error occurred while updating "
                         "monthly salary data",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+class OrderHourlySummaryView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            # ---------------------------------------------------------
+            # AUTHENTICATION
+            # ---------------------------------------------------------
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # ---------------------------------------------------------
+            # GET PARAMS
+            # ---------------------------------------------------------
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            if not start_date or not end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date and end_date are required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # VALIDATE DATE FORMAT
+            # ---------------------------------------------------------
+            try:
+                start_date_obj = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                end_date_obj = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+            except ValueError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if start_date_obj > end_date_obj:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # CREATE FULL DATETIME RANGE
+            # ---------------------------------------------------------
+            start_datetime = datetime.combine(
+                start_date_obj,
+                time.min
+            )
+
+            # Use exclusive next-day boundary.
+            # This is safer than filtering until 23:59:59.999999.
+            end_datetime = datetime.combine(
+                end_date_obj,
+                time.max
+            )
+
+            if timezone.is_aware(timezone.now()):
+                current_timezone = timezone.get_current_timezone()
+
+                start_datetime = timezone.make_aware(
+                    start_datetime,
+                    current_timezone
+                )
+
+                end_datetime = timezone.make_aware(
+                    end_datetime,
+                    current_timezone
+                )
+
+            # ---------------------------------------------------------
+            # BASE QUERYSET
+            # FILTER STRICTLY USING CREATED_AT
+            # ---------------------------------------------------------
+            orders = (
+                Order.objects
+                .filter(
+                    created_at__gte=start_datetime,
+                    created_at__lte=end_datetime
+                )
+                .select_related("family")
+            )
+
+            # ---------------------------------------------------------
+            # TOTAL ORDERS
+            # ---------------------------------------------------------
+            total_orders = orders.count()
+
+            # ---------------------------------------------------------
+            # OVERALL HOURLY SUMMARY
+            # ---------------------------------------------------------
+            hourly_queryset = (
+                orders
+                .annotate(hour=ExtractHour("created_at"))
+                .values("hour")
+                .annotate(orders=Count("id"))
+                .order_by("hour")
+            )
+
+            overall_hour_map = {
+                row["hour"]: row["orders"]
+                for row in hourly_queryset
+                if row["hour"] is not None
+            }
+
+            # ---------------------------------------------------------
+            # BUILD ALL 24 HOURS
+            #
+            # Important:
+            # Even if an hour has zero orders, it will still be returned.
+            # ---------------------------------------------------------
+            hourly_orders = []
+
+            for hour in range(24):
+                next_hour = (hour + 1) % 24
+
+                hour_label = (
+                    f"{hour:02d}:00-{next_hour:02d}:00"
+                )
+
+                hourly_orders.append(
+                    {
+                        "hour": hour_label,
+                        "orders": overall_hour_map.get(hour, 0)
+                    }
+                )
+
+            # ---------------------------------------------------------
+            # DIVISION / FAMILY WISE HOURLY DATA
+            # ---------------------------------------------------------
+            family_hourly_queryset = (
+                orders
+                .filter(family__isnull=False)
+                .annotate(hour=ExtractHour("created_at"))
+                .values(
+                    "family_id",
+                    "family__name",
+                    "hour"
+                )
+                .annotate(orders=Count("id"))
+                .order_by(
+                    "family__name",
+                    "hour"
+                )
+            )
+
+            # ---------------------------------------------------------
+            # FAMILY TOTALS
+            # ---------------------------------------------------------
+            family_total_queryset = (
+                orders
+                .filter(family__isnull=False)
+                .values(
+                    "family_id",
+                    "family__name"
+                )
+                .annotate(
+                    total_orders=Count("id")
+                )
+                .order_by("family__name")
+            )
+
+            # ---------------------------------------------------------
+            # CREATE FAMILY HOUR MAP
+            # ---------------------------------------------------------
+            family_hour_map = {}
+
+            for row in family_hourly_queryset:
+
+                family_id = row["family_id"]
+
+                if family_id not in family_hour_map:
+                    family_hour_map[family_id] = {}
+
+                if row["hour"] is not None:
+                    family_hour_map[family_id][row["hour"]] = row["orders"]
+
+            # ---------------------------------------------------------
+            # FORMAT FAMILY DATA
+            # ---------------------------------------------------------
+            family_data = []
+
+            for family in family_total_queryset:
+
+                family_id = family["family_id"]
+                family_name = family["family__name"]
+
+                current_family_hours = family_hour_map.get(
+                    family_id,
+                    {}
+                )
+
+                family_hourly_orders = []
+
+                for hour in range(24):
+
+                    next_hour = (hour + 1) % 24
+
+                    hour_label = (
+                        f"{hour:02d}:00-{next_hour:02d}:00"
+                    )
+
+                    family_hourly_orders.append(
+                        {
+                            "hour": hour_label,
+                            "orders": current_family_hours.get(
+                                hour,
+                                0
+                            )
+                        }
+                    )
+
+                family_data.append(
+                    {
+                        "family_id": family_id,
+                        "family_name": family_name,
+                        "summary": {
+                            "total_orders": family["total_orders"],
+                            "hourly_orders": family_hourly_orders
+                        }
+                    }
+                )
+
+            # ---------------------------------------------------------
+            # RESPONSE
+            # ---------------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+                    "start_date": start_date,
+                    "end_date": end_date,
+
+                    "summary": {
+                        "total_orders": total_orders,
+                        "hourly_orders": hourly_orders
+                    },
+
+                    "data": family_data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "OrderHourlySummaryView GET Error: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching hourly order summary.",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class FamilyOrderHourlyDetailView(BaseTokenView):
+
+    def get(self, request, family_id):
+        try:
+            # ---------------------------------------------------------
+            # AUTHENTICATION
+            # ---------------------------------------------------------
+            authUser, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            # ---------------------------------------------------------
+            # GET PARAMS
+            # ---------------------------------------------------------
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            if not start_date or not end_date:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date and end_date are required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # VALIDATE DATE FORMAT
+            # ---------------------------------------------------------
+            try:
+                start_date_obj = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                end_date_obj = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+            except ValueError:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if start_date_obj > end_date_obj:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "start_date cannot be greater than end_date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ---------------------------------------------------------
+            # CHECK FAMILY
+            # ---------------------------------------------------------
+            family = Family.objects.filter(id=family_id).first()
+
+            if not family:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Family not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # ---------------------------------------------------------
+            # CREATE DATETIME RANGE
+            # ---------------------------------------------------------
+            start_datetime = datetime.combine(
+                start_date_obj,
+                time.min
+            )
+
+            end_datetime = datetime.combine(
+                end_date_obj,
+                time.max
+            )
+
+            if timezone.is_aware(timezone.now()):
+                current_timezone = timezone.get_current_timezone()
+
+                start_datetime = timezone.make_aware(
+                    start_datetime,
+                    current_timezone
+                )
+
+                end_datetime = timezone.make_aware(
+                    end_datetime,
+                    current_timezone
+                )
+
+            # ---------------------------------------------------------
+            # FAMILY ORDER QUERYSET
+            # ---------------------------------------------------------
+            orders = (
+                Order.objects
+                .filter(
+                    family_id=family_id,
+                    created_at__gte=start_datetime,
+                    created_at__lte=end_datetime
+                )
+                .select_related(
+                    "family",
+                    "customer",
+                    "manage_staff",
+                    "company"
+                )
+                .order_by("-created_at", "-id")
+            )
+
+            # ---------------------------------------------------------
+            # SUMMARY
+            # ---------------------------------------------------------
+            total_orders = orders.count()
+
+            # ---------------------------------------------------------
+            # HOURLY SUMMARY
+            # ---------------------------------------------------------
+            hourly_queryset = (
+                orders
+                .annotate(hour=ExtractHour("created_at"))
+                .values("hour")
+                .annotate(orders=Count("id"))
+                .order_by("hour")
+            )
+
+            hourly_map = {
+                row["hour"]: row["orders"]
+                for row in hourly_queryset
+                if row["hour"] is not None
+            }
+
+            hourly_orders = []
+
+            for hour in range(24):
+                next_hour = (hour + 1) % 24
+
+                hourly_orders.append(
+                    {
+                        "hour": f"{hour:02d}:00-{next_hour:02d}:00",
+                        "orders": hourly_map.get(hour, 0)
+                    }
+                )
+
+            # ---------------------------------------------------------
+            # PAGINATION
+            # ---------------------------------------------------------
+            paginator = StandardPagination()
+
+            paginated_orders = paginator.paginate_queryset(
+                orders,
+                request,
+                view=self
+            )
+
+            # ---------------------------------------------------------
+            # ORDER DETAILS
+            # ---------------------------------------------------------
+            order_details = []
+
+            for order in paginated_orders:
+
+                order_details.append(
+                    {
+                        "id": order.id,
+                        "invoice": order.invoice,
+
+                        "customer": {
+                            "id": order.customer.id if order.customer else None,
+                            "name": order.customer.name if order.customer else None
+                        },
+
+                        "manage_staff": {
+                            "id": (
+                                order.manage_staff.id
+                                if order.manage_staff
+                                else None
+                            ),
+                            "name": (
+                                order.manage_staff.name
+                                if order.manage_staff
+                                else None
+                            )
+                        },
+
+                        "amount": float(order.total_amount or 0),
+
+                        "company": {
+                            "id": order.company.id if order.company else None,
+                            "name": order.company.name if order.company else None
+                        },
+
+                        "status": order.status,
+
+                        "created_at": (
+                            timezone.localtime(order.created_at).isoformat()
+                            if order.created_at
+                            else None
+                        )
+                    }
+                )
+
+            # ---------------------------------------------------------
+            # PAGINATION DETAILS
+            # ---------------------------------------------------------
+            page = paginator.page
+
+            pagination_data = {
+                "count": page.paginator.count,
+                "total_pages": page.paginator.num_pages,
+                "current_page": page.number,
+                "page_size": paginator.page_size,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link()
+            }
+
+            # ---------------------------------------------------------
+            # FINAL RESPONSE
+            # ---------------------------------------------------------
+            return Response(
+                {
+                    "status": "success",
+
+                    "start_date": start_date,
+                    "end_date": end_date,
+
+                    "family_id": family.id,
+                    "family_name": family.name,
+
+                    "summary": {
+                        "total_orders": total_orders,
+                        "hourly_orders": hourly_orders
+                    },
+
+                    "pagination": pagination_data,
+
+                    "data": order_details
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "FamilyOrderHourlyDetailView GET Error: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching family order details.",
                     "errors": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
