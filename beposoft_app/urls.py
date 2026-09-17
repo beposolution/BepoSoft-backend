@@ -113,6 +113,8 @@ urlpatterns = [
     path('api/orders/summary/family/data/', FamilyOrderSummaryView.as_view(), name='family-order-summary'),
     path("api/family/orders/summary/without/bepocart/", FamilyOrderSummaryWithoutBepocartView.as_view(), name="family-order-summary-without-bepocart",),
     path('api/orders/family/wise/summary/', FamilyWiseOrderSummaryView.as_view(), name='family-wise-order-summary'),
+    path('api/orders/hourly/summary/', OrderHourlySummaryView.as_view(), name='order-hourly-summary'),
+    path('api/orders/hourly/family/<int:family_id>/', FamilyOrderHourlyDetailView.as_view(), name='family-order-hourly-detail'),
     path("api/orders/date/report/<str:start_date>/<str:end_date>/", OrderDateReportView.as_view(), name="order-date-report"),
     path('api/orders/parcel/service/data/', ParcelServiceGroupedView.as_view(), name="parcel-service-warehouse-data"),
     path('api/orders/update/<int:pk>/',OrderUpdateView.as_view()),
