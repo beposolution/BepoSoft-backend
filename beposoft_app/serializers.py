@@ -723,7 +723,26 @@ class BankAccountTypeSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 class BankSerializer(serializers.ModelSerializer):
-    # created_user = serializers.CharField(source="created_user.name")
+    created_user = serializers.CharField(
+        source="created_user.name",
+        read_only=True,
+        allow_null=True,
+        default=None
+    )
+
+    company_name = serializers.CharField(
+        source="company.name",
+        read_only=True,
+        allow_null=True,
+        default=None
+    )
+
+    account_type_name = serializers.CharField(
+        source="account_type.account_type",
+        read_only=True,
+        allow_null=True,
+        default=None
+    )
     class Meta:
         model = Bank
         fields = "__all__"
