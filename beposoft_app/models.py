@@ -589,7 +589,7 @@ class BankAccountType(models.Model):
     
 class Bank(models.Model):
     created_user = models.ForeignKey(User,on_delete=models.CASCADE,null=True)
-    Company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=100)
     account_number = models.CharField(max_length=100)
     ifsc_code = models.CharField(max_length=100)
