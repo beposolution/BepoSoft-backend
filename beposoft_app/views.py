@@ -36102,3 +36102,335 @@ class FamilyOrderHourlyDetailView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# company-wise banking report
+
+class CompanyWiseFinanceReportAPIView(BaseTokenView):
+
+    def get(self, request, company_id):
+
+        try:
+
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # -----------------------------------------
+            # GET COMPANY
+            # -----------------------------------------
+
+            company = get_object_or_404(
+                Company,
+                id=company_id
+            )
+
+            # -----------------------------------------
+            # DATE FILTER
+            # -----------------------------------------
+
+            today = timezone.localdate()
+
+            start_date = request.GET.get(
+                "start_date",
+                today.strftime("%Y-%m-%d")
+            )
+
+            end_date = request.GET.get(
+                "end_date",
+                today.strftime("%Y-%m-%d")
+            )
+
+            try:
+
+                start_date = datetime.strptime(
+                    start_date,
+                    "%Y-%m-%d"
+                ).date()
+
+                end_date = datetime.strptime(
+                    end_date,
+                    "%Y-%m-%d"
+                ).date()
+
+            except ValueError:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if start_date > end_date:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Start date cannot be greater than end date."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # -----------------------------------------
+            # AMOUNT CONVERSION
+            # -----------------------------------------
+
+            def to_decimal(value):
+
+                try:
+
+                    return Decimal(str(value or 0))
+
+                except (InvalidOperation, TypeError, ValueError):
+
+                    return Decimal("0.00")
+
+            def format_amount(value):
+
+                return str(
+                    value.quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP
+                    )
+                )
+
+            # -----------------------------------------
+            # FETCH ONLY SELECTED COMPANY BANKS
+            # -----------------------------------------
+
+            banks = Bank.objects.filter(
+                company_id=company_id
+            ).select_related(
+                "company"
+            ).order_by(
+                "name"
+            )
+
+            # Reuse existing finance serializer
+
+            bank_serializer = FinanaceReceiptSerializer(
+                banks,
+                many=True
+            )
+
+            serialized_banks = bank_serializer.data
+
+            # -----------------------------------------
+            # COMPANY TOTAL INITIALIZATION
+            # -----------------------------------------
+
+            company_opening = Decimal("0.00")
+
+            company_credit = Decimal("0.00")
+
+            company_debit = Decimal("0.00")
+
+            company_closing = Decimal("0.00")
+
+            bank_details = []
+
+            # -----------------------------------------
+            # BANK-WISE FINANCE CALCULATION
+            # -----------------------------------------
+
+            for bank in serialized_banks:
+
+                opening_balance = to_decimal(
+                    bank.get("open_balance")
+                )
+
+                credit = Decimal("0.00")
+
+                debit = Decimal("0.00")
+
+                # -------------------------------------
+                # CREDIT CALCULATION
+                # -------------------------------------
+
+                for payment in bank.get("payments", []):
+
+                    received_at = payment.get("received_at")
+
+                    if not received_at:
+                        continue
+
+                    payment_date = parse_date(
+                        str(received_at)[:10]
+                    )
+
+                    if not payment_date:
+                        continue
+
+                    amount = to_decimal(
+                        payment.get("amount")
+                    )
+
+                    if payment_date < start_date:
+
+                        opening_balance += amount
+
+                    elif start_date <= payment_date <= end_date:
+
+                        credit += amount
+
+                # -------------------------------------
+                # DEBIT CALCULATION
+                # -------------------------------------
+
+                for expense in bank.get("banks", []):
+
+                    expense_at = expense.get("expense_date")
+
+                    if not expense_at:
+                        continue
+
+                    expense_date = parse_date(
+                        str(expense_at)[:10]
+                    )
+
+                    if not expense_date:
+                        continue
+
+                    amount = to_decimal(
+                        expense.get("amount")
+                    )
+
+                    if expense_date < start_date:
+
+                        opening_balance -= amount
+
+                    elif start_date <= expense_date <= end_date:
+
+                        debit += amount
+
+                # -------------------------------------
+                # CLOSING BALANCE
+                # -------------------------------------
+
+                closing_balance = (
+                    opening_balance + credit - debit
+                )
+
+                # -------------------------------------
+                # ADD BANK DETAILS
+                # -------------------------------------
+
+                bank_details.append({
+
+                    "id": bank.get("id"),
+
+                    "name": bank.get("name"),
+
+                    "opening_balance": format_amount(
+                        opening_balance
+                    ),
+
+                    "credit": format_amount(
+                        credit
+                    ),
+
+                    "debit": format_amount(
+                        debit
+                    ),
+
+                    "closing_balance": format_amount(
+                        closing_balance
+                    )
+
+                })
+
+                # -------------------------------------
+                # UPDATE COMPANY TOTAL
+                # -------------------------------------
+
+                company_opening += opening_balance
+
+                company_credit += credit
+
+                company_debit += debit
+
+                company_closing += closing_balance
+
+            # -----------------------------------------
+            # RESPONSE
+            # -----------------------------------------
+
+            return Response(
+
+                {
+
+                    "status": "success",
+
+                    "start_date": str(start_date),
+
+                    "end_date": str(end_date),
+
+                    "data": {
+
+                        "company_id": company.id,
+
+                        "company_name": company.name,
+
+                        "total_banks": len(bank_details),
+
+                        "opening_balance": format_amount(
+                            company_opening
+                        ),
+
+                        "credit": format_amount(
+                            company_credit
+                        ),
+
+                        "debit": format_amount(
+                            company_debit
+                        ),
+
+                        "closing_balance": format_amount(
+                            company_closing
+                        ),
+
+                        "banks": bank_details
+
+                    }
+
+                },
+
+                status=status.HTTP_200_OK
+
+            )
+
+        except Http404:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Company not found."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Company-wise finance report error: %s",
+                str(e)
+            )
+
+            return Response(
+
+                {
+
+                    "status": "error",
+
+                    "message": "An error occurred",
+
+                    "errors": str(e)
+
+                },
+
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+
+            )

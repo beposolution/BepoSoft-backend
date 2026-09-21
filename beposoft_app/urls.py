@@ -481,6 +481,9 @@ urlpatterns = [
     path("api/staff/monthly/salary/", StaffMonthlySalaryView.as_view()),
     path("api/staff/monthly/salary/<int:pk>/", StaffMonthlySalaryDetailView.as_view()),
 
+    # company-wise banking
+    path('api/finance/report/company/wise/<int:company_id>/', CompanyWiseFinanceReportAPIView.as_view()),
+
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
     path("api/internal/mails/<int:pk>/", InternalMailDetailView.as_view(), name="internal-mail-detail"),
