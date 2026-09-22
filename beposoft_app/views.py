@@ -9579,6 +9579,16 @@ class StatewiseSalesReport(APIView):
                 today.isoformat()
             )
 
+            search = request.query_params.get(
+                "search",
+                ""
+            ).strip()
+
+            staff_id = request.query_params.get(
+                "staff_id",
+                ""
+            ).strip()
+
             start_date_obj = parse_date(start_date)
             end_date_obj = parse_date(end_date)
 
@@ -9608,71 +9618,96 @@ class StatewiseSalesReport(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+
+            if staff_id:
+                if not staff_id.isdigit():
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "Invalid staff_id. "
+                                "Staff ID must be a positive integer."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if int(staff_id) <= 0:
+
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                "staff_id must be greater than zero."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
             orders_queryset = Order.objects.filter(
                 order_date__gte=start_date_obj.isoformat(),
                 order_date__lte=end_date_obj.isoformat()
-
             )
+
+            if staff_id:
+                orders_queryset = orders_queryset.filter(
+                    manage_staff_id=int(staff_id)
+                )
+
+            if search:
+                orders_queryset = orders_queryset.filter(
+                    Q(invoice__icontains=search)
+                    | Q(customer__name__icontains=search)
+                    | Q(customer__phone__icontains=search)
+                    | Q(manage_staff__name__icontains=search)
+                )
 
             state_summary = (
                 orders_queryset
                 .values("state_id")
                 .annotate(
-
                     total_orders_count=Count("id"),
-
                     total_sales_amount=Sum("total_amount"),
-
                     approved_orders_count=Count(
                         "id",
                         filter=Q(status="Approved")
                     ),
-
                     approved_amount=Sum(
                         "total_amount",
                         filter=Q(status="Approved")
                     ),
-
                     completed_orders_count=Count(
                         "id",
                         filter=Q(status="Completed")
                     ),
-
                     completed_amount=Sum(
                         "total_amount",
                         filter=Q(status="Completed")
                     ),
-
                     cancelled_orders_count=Count(
                         "id",
                         filter=Q(status="Cancelled")
                     ),
-
                     cancelled_amount=Sum(
                         "total_amount",
                         filter=Q(status="Cancelled")
                     ),
-
                     rejected_orders_count=Count(
                         "id",
                         filter=Q(status="Rejected")
                     ),
-
                     rejected_amount=Sum(
                         "total_amount",
                         filter=Q(status="Rejected")
                     ),
-
                     returned_orders_count=Count(
                         "id",
                         filter=Q(status="Return")
                     ),
-
                     returned_amount=Sum(
                         "total_amount",
                         filter=Q(status="Return")
                     )
-
                 )
                 .order_by("state_id")
             )
@@ -9699,11 +9734,8 @@ class StatewiseSalesReport(APIView):
                 )
 
                 state_data = {
-
                     "id": state.pk,
-
                     "name": state.name,
-
                     "total_orders_count": summary.get(
                         "total_orders_count",
                         0
@@ -9803,14 +9835,6 @@ class StatewiseSalesReport(APIView):
 
             grouped_orders = {}
 
-            for order in serialized_orders:
-
-                state_id = order.get("state")
-
-                # Serializer returns state name.
-                # Use the original model instance
-                # to obtain the state ID reliably.
-
             for order_instance, order_data in zip(
 
                 paginated_orders,
@@ -9838,7 +9862,6 @@ class StatewiseSalesReport(APIView):
                 )
 
             for state_id, date_groups in grouped_orders.items():
-
                 state_data = state_data_map.get(
                     state_id
                 )
@@ -9864,6 +9887,8 @@ class StatewiseSalesReport(APIView):
 
                     "start_date": start_date_obj.isoformat(),
                     "end_date": end_date_obj.isoformat(),
+                    "search": search,
+                    "staff_id": int(staff_id) if staff_id else None,
                     "count": paginator.page.paginator.count,
                     "current_page": paginator.page.number,
                     "total_pages": paginator.page.paginator.num_pages,
