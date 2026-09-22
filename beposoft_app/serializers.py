@@ -1558,6 +1558,7 @@ class OrderStateWiseSerializer(serializers.ModelSerializer):
     staffID = serializers.CharField(source="manage_staff.pk")
     family = serializers.CharField(source="family.name")
     customerID = serializers.IntegerField(source="customer.pk")
+    customerName = serializers.CharField(source="customer.name")
     state = serializers.CharField(source="state.name")
     
     class Meta:
