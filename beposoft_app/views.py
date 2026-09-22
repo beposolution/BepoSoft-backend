@@ -9499,67 +9499,395 @@ class ProductCountByCategoryView(APIView):
 
 
 
+# class StatewiseSalesReport(APIView):
+#     def get(self, request):
+#         try:
+#             states = State.objects.all()
+#             data = []
+
+#             for state in states:
+#                 # Get orders grouped by order_date for the state
+#                 orders_by_date = Order.objects.filter(state=state).values('order_date').distinct()
+
+#                 # Calculating counts and total amounts for each status
+#                 total_orders = Order.objects.filter(state=state).count()
+#                 total_amount = Order.objects.filter(state=state).aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 approved_orders = Order.objects.filter(state=state, status='Approved').count()
+#                 approved_amount = Order.objects.filter(state=state, status='Approved').aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 shipped_orders = Order.objects.filter(state=state, status='Completed').count()
+#                 shipped_amount = Order.objects.filter(state=state, status='Completed').aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 cancelled_orders = Order.objects.filter(state=state, status='Cancelled').count()
+#                 cancelled_amount = Order.objects.filter(state=state, status='Cancelled').aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 rejected_orders = Order.objects.filter(state=state, status='Rejected').count()
+#                 rejected_amount = Order.objects.filter(state=state, status='Rejected').aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 returned_orders = Order.objects.filter(state=state, status='Return').count()
+#                 returned_amount = Order.objects.filter(state=state, status='Return').aggregate(total=Sum('total_amount'))['total'] or 0
+
+#                 state_data = {
+#                     'id': state.pk,
+#                     'name': state.name,
+#                     'total_orders_count': total_orders,
+#                     'total_amount': total_amount,
+#                     'approved_orders_count': approved_orders,
+#                     'approved_amount': approved_amount,
+#                     'completed_orders_count': shipped_orders,
+#                     'completed_amount': shipped_amount,
+#                     'cancelled_orders_count': cancelled_orders,
+#                     'cancelled_amount': cancelled_amount,
+#                     'rejected_orders_count': rejected_orders,
+#                     'rejected_amount': rejected_amount,
+#                     'returned_orders_count': returned_orders,
+#                     'returned_amount': returned_amount,
+#                     'orders': []
+#                 }
+
+#                 for order_date in orders_by_date:
+#                     date_orders = Order.objects.filter(state=state, order_date=order_date['order_date'])
+#                     order_data = {
+#                         'order_date': order_date['order_date'],
+#                         'waiting_orders': OrderStateWiseSerializer(date_orders, many=True).data
+#                     }
+#                     state_data['orders'].append(order_data)
+
+#                 data.append(state_data)
+
+#             return Response({"data": data}, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class StatewiseSalesReport(APIView):
+
     def get(self, request):
+
         try:
-            states = State.objects.all()
+
+            today = timezone.localdate()
+
+            start_date = request.query_params.get(
+                "start_date",
+                today.isoformat()
+            )
+
+            end_date = request.query_params.get(
+                "end_date",
+                today.isoformat()
+            )
+
+            start_date_obj = parse_date(start_date)
+            end_date_obj = parse_date(end_date)
+
+            if not start_date_obj or not end_date_obj:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Invalid date format. "
+                            "Use YYYY-MM-DD."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if start_date_obj > end_date_obj:
+
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "start_date cannot be "
+                            "greater than end_date."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            orders_queryset = Order.objects.filter(
+                order_date__gte=start_date_obj.isoformat(),
+                order_date__lte=end_date_obj.isoformat()
+
+            )
+
+            state_summary = (
+                orders_queryset
+                .values("state_id")
+                .annotate(
+
+                    total_orders_count=Count("id"),
+
+                    total_sales_amount=Sum("total_amount"),
+
+                    approved_orders_count=Count(
+                        "id",
+                        filter=Q(status="Approved")
+                    ),
+
+                    approved_amount=Sum(
+                        "total_amount",
+                        filter=Q(status="Approved")
+                    ),
+
+                    completed_orders_count=Count(
+                        "id",
+                        filter=Q(status="Completed")
+                    ),
+
+                    completed_amount=Sum(
+                        "total_amount",
+                        filter=Q(status="Completed")
+                    ),
+
+                    cancelled_orders_count=Count(
+                        "id",
+                        filter=Q(status="Cancelled")
+                    ),
+
+                    cancelled_amount=Sum(
+                        "total_amount",
+                        filter=Q(status="Cancelled")
+                    ),
+
+                    rejected_orders_count=Count(
+                        "id",
+                        filter=Q(status="Rejected")
+                    ),
+
+                    rejected_amount=Sum(
+                        "total_amount",
+                        filter=Q(status="Rejected")
+                    ),
+
+                    returned_orders_count=Count(
+                        "id",
+                        filter=Q(status="Return")
+                    ),
+
+                    returned_amount=Sum(
+                        "total_amount",
+                        filter=Q(status="Return")
+                    )
+
+                )
+                .order_by("state_id")
+            )
+
+            summary_map = {
+
+                item["state_id"]: item
+
+                for item in state_summary
+
+            }
+
+            states = State.objects.all().order_by("id")
+
             data = []
 
+            state_data_map = {}
+
             for state in states:
-                # Get orders grouped by order_date for the state
-                orders_by_date = Order.objects.filter(state=state).values('order_date').distinct()
 
-                # Calculating counts and total amounts for each status
-                total_orders = Order.objects.filter(state=state).count()
-                total_amount = Order.objects.filter(state=state).aggregate(total=Sum('total_amount'))['total'] or 0
-
-                approved_orders = Order.objects.filter(state=state, status='Approved').count()
-                approved_amount = Order.objects.filter(state=state, status='Approved').aggregate(total=Sum('total_amount'))['total'] or 0
-
-                shipped_orders = Order.objects.filter(state=state, status='Completed').count()
-                shipped_amount = Order.objects.filter(state=state, status='Completed').aggregate(total=Sum('total_amount'))['total'] or 0
-
-                cancelled_orders = Order.objects.filter(state=state, status='Cancelled').count()
-                cancelled_amount = Order.objects.filter(state=state, status='Cancelled').aggregate(total=Sum('total_amount'))['total'] or 0
-
-                rejected_orders = Order.objects.filter(state=state, status='Rejected').count()
-                rejected_amount = Order.objects.filter(state=state, status='Rejected').aggregate(total=Sum('total_amount'))['total'] or 0
-
-                returned_orders = Order.objects.filter(state=state, status='Return').count()
-                returned_amount = Order.objects.filter(state=state, status='Return').aggregate(total=Sum('total_amount'))['total'] or 0
+                summary = summary_map.get(
+                    state.id,
+                    {}
+                )
 
                 state_data = {
-                    'id': state.pk,
-                    'name': state.name,
-                    'total_orders_count': total_orders,
-                    'total_amount': total_amount,
-                    'approved_orders_count': approved_orders,
-                    'approved_amount': approved_amount,
-                    'completed_orders_count': shipped_orders,
-                    'completed_amount': shipped_amount,
-                    'cancelled_orders_count': cancelled_orders,
-                    'cancelled_amount': cancelled_amount,
-                    'rejected_orders_count': rejected_orders,
-                    'rejected_amount': rejected_amount,
-                    'returned_orders_count': returned_orders,
-                    'returned_amount': returned_amount,
-                    'orders': []
+
+                    "id": state.pk,
+
+                    "name": state.name,
+
+                    "total_orders_count": summary.get(
+                        "total_orders_count",
+                        0
+                    ),
+
+                    "total_amount": summary.get(
+                        "total_sales_amount"
+                    ) or 0,
+
+                    "approved_orders_count": summary.get(
+                        "approved_orders_count",
+                        0
+                    ),
+
+                    "approved_amount": summary.get(
+                        "approved_amount"
+                    ) or 0,
+
+                    "completed_orders_count": summary.get(
+                        "completed_orders_count",
+                        0
+                    ),
+
+                    "completed_amount": summary.get(
+                        "completed_amount"
+                    ) or 0,
+
+                    "cancelled_orders_count": summary.get(
+                        "cancelled_orders_count",
+                        0
+                    ),
+
+                    "cancelled_amount": summary.get(
+                        "cancelled_amount"
+                    ) or 0,
+
+                    "rejected_orders_count": summary.get(
+                        "rejected_orders_count",
+                        0
+                    ),
+
+                    "rejected_amount": summary.get(
+                        "rejected_amount"
+                    ) or 0,
+
+                    "returned_orders_count": summary.get(
+                        "returned_orders_count",
+                        0
+                    ),
+
+                    "returned_amount": summary.get(
+                        "returned_amount"
+                    ) or 0,
+
+                    "orders": []
+
                 }
 
-                for order_date in orders_by_date:
-                    date_orders = Order.objects.filter(state=state, order_date=order_date['order_date'])
-                    order_data = {
-                        'order_date': order_date['order_date'],
-                        'waiting_orders': OrderStateWiseSerializer(date_orders, many=True).data
-                    }
-                    state_data['orders'].append(order_data)
-
                 data.append(state_data)
+                state_data_map[state.id] = state_data
 
-            return Response({"data": data}, status=status.HTTP_200_OK)
+            orders_queryset = (
+                orders_queryset
+                .select_related(
+                    "manage_staff",
+                    "family",
+                    "customer",
+                    "state",
+                    "warehouses",
+                    "company",
+                    "billing_address",
+                    "bank",
+                    "parcel_service",
+                    "confirmed_by",
+                    "locked_by"
+                )
+                .order_by(
+                    "-order_date",
+                    "-id"
+                )
+            )
+
+            paginator = StandardPagination()
+
+            paginated_orders = paginator.paginate_queryset(
+                orders_queryset,
+                request,
+                view=self
+            )
+
+            serializer = OrderStateWiseSerializer(
+                paginated_orders,
+                many=True
+            )
+
+            serialized_orders = serializer.data
+
+            grouped_orders = {}
+
+            for order in serialized_orders:
+
+                state_id = order.get("state")
+
+                # Serializer returns state name.
+                # Use the original model instance
+                # to obtain the state ID reliably.
+
+            for order_instance, order_data in zip(
+
+                paginated_orders,
+
+                serialized_orders
+
+            ):
+
+                state_id = order_instance.state_id
+
+                order_date = order_instance.order_date
+
+                if state_id not in grouped_orders:
+
+                    grouped_orders[state_id] = {}
+
+                if order_date not in grouped_orders[state_id]:
+
+                    grouped_orders[state_id][order_date] = []
+
+                grouped_orders[state_id][order_date].append(
+
+                    order_data
+
+                )
+
+            for state_id, date_groups in grouped_orders.items():
+
+                state_data = state_data_map.get(
+                    state_id
+                )
+
+                if not state_data:
+                    continue
+
+                for order_date, waiting_orders in date_groups.items():
+                    state_data["orders"].append(
+                        {
+                            "order_date": order_date,
+                            "waiting_orders": waiting_orders
+                        }
+                    )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": (
+                        "State-wise sales report "
+                        "fetched successfully"
+                    ),
+
+                    "start_date": start_date_obj.isoformat(),
+                    "end_date": end_date_obj.isoformat(),
+                    "count": paginator.page.paginator.count,
+                    "current_page": paginator.page.number,
+                    "total_pages": paginator.page.paginator.num_pages,
+                    "page_size": paginator.get_page_size(request),
+                    "next": paginator.get_next_link(),
+                    "previous": paginator.get_previous_link(),
+                    "data": data
+                },
+                status=status.HTTP_200_OK
+            )
 
         except Exception as e:
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception(
+                "Error in StatewiseSalesReport: %s",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 
 class StateOrderDetailsView(BaseTokenView):
