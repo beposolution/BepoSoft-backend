@@ -1685,7 +1685,7 @@ class GRVModel(models.Model):
     price=models.DecimalField(max_digits=10, decimal_places=2)
     quantity=models.IntegerField()
     remark=models.CharField(max_length=20,choices=REMARK_CHOICES,null=True)
-    status=models.CharField(max_length=30,choices=STATUS_CHOICES,default='Waiting For Approval',null=True)
+    status=models.CharField(max_length=30,choices=STATUS_CHOICES,default='pending',null=True)
     date=models.DateField(null=True)
     time=models.TimeField(null=True)
     note=models.TextField(null=True, blank=True)
