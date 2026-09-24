@@ -8640,6 +8640,180 @@ class CyclingSkatingGRVGETView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class MyGRVGETView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            # Authenticate logged-in user
+            authUser, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # Get query parameters
+            search = request.GET.get("search", "").strip()
+            order_filter = request.GET.get("order", "").strip()
+            customer_filter = request.GET.get("customer", "").strip()
+            status_filter = request.GET.get("status", "").strip()
+            remark_filter = request.GET.get("remark", "").strip()
+            returnreason_filter = request.GET.get("returnreason", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            # Fetch GRV records belonging to logged-in manage_staff
+            grvdata = GRVModel.objects.select_related(
+                "order",
+                "order__manage_staff",
+                "order__customer",
+                "order__billing_address",
+                "order__family",
+                "product_id"
+            ).annotate(
+                price_as_text=Cast(
+                    "price",
+                    output_field=CharField()
+                )
+            ).filter(
+                order__manage_staff=authUser
+            ).order_by("-id")
+
+            # Filter by order ID or invoice number
+            if order_filter:
+
+                if order_filter.isdigit():
+
+                    grvdata = grvdata.filter(
+                        order_id=int(order_filter)
+                    )
+
+                else:
+
+                    grvdata = grvdata.filter(
+                        order__invoice__icontains=order_filter
+                    )
+
+            # Filter by customer ID or customer name
+            if customer_filter:
+
+                if customer_filter.isdigit():
+
+                    grvdata = grvdata.filter(
+                        order__customer_id=int(customer_filter)
+                    )
+
+                else:
+
+                    grvdata = grvdata.filter(
+                        order__customer__name__icontains=customer_filter
+                    )
+
+            # Filter by GRV start date
+            if start_date:
+
+                parsed_start_date = parse_date(start_date)
+
+                if not parsed_start_date:
+
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid start_date. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                grvdata = grvdata.filter(
+                    date__gte=parsed_start_date
+                )
+
+            # Filter by GRV end date
+            if end_date:
+
+                parsed_end_date = parse_date(end_date)
+
+                if not parsed_end_date:
+
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Invalid end_date. Use YYYY-MM-DD."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                grvdata = grvdata.filter(
+                    date__lte=parsed_end_date
+                )
+
+            # Filter by GRV status
+            if status_filter:
+
+                grvdata = grvdata.filter(
+                    status__iexact=status_filter
+                )
+
+            # Filter by remark
+            if remark_filter:
+
+                grvdata = grvdata.filter(
+                    remark__iexact=remark_filter
+                )
+
+            # Filter by return reason
+            if returnreason_filter:
+
+                grvdata = grvdata.filter(
+                    returnreason__iexact=returnreason_filter
+                )
+
+            # Search GRV records
+            if search:
+
+                grvdata = grvdata.filter(
+                    Q(remark__icontains=search) |
+                    Q(price_as_text__icontains=search) |
+                    Q(returnreason__icontains=search) |
+                    Q(product__icontains=search)
+                )
+
+            # Pagination
+            paginator = StandardPagination()
+
+            paginated_grvdata = paginator.paginate_queryset(
+                grvdata,
+                request
+            )
+
+            # Serialize GRV data
+            serializer = GRVSerializer(
+                paginated_grvdata,
+                many=True
+            )
+
+            # Return paginated response
+            return paginator.get_paginated_response(
+                {
+                    "status": "success",
+                    "message": "Logged-in staff GRV records fetched successfully",
+                    "data": serializer.data
+                }
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Error fetching logged-in staff GRV records"
+            )
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         
 

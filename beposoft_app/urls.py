@@ -222,6 +222,7 @@ urlpatterns = [
     path('api/grv/data/',GRVaddView.as_view()),
     path('api/get/grv/data/',GRVGETView.as_view()),
     path('api/grv/cycling/skating/', CyclingSkatingGRVGETView.as_view()),
+    path('api/my/grv/data/', MyGRVGETView.as_view()),
     path('api/getgrv/<int:pk>',GRVGetViewById.as_view()),
     path('api/grv/update/<int:pk>/',GRVUpdateView.as_view()),
     
