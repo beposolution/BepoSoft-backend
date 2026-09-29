@@ -15757,6 +15757,7 @@ class AdvanceTransferEditAccessStatusView(BaseTokenView):
 class AdvanceTransferEditRequestApproveView(BaseTokenView):
 
     def post(self, request, request_id):
+
         user, error = self.get_user_from_token(request)
 
         if error:
@@ -15768,18 +15769,19 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
             else ""
         )
 
-        ALLOWED_ROLES = {
+        DIRECT_EDIT_ROLES = {
             "ADMIN",
             "CEO",
             "COO",
             "HR",
         }
 
-        # -------------------------------------------------
+        # --------------------------------------------------
         # Permission check
-        # -------------------------------------------------
+        # --------------------------------------------------
 
-        if department not in ALLOWED_ROLES:
+        if department not in DIRECT_EDIT_ROLES:
+
             return Response(
                 {
                     "status": "error",
@@ -15792,27 +15794,30 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
 
             with transaction.atomic():
 
-                # -------------------------------------------------
-                # Lock request while approving
-                # -------------------------------------------------
+                # --------------------------------------------------
+                # Lock ONLY AdvanceTransferEditRequest
+                #
+                # IMPORTANT:
+                # Do NOT use select_related() here.
+                # A nullable joined table can cause:
+                #
+                # FOR UPDATE cannot be applied to the nullable
+                # side of an outer join
+                # --------------------------------------------------
 
                 edit_request = (
                     AdvanceTransferEditRequest.objects
                     .select_for_update()
-                    .select_related(
-                        "transfer",
-                        "requested_by",
-                        "requested_by__department_id",
-                    )
                     .filter(pk=request_id)
                     .first()
                 )
 
-                # -------------------------------------------------
+                # --------------------------------------------------
                 # Request not found
-                # -------------------------------------------------
+                # --------------------------------------------------
 
                 if not edit_request:
+
                     return Response(
                         {
                             "status": "error",
@@ -15821,11 +15826,12 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                         status=status.HTTP_404_NOT_FOUND,
                     )
 
-                # -------------------------------------------------
+                # --------------------------------------------------
                 # Only pending request can be approved
-                # -------------------------------------------------
+                # --------------------------------------------------
 
                 if edit_request.status != "pending":
+
                     return Response(
                         {
                             "status": "error",
@@ -15838,22 +15844,25 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-                # -------------------------------------------------
-                # Approve
-                # -------------------------------------------------
+                # --------------------------------------------------
+                # Approve request
+                # --------------------------------------------------
 
                 edit_request.status = "approved"
                 edit_request.approved_by = user
                 edit_request.approved_at = timezone.now()
 
-                # IMPORTANT:
-                # Don't use update_fields here for now.
-                # Normal save is safer while checking your model.
-                edit_request.save()
+                edit_request.save(
+                    update_fields=[
+                        "status",
+                        "approved_by",
+                        "approved_at",
+                    ]
+                )
 
-            # -------------------------------------------------
-            # Success response
-            # -------------------------------------------------
+            # --------------------------------------------------
+            # Success
+            # --------------------------------------------------
 
             return Response(
                 {
@@ -15861,32 +15870,8 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                     "message": "Edit access approved successfully.",
                     "data": {
                         "request_id": edit_request.id,
-
                         "transfer_id": edit_request.transfer_id,
-
                         "requested_by": edit_request.requested_by_id,
-
-                        "requested_by_name": (
-                            edit_request.requested_by.name
-                            if edit_request.requested_by
-                            else None
-                        ),
-
-                        "requested_by_eid": (
-                            edit_request.requested_by.eid
-                            if edit_request.requested_by
-                            else None
-                        ),
-
-                        "requested_by_department": (
-                            edit_request.requested_by.department_id.name
-                            if (
-                                edit_request.requested_by
-                                and edit_request.requested_by.department_id
-                            )
-                            else None
-                        ),
-
                         "request_status": edit_request.status,
                         "approved_by": user.id,
                         "approved_by_name": user.name,
@@ -15897,9 +15882,6 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
             )
 
         except Exception as e:
-
-            # This is important while debugging.
-            # It lets React show the actual backend problem.
 
             print(
                 "Advance transfer edit approval error:",
