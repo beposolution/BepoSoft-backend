@@ -15630,6 +15630,130 @@ class AdvanceTransferEditRequestListView(BaseTokenView):
         )
 
 
+class AdvanceTransferEditAccessStatusView(BaseTokenView):
+
+    def get(self, request, transfer_id):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        # Make sure transfer exists
+        try:
+            transfer = AdvanceAmountTransfer.objects.get(
+                pk=transfer_id
+            )
+        except AdvanceAmountTransfer.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Transfer not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        department = (
+            user.department_id.name.strip().upper()
+            if user.department_id and user.department_id.name
+            else ""
+        )
+
+        direct_edit_roles = [
+            "ADMIN",
+            "CEO",
+            "COO",
+            "HR",
+        ]
+
+        request_edit_roles = [
+            "ACCOUNTS / ACCOUNTING",
+        ]
+
+        # ADMIN / CEO / COO / HR
+        # Always have edit permission
+        if department in direct_edit_roles:
+            return Response(
+                {
+                    "status": "success",
+                    "transfer_id": transfer.id,
+                    "can_edit": True,
+                    "requires_approval": False,
+                    "request_status": "direct_access",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # ACCOUNTS / ACCOUNTING
+        if department in request_edit_roles:
+
+            latest_request = (
+                AdvanceTransferEditRequest.objects
+                .filter(
+                    transfer=transfer,
+                    requested_by=user,
+                )
+                .order_by("-id")
+                .first()
+            )
+
+            # Never requested before
+            if not latest_request:
+                return Response(
+                    {
+                        "status": "success",
+                        "transfer_id": transfer.id,
+                        "can_edit": False,
+                        "requires_approval": True,
+                        "request_status": "none",
+                        "request_id": None,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Approved
+            if latest_request.status == "approved":
+                return Response(
+                    {
+                        "status": "success",
+                        "transfer_id": transfer.id,
+                        "can_edit": True,
+                        "requires_approval": False,
+                        "request_status": "approved",
+                        "request_id": latest_request.id,
+                        "requested_at": latest_request.requested_at,
+                        "approved_at": latest_request.approved_at,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Pending / Rejected / Used
+            return Response(
+                {
+                    "status": "success",
+                    "transfer_id": transfer.id,
+                    "can_edit": False,
+                    "requires_approval": True,
+                    "request_status": latest_request.status,
+                    "request_id": latest_request.id,
+                    "requested_at": latest_request.requested_at,
+                    "approved_at": latest_request.approved_at,
+                    "used_at": latest_request.used_at,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Other departments
+        return Response(
+            {
+                "status": "success",
+                "transfer_id": transfer.id,
+                "can_edit": False,
+                "requires_approval": False,
+                "request_status": "not_allowed",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdvanceTransferEditRequestApproveView(BaseTokenView):
 
     def post(self, request, request_id):
