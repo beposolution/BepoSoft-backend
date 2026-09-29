@@ -15224,37 +15224,515 @@ class AdvanceAmountTransferDetailView(BaseTokenView):
             status=status.HTTP_200_OK,
         )
 
+    # def put(self, request, pk):
+    #     user, error = self.get_user_from_token(request)
+    #     if error:
+    #         return error
+
+    #     transfer = self.get_object(pk)
+    #     serializer = AdvanceAmountTransferSerializer(
+    #         transfer, data=request.data, partial=True
+    #     )
+
+    #     if serializer.is_valid():
+    #         serializer.save()
+
+    #         images = request.FILES.getlist("images")
+    #         for img in images:
+    #             AdvanceAmountTransferImage.objects.create(
+    #                 transfer=transfer, image=img
+    #             )
+
+    #         return Response(
+    #             {
+    #                 "message": "Transfer updated successfully",
+    #                 "data": AdvanceAmountTransferSerializer(transfer).data,
+    #             },
+    #             status=status.HTTP_200_OK,
+    #         )
+
+    #     return Response(
+    #         {"message": "Validation error", "errors": serializer.errors},
+    #         status=status.HTTP_400_BAD_REQUEST,
+    #     )
+
     def put(self, request, pk):
         user, error = self.get_user_from_token(request)
         if error:
             return error
 
         transfer = self.get_object(pk)
-        serializer = AdvanceAmountTransferSerializer(
-            transfer, data=request.data, partial=True
+
+        # EDIT ACCESS CONTROL
+        department = (
+            user.department_id.name.strip()
+            if user.department_id and user.department_id.name
+            else ""
         )
 
-        if serializer.is_valid():
-            serializer.save()
+        # Existing roles that can edit without requesting approval
+        direct_edit_roles = [
+            "ADMIN",
+            "CEO",
+            "COO",
+            "HR",
+        ]
 
-            images = request.FILES.getlist("images")
-            for img in images:
-                AdvanceAmountTransferImage.objects.create(
-                    transfer=transfer, image=img
+        # Roles that require one-time approval
+        request_edit_roles = [
+            "ACCOUNTS / ACCOUNTING",
+        ]
+
+        approved_request = None
+
+        # Existing roles -> direct edit access
+        if department in direct_edit_roles:
+            pass
+
+        # Accounts / Accounting -> require approved request
+        elif department in request_edit_roles:
+
+            approved_request = (
+                AdvanceTransferEditRequest.objects
+                .filter(
+                    transfer=transfer,
+                    requested_by=user,
+                    status="approved",
                 )
+                .order_by("-id")
+                .first()
+            )
+
+            if not approved_request:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": (
+                            "You do not currently have edit access. "
+                            "Please request edit access and wait for approval."
+                        ),
+                        "edit_access": False,
+                        "requires_approval": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # Any other department -> no edit access
+        else:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "You do not have permission to edit this transfer.",
+                    "edit_access": False,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # VALIDATE UPDATE
+        serializer = AdvanceAmountTransferSerializer(
+            transfer,
+            data=request.data,
+            partial=True,
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation error",
+                    "errors": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # UPDATE TRANSFER
+        try:
+            with transaction.atomic():
+
+                serializer.save()
+
+                # Upload new images
+                images = request.FILES.getlist("images")
+
+                for img in images:
+                    AdvanceAmountTransferImage.objects.create(
+                        transfer=transfer,
+                        image=img,
+                    )
+
+                # CONSUME ACCOUNTS APPROVAL
+                # Only after the update has successfully completed.
+                # This makes the approval SINGLE USE.
+                # Accounts must request approval again for next edit.
+                if approved_request:
+                    approved_request.status = "used"
+                    approved_request.used_at = timezone.now()
+
+                    approved_request.save(
+                        update_fields=[
+                            "status",
+                            "used_at",
+                        ]
+                    )
+
+            # Refresh data after successful update
+            transfer.refresh_from_db()
 
             return Response(
                 {
+                    "status": "success",
                     "message": "Transfer updated successfully",
                     "data": AdvanceAmountTransferSerializer(transfer).data,
+
+                    # Accounts permission is now consumed
+                    "edit_access": (
+                        department in direct_edit_roles
+                    ),
+                    "requires_new_request": (
+                        department in request_edit_roles
+                    ),
                 },
                 status=status.HTTP_200_OK,
             )
 
-        return Response(
-            {"message": "Validation error", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST,
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to update transfer",
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class AdvanceTransferEditAccessRequestView(BaseTokenView):
+
+    def post(self, request, transfer_id):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        department = (
+            user.department_id.name.strip().upper()
+            if user.department_id and user.department_id.name
+            else ""
         )
+
+        # Only Accounts / Accounting can request edit access
+        if department != "ACCOUNTS / ACCOUNTING":
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Only Accounts / Accounting can request edit access.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        transfer = get_object_or_404(
+            AdvanceAmountTransfer,
+            pk=transfer_id
+        )
+
+        # Check if pending or approved request already exists
+        existing_request = (
+            AdvanceTransferEditRequest.objects
+            .filter(
+                transfer=transfer,
+                requested_by=user,
+                status__in=["pending", "approved"],
+            )
+            .order_by("-id")
+            .first()
+        )
+
+        if existing_request:
+            if existing_request.status == "pending":
+                message = "Edit access request is already pending."
+            else:
+                message = "Edit access is already approved."
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": message,
+                    "request_id": existing_request.id,
+                    "request_status": existing_request.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create new request
+        edit_request = AdvanceTransferEditRequest.objects.create(
+            transfer=transfer,
+            requested_by=user,
+            status="pending",
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Edit access request sent successfully.",
+                "data": {
+                    "request_id": edit_request.id,
+                    "transfer_id": transfer.id,
+                    "requested_by": user.id,
+                    "requested_by_name": user.name,
+                    "requested_by_eid": user.eid,
+                    "department": (
+                        user.department_id.name
+                        if user.department_id
+                        else None
+                    ),
+                    "request_status": edit_request.status,
+                    "requested_at": edit_request.requested_at,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdvanceTransferEditRequestListView(BaseTokenView):
+
+    def get(self, request):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        department = (
+            user.department_id.name.strip().upper()
+            if user.department_id and user.department_id.name
+            else ""
+        )
+
+        allowed_roles = [
+            "ADMIN",
+            "CEO",
+            "COO",
+            "HR",
+        ]
+
+        if department not in allowed_roles:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "You do not have permission to view edit requests.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Default = pending
+        request_status = request.GET.get(
+            "status",
+            "pending"
+        ).strip().lower()
+
+        allowed_statuses = [
+            "pending",
+            "approved",
+            "rejected",
+            "used",
+            "all",
+        ]
+
+        if request_status not in allowed_statuses:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid request status.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        edit_requests = (
+            AdvanceTransferEditRequest.objects
+            .select_related(
+                "transfer",
+                "transfer__send_from",
+                "transfer__send_to",
+                "requested_by",
+                "requested_by__department_id",
+                "approved_by",
+            )
+            .order_by("-id")
+        )
+
+        if request_status != "all":
+            edit_requests = edit_requests.filter(
+                status=request_status
+            )
+
+        data = []
+
+        for item in edit_requests:
+            data.append(
+                {
+                    "request_id": item.id,
+
+                    "transfer_id": item.transfer.id,
+
+                    "send_from_id": item.transfer.send_from_id,
+                    "send_from_name": (
+                        item.transfer.send_from.name
+                        if item.transfer.send_from
+                        else None
+                    ),
+
+                    "send_to_id": item.transfer.send_to_id,
+                    "send_to_name": (
+                        item.transfer.send_to.name
+                        if item.transfer.send_to
+                        else None
+                    ),
+
+                    "amount": item.transfer.amount,
+                    "transfer_date": item.transfer.date,
+
+                    # WHO REQUESTED
+                    "requested_by": item.requested_by.id,
+                    "requested_by_name": item.requested_by.name,
+                    "requested_by_eid": item.requested_by.eid,
+
+                    "requested_by_department": (
+                        item.requested_by.department_id.name
+                        if item.requested_by.department_id
+                        else None
+                    ),
+
+                    "request_status": item.status,
+                    "requested_at": item.requested_at,
+
+                    # WHO APPROVED
+                    "approved_by": (
+                        item.approved_by.id
+                        if item.approved_by
+                        else None
+                    ),
+
+                    "approved_by_name": (
+                        item.approved_by.name
+                        if item.approved_by
+                        else None
+                    ),
+
+                    "approved_at": item.approved_at,
+                    "used_at": item.used_at,
+                }
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "count": len(data),
+                "data": data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdvanceTransferEditRequestApproveView(BaseTokenView):
+
+    def post(self, request, request_id):
+        user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        department = (
+            user.department_id.name.strip().upper()
+            if user.department_id and user.department_id.name
+            else ""
+        )
+
+        allowed_roles = [
+            "ADMIN",
+            "CEO",
+            "COO",
+            "HR",
+        ]
+
+        if department not in allowed_roles:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "You do not have permission to approve edit access.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            with transaction.atomic():
+
+                edit_request = (
+                    AdvanceTransferEditRequest.objects
+                    .select_for_update()
+                    .select_related(
+                        "transfer",
+                        "requested_by",
+                        "requested_by__department_id",
+                    )
+                    .get(pk=request_id)
+                )
+
+                # Only pending requests can be approved
+                if edit_request.status != "pending":
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Only pending requests can be approved.",
+                            "request_status": edit_request.status,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                edit_request.status = "approved"
+                edit_request.approved_by = user
+                edit_request.approved_at = timezone.now()
+
+                edit_request.save(
+                    update_fields=[
+                        "status",
+                        "approved_by",
+                        "approved_at",
+                    ]
+                )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Edit access approved successfully.",
+                    "data": {
+                        "request_id": edit_request.id,
+                        "transfer_id": edit_request.transfer_id,
+
+                        "requested_by": edit_request.requested_by.id,
+                        "requested_by_name": edit_request.requested_by.name,
+                        "requested_by_eid": edit_request.requested_by.eid,
+
+                        "requested_by_department": (
+                            edit_request.requested_by.department_id.name
+                            if edit_request.requested_by.department_id
+                            else None
+                        ),
+
+                        "request_status": edit_request.status,
+
+                        "approved_by": user.id,
+                        "approved_by_name": user.name,
+                        "approved_at": edit_request.approved_at,
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except AdvanceTransferEditRequest.DoesNotExist:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Edit access request not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
 
 class AdvanceAmountTransferImageDeleteView(BaseTokenView):
     def delete(self, request, image_id):
