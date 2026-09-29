@@ -1549,6 +1549,25 @@ class AdvanceAmountTransferImage(models.Model):
         return f"Image for Transfer ID {self.transfer.id}"
 
 
+class AdvanceTransferEditRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("used", "Used"),
+    ]
+    transfer = models.ForeignKey(AdvanceAmountTransfer, on_delete=models.CASCADE, related_name="edit_requests")
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="advance_transfer_edit_requests")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_advance_transfer_edit_requests")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "advance_transfer_edit_request"
+
+
 class PerfomaInvoiceOrder(models.Model):
     manage_staff = models.ForeignKey(User, on_delete=models.CASCADE)
     warehouses_obj = models.ForeignKey(WareHouse, on_delete=models.CASCADE, null=True)
