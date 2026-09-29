@@ -15754,6 +15754,100 @@ class AdvanceTransferEditAccessStatusView(BaseTokenView):
         )
 
 
+class AdvanceTransferEditRequestRejectView(BaseTokenView):
+
+    def post(self, request, request_id):
+
+        user, error = self.get_user_from_token(request)
+
+        if error:
+            return error
+
+        department = (
+            (user.department_id.name or "").strip().upper()
+            if user.department_id
+            else ""
+        )
+
+        DIRECT_EDIT_ROLES = {
+            "ADMIN",
+            "CEO",
+            "COO",
+            "HR",
+        }
+
+        if department not in DIRECT_EDIT_ROLES:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "You do not have permission to reject edit access.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+
+            with transaction.atomic():
+
+                edit_request = (
+                    AdvanceTransferEditRequest.objects
+                    .select_for_update()
+                    .filter(pk=request_id)
+                    .first()
+                )
+
+                if not edit_request:
+
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Edit access request not found.",
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                if edit_request.status != "pending":
+
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": (
+                                f"This request is already "
+                                f"{edit_request.status}."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                edit_request.status = "rejected"
+
+                edit_request.save(
+                    update_fields=["status"]
+                )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Edit access request rejected.",
+                    "request_id": edit_request.id,
+                    "request_status": "rejected",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to reject edit access.",
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class AdvanceTransferEditRequestApproveView(BaseTokenView):
 
     def post(self, request, request_id):
