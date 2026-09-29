@@ -15758,23 +15758,28 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
 
     def post(self, request, request_id):
         user, error = self.get_user_from_token(request)
+
         if error:
             return error
 
         department = (
-            user.department_id.name.strip().upper()
-            if user.department_id and user.department_id.name
+            (user.department_id.name or "").strip().upper()
+            if user.department_id
             else ""
         )
 
-        allowed_roles = [
+        ALLOWED_ROLES = {
             "ADMIN",
             "CEO",
             "COO",
             "HR",
-        ]
+        }
 
-        if department not in allowed_roles:
+        # -------------------------------------------------
+        # Permission check
+        # -------------------------------------------------
+
+        if department not in ALLOWED_ROLES:
             return Response(
                 {
                     "status": "error",
@@ -15784,7 +15789,12 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
             )
 
         try:
+
             with transaction.atomic():
+
+                # -------------------------------------------------
+                # Lock request while approving
+                # -------------------------------------------------
 
                 edit_request = (
                     AdvanceTransferEditRequest.objects
@@ -15794,31 +15804,56 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                         "requested_by",
                         "requested_by__department_id",
                     )
-                    .get(pk=request_id)
+                    .filter(pk=request_id)
+                    .first()
                 )
 
-                # Only pending requests can be approved
+                # -------------------------------------------------
+                # Request not found
+                # -------------------------------------------------
+
+                if not edit_request:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Edit access request not found.",
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                # -------------------------------------------------
+                # Only pending request can be approved
+                # -------------------------------------------------
+
                 if edit_request.status != "pending":
                     return Response(
                         {
                             "status": "error",
-                            "message": "Only pending requests can be approved.",
+                            "message": (
+                                f"This request is already "
+                                f"{edit_request.status}."
+                            ),
                             "request_status": edit_request.status,
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+                # -------------------------------------------------
+                # Approve
+                # -------------------------------------------------
+
                 edit_request.status = "approved"
                 edit_request.approved_by = user
                 edit_request.approved_at = timezone.now()
 
-                edit_request.save(
-                    update_fields=[
-                        "status",
-                        "approved_by",
-                        "approved_at",
-                    ]
-                )
+                # IMPORTANT:
+                # Don't use update_fields here for now.
+                # Normal save is safer while checking your model.
+                edit_request.save()
+
+            # -------------------------------------------------
+            # Success response
+            # -------------------------------------------------
 
             return Response(
                 {
@@ -15826,20 +15861,33 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                     "message": "Edit access approved successfully.",
                     "data": {
                         "request_id": edit_request.id,
+
                         "transfer_id": edit_request.transfer_id,
 
-                        "requested_by": edit_request.requested_by.id,
-                        "requested_by_name": edit_request.requested_by.name,
-                        "requested_by_eid": edit_request.requested_by.eid,
+                        "requested_by": edit_request.requested_by_id,
+
+                        "requested_by_name": (
+                            edit_request.requested_by.name
+                            if edit_request.requested_by
+                            else None
+                        ),
+
+                        "requested_by_eid": (
+                            edit_request.requested_by.eid
+                            if edit_request.requested_by
+                            else None
+                        ),
 
                         "requested_by_department": (
                             edit_request.requested_by.department_id.name
-                            if edit_request.requested_by.department_id
+                            if (
+                                edit_request.requested_by
+                                and edit_request.requested_by.department_id
+                            )
                             else None
                         ),
 
                         "request_status": edit_request.status,
-
                         "approved_by": user.id,
                         "approved_by_name": user.name,
                         "approved_at": edit_request.approved_at,
@@ -15848,13 +15896,24 @@ class AdvanceTransferEditRequestApproveView(BaseTokenView):
                 status=status.HTTP_200_OK,
             )
 
-        except AdvanceTransferEditRequest.DoesNotExist:
+        except Exception as e:
+
+            # This is important while debugging.
+            # It lets React show the actual backend problem.
+
+            print(
+                "Advance transfer edit approval error:",
+                repr(e)
+            )
+
             return Response(
                 {
                     "status": "error",
-                    "message": "Edit access request not found.",
+                    "message": "Failed to approve edit access.",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
                 },
-                status=status.HTTP_404_NOT_FOUND,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         
 
