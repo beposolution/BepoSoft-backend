@@ -15265,7 +15265,7 @@ class AdvanceAmountTransferDetailView(BaseTokenView):
 
         # EDIT ACCESS CONTROL
         department = (
-            user.department_id.name.strip()
+            user.department_id.name.strip().upper()
             if user.department_id and user.department_id.name
             else ""
         )
