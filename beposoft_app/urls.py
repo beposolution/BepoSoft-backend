@@ -188,6 +188,7 @@ urlpatterns = [
     path("api/advance/transfer/<int:transfer_id>/edit-request/", AdvanceTransferEditAccessRequestView.as_view(), name="advance-transfer-edit-request"),
     path("api/advance/transfer/edit-requests/", AdvanceTransferEditRequestListView.as_view(), name="advance-transfer-edit-request-list"),
     path("api/advance/transfer/edit-request/<int:request_id>/approve/", AdvanceTransferEditRequestApproveView.as_view(), name="advance-transfer-edit-request-approve"),
+    path("api/advance/transfer/<int:transfer_id>/edit-access/", AdvanceTransferEditAccessStatusView.as_view(), name="advance-transfer-edit-access-status"),
     path("api/advance/transfer/image/<int:image_id>/",AdvanceAmountTransferImageDeleteView.as_view(), name="advance-transfer-image-delete"),
     path('api/commission/receipts/add/', CommissionReceiptListCreateView.as_view(), name='commission-receipt-list-create'),
     path('api/commission/receipts/edit/<int:pk>/', CommissionReceiptDetailView.as_view(), name='commission-receipt-detail'),
