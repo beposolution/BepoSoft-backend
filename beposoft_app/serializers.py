@@ -2158,6 +2158,15 @@ class DataLogCreateSerializer(serializers.ModelSerializer):
             'longitude',
             'location_accuracy',
             'location_captured_at',
+            'location_name',
+            'street',
+            'sub_locality',
+            'locality',
+            'district',
+            'state',
+            'postal_code',
+            'country',
+            'country_code',
         ]
 
         extra_kwargs = {
@@ -2215,6 +2224,49 @@ class DataLogCreateSerializer(serializers.ModelSerializer):
             },
 
             'location_captured_at': {
+                'required': False,
+                'allow_null': True,
+            },
+            'location_name': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'street': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'sub_locality': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'locality': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'district': {
+                'required': False,
+                'allow_null': True,
+            },
+            'state': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'postal_code': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'country': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'country_code': {
                 'required': False,
                 'allow_null': True,
             },
