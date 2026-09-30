@@ -1770,11 +1770,30 @@ class DataLog(models.Model):
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='data_logs')
     before_data = models.JSONField(null=True, blank=True, default=dict)
     after_data  = models.JSONField(null=True, blank=True, default=dict)
+    # NETWORK / REQUEST EVIDENCE
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    # DEVICE EVIDENCE
+    device_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    device_name = models.CharField(max_length=255, null=True, blank=True)
+    platform = models.CharField(max_length=50, null=True, blank=True)
+    app_version = models.CharField(max_length=50, null=True, blank=True)
+    # LOCATION EVIDENCE
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_accuracy = models.FloatField(null=True, blank=True)
+    location_captured_at = models.DateTimeField(null=True, blank=True)
+    # SERVER TIMESTAMP
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "data_log"
-        indexes = [models.Index(fields=['created_at'])]
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['order', 'created_at']),
+            models.Index(fields=['device_id', 'created_at']),
+        ]
 
     def __str__(self):
         u = self.user.name if self.user else "anonymous"
