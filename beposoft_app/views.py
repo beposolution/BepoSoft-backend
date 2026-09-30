@@ -12959,20 +12959,77 @@ class ProductCategoryView(BaseTokenView):
                 "errors": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class DataLogCreateView(BaseTokenView):
-    def post(self, request):
-        auth_user, error_response = self.get_user_from_token(request)
-        if error_response:
-            return error_response
 
-        serializer = DataLogCreateSerializer(data=request.data)
-        if serializer.is_valid():
-            log = DataLog.objects.create(
-                user=auth_user,
-                **serializer.validated_data,  # accepts: order, before_data, after_data
+class DataLogCreateView(BaseTokenView):
+
+    def post(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(
+                request
             )
-            return Response(DataLogViewSerializer(log).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            if error_response:
+                return error_response
+
+            serializer = DataLogCreateSerializer(
+                data=request.data
+            )
+
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Invalid data.",
+                        "errors": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            user_agent = request.META.get(
+                "HTTP_USER_AGENT",
+                ""
+            )
+
+            log = DataLog.objects.create(
+                # Server controlled
+                user=auth_user,
+                user_agent=user_agent,
+
+                # Frontend supplied + serializer validated
+                # order
+                # before_data
+                # after_data
+                # ip_address
+                # device_id
+                # device_name
+                # platform
+                # app_version
+                # latitude
+                # longitude
+                # location_accuracy
+                # location_captured_at
+                **serializer.validated_data,
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Data log created successfully.",
+                    "data": DataLogViewSerializer(log).data,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Failed to create data log.",
+                    "error": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class DataLogListView(BaseTokenView):

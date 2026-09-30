@@ -2129,20 +2129,114 @@ class AttendanceAbsenceSerializer(serializers.Serializer):
 
 class DataLogCreateSerializer(serializers.ModelSerializer):
     """
-    Frontend supplies fields below; server injects user + created_at.
+    Frontend supplies audit evidence.
+
+    Server manages:
+    - user
+    - created_at
     """
+
     class Meta:
         model = DataLog
-        # user & created_at are server-managed
-        exclude = ['id', 'user', 'created_at']
+
+        fields = [
+            'order',
+            'before_data',
+            'after_data',
+
+            # Network
+            'ip_address',
+
+            # Device
+            'device_id',
+            'device_name',
+            'platform',
+            'app_version',
+
+            # Location
+            'latitude',
+            'longitude',
+            'location_accuracy',
+            'location_captured_at',
+        ]
+
+        extra_kwargs = {
+            'order': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'before_data': {
+                'required': False,
+            },
+
+            'after_data': {
+                'required': False,
+            },
+
+            'ip_address': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'device_id': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'device_name': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'platform': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'app_version': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'latitude': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'longitude': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'location_accuracy': {
+                'required': False,
+                'allow_null': True,
+            },
+
+            'location_captured_at': {
+                'required': False,
+                'allow_null': True,
+            },
+        }
+
 
 class DataLogViewSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(source='user.name', read_only=True)
-    order_name = serializers.CharField(source='order.invoice', read_only=True)
+
+    user_name = serializers.CharField(
+        source='user.name',
+        read_only=True
+    )
+
+    order_name = serializers.CharField(
+        source='order.invoice',
+        read_only=True
+    )
 
     class Meta:
         model = DataLog
-        fields = '__all__'      
+        fields = '__all__'
+
 
 class ProductDateWiseReportSerializer(serializers.ModelSerializer):
     order_date = serializers.CharField(source='order.order_date', read_only=True)
