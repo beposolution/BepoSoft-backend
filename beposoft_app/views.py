@@ -12013,29 +12013,48 @@ class ProductByWarehouseGETView(BaseTokenView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Filter unique products by groupID
             seen_group_ids = set()
             unique_products = []
 
             for product in products:
                 group_id = product.groupID
 
-                if group_id not in seen_group_ids:
+                if group_id:
+                    if group_id in seen_group_ids:
+                        continue
+
                     seen_group_ids.add(group_id)
+
+                    main_product = Products.objects.filter(
+                        groupID=group_id,
+                        warehouse=warehouse,
+                        approval_status__in=["Approved", "Disapproved"]
+                    ).order_by("id").first()
+
+                    if main_product:
+                        unique_products.append(main_product)
+
+                else:
                     unique_products.append(product)
 
             # Pagination
             paginator = StandardPagination()
-            paginated_products = paginator.paginate_queryset(unique_products, request)
+            paginated_products = paginator.paginate_queryset(
+                unique_products,
+                request
+            )
 
-            serializer = ProductSingleviewSerializres(paginated_products, many=True)
+            serializer = ProductSingleviewSerializres(
+                paginated_products,
+                many=True
+            )
 
             return paginator.get_paginated_response({
                 "message": "Product list successfully retrieved",
                 "data": serializer.data
             })
 
-        except authUser.DoesNotExist:
+        except User.DoesNotExist:
             return Response({
                 "status": "error",
                 "message": "User does not exist"
