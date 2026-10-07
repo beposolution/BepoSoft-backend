@@ -743,6 +743,7 @@ class Order(models.Model):
         ('Rejected', 'Rejected'),
         ('Return', 'Return'),
         ('Packing under progress', 'Packing under progress'),
+        ('Pending For Packing', 'Pending For Packing'),
         ('Packed', 'Packed'),
         ('Ready to ship', 'Ready to ship'),
         ('Pre Booked', 'Pre Booked'),
