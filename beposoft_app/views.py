@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 class StandardPagination(PageNumberPagination):
     page_size = 50
 
+class StandardPagination1(PageNumberPagination):
+    page_size = 100
+
 class UserRegistrationAPIView(APIView):
     def post(self, request):
         try:
@@ -874,7 +877,7 @@ class CustomerView(BaseTokenView):
                     Q(email__icontains=search)
                 )
 
-            paginator = StandardPagination()
+            paginator = StandardPagination1()
             result_page = paginator.paginate_queryset(customers, request)
 
             serializer = CustomerModelSerializerLimited(result_page, many=True)
