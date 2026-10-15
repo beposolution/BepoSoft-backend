@@ -1599,6 +1599,7 @@ class PerfomaInvoiceOrder(models.Model):
     ], default='Pending')
     total_amount = models.FloatField()
     note = models.TextField(null=True)
+    parcel_note = models.TextField(null=True, blank=True)
     
     def save(self, *args, **kwargs):
         if not self.invoice:

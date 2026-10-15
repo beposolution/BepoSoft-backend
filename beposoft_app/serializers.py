@@ -1133,7 +1133,7 @@ class PerfomaInvoiceOrderSerializers(serializers.ModelSerializer):
     warehouse_id = serializers.IntegerField(write_only=True) 
     class Meta :
         model = PerfomaInvoiceOrder
-        fields = ["manage_staff", "company", "customer", "invoice", "billing_address",
+        fields = ["manage_staff", "company", "customer", "invoice", "billing_address","parcel_note",
                   "shipping_mode", "code_charge","order_date", "family", "state", "status", "total_amount",
                    "shipping_charge","note", "warehouse_id"]  # Include warehouse_id
 
@@ -1236,7 +1236,7 @@ class PerfomaInvoiceProductsSerializers(serializers.ModelSerializer):
                   "invoice","billing_address",
                   "shipping_mode","code_charge","order_date","family","familyname",
                   "state","status","total_amount",
-                  "payment_receipts","payment_slips",
+                  "payment_receipts","payment_slips", "note","parcel_note",
                   "shipping_charge","customerID","perfoma_items","warehouse_id"]
     def to_representation(self, instance):
         # Add manage_staff_designation to the context of nested serializers
@@ -4632,6 +4632,7 @@ class PerfomaInvoiceOrderUpdateSerializer(serializers.ModelSerializer):
             "status",
             "total_amount",
             "note",
+            "parcel_note",
         ]
 
 
