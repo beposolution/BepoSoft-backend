@@ -207,6 +207,8 @@ urlpatterns = [
     path('api/perfoma/order/<int:order_id>/item/<int:item_id>/update/', PerfomaInvoiceOrderItemUpdateView.as_view()),
     path('api/perfoma/order/<int:pk>/update/', PerfomaInvoiceOrderUpdateView.as_view()),
     path('api/perfoma/order/<int:order_id>/item/add/', PerfomaInvoiceOrderItemAddView.as_view()),
+    path('api/perfoma/payment/slips/upload/', PerformaPaymentSlipAdd.as_view()),
+    path('api/perfoma/payment/slips/<int:proforma_id>/', PerformaPaymentSlipView.as_view()),
     
     
     path('api/warehouse/data/',WarehouseDataView.as_view()),

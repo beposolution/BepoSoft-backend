@@ -32615,6 +32615,144 @@ class PerfomaInvoiceOrderItemAddView(BaseTokenView):
             )
 
 
+# performa payment slip
+
+class PerformaPaymentSlipAdd(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            proforma_id = request.data.get("proforma")
+            files = request.FILES.getlist("files")
+
+            if not proforma_id:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Proforma ID is required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not files:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "No payment slip uploaded."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            proforma = PerfomaInvoiceOrder.objects.filter(
+                id=proforma_id
+            ).first()
+
+            if not proforma:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Proforma invoice not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            saved_slips = []
+
+            for uploaded_file in files:
+                slip = PerformaPaymentSlip.objects.create(
+                    proforma=proforma,
+                    file=uploaded_file,
+                    uploaded_by=user
+                )
+
+                saved_slips.append(slip)
+
+            serializer = PerformaPaymentSlipSerializer(
+                saved_slips,
+                many=True,
+                context={"request": request}
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Payment slip uploaded successfully.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while uploading payment slip.",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class PerformaPaymentSlipView(BaseTokenView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request, proforma_id):
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            proforma = PerfomaInvoiceOrder.objects.filter(
+                id=proforma_id
+            ).first()
+
+            if not proforma:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Proforma invoice not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            slips = PerformaPaymentSlip.objects.filter(
+                proforma=proforma
+            ).order_by("-id")
+
+            serializer = PerformaPaymentSlipSerializer(
+                slips,
+                many=True,
+                context={"request": request}
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "message": "Payment slips fetched successfully.",
+                    "proforma": proforma.id,
+                    "invoice": proforma.invoice,
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred while fetching payment slips.",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 # new api's for order data
 
