@@ -1648,6 +1648,21 @@ class PerfomaInvoiceOrderItem(models.Model):
 
 
 
+class PerformaPaymentSlip(models.Model):
+    proforma = models.ForeignKey(PerfomaInvoiceOrder, on_delete=models.CASCADE, related_name="payment_slips")
+    file = models.FileField(upload_to="performa_payment_slips/")
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="uploaded_performa_payment_slips")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Payment slip for {self.proforma.invoice} - {self.id}"
+
+    class Meta:
+        db_table = "performa_payment_slips"
+        ordering = ["-id"]
+
+
+
 
 class Warehousedata(models.Model):
     MESSAGE_CHOICES=[

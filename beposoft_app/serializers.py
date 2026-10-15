@@ -1188,7 +1188,31 @@ class PerfomaInvoiceProducts(serializers.ModelSerializer):
     
     def get_exclude_price(self, obj):
         return int(obj.product.exclude_price) if obj.product.exclude_price is not None else None
-    
+
+
+
+class PerformaPaymentSlipSerializer(serializers.ModelSerializer):
+
+    uploaded_by_name = serializers.CharField(source="uploaded_by.name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = PerformaPaymentSlip
+
+        fields = [
+            "id",
+            "proforma",
+            "file",
+            "uploaded_by",
+            "uploaded_by_name",
+            "uploaded_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "uploaded_by",
+            "uploaded_by_name",
+            "uploaded_at",
+        ]
 
     
         
@@ -1200,6 +1224,7 @@ class PerfomaInvoiceProductsSerializers(serializers.ModelSerializer):
  
     billing_address = ShippingAddressView(read_only=True)
     customer = CustomerSerilizers(read_only=True)
+    payment_slips = PerformaPaymentSlipSerializer(many=True, read_only=True)
     payment_receipts =  PaymentRecieptsViewSerializers(many=True,read_only=True)
     customerID = serializers.IntegerField(source="customer.pk")
     perfoma_items = PerfomaInvoiceProducts(many=True,read_only=True)
@@ -1211,7 +1236,7 @@ class PerfomaInvoiceProductsSerializers(serializers.ModelSerializer):
                   "invoice","billing_address",
                   "shipping_mode","code_charge","order_date","family","familyname",
                   "state","status","total_amount",
-                  "payment_receipts",
+                  "payment_receipts","payment_slips",
                   "shipping_charge","customerID","perfoma_items","warehouse_id"]
     def to_representation(self, instance):
         # Add manage_staff_designation to the context of nested serializers
