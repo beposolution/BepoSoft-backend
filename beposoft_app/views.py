@@ -2399,320 +2399,386 @@ class CreateOrder2(BaseTokenView):
             )
 
 
+
 class CreateOrder3(BaseTokenView):
     parser_classes = [MultiPartParser, FormParser]
 
-    @transaction.atomic
     def post(self, request):
+
+        authUser, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        performa_id = request.data.get("performa_id")
+
+        if not performa_id:
+            return Response({
+                "status": "error",
+                "message": "Proforma ID is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        payment_images = request.FILES.getlist("images")
+        payment_slip_ids = request.data.getlist(
+            "proforma_payment_slip_ids"
+        )
+
         try:
-            # Authenticate user
-            authUser, error_response = self.get_user_from_token(request)
-            if error_response:
-                return error_response
+            with transaction.atomic():
 
-            # Get proforma id
-            performa_id = request.data.get("performa_id")
+                # STEP 1: LOCK AND FETCH PROFORMA
 
-            # Newly uploaded payment receipt images
-            payment_images = request.FILES.getlist("images")
-
-            # Existing payment slips coming from Proforma
-            proforma_payment_slip_ids = request.data.getlist(
-                "proforma_payment_slip_ids"
-            )
-
-            # ---------------------------------------------------------
-            # FETCH VALID PROFORMA PAYMENT SLIPS
-            # ---------------------------------------------------------
-            proforma_payment_slips = PerformaPaymentSlip.objects.none()
-
-            if performa_id and proforma_payment_slip_ids:
-                proforma_payment_slips = PerformaPaymentSlip.objects.filter(
-                    id__in=proforma_payment_slip_ids,
-                    proforma_id=performa_id,
+                proforma = (
+                    PerfomaInvoiceOrder.objects
+                    .select_for_update()
+                    .filter(pk=performa_id)
+                    .first()
                 )
 
-            # ---------------------------------------------------------
-            # PAYMENT IMAGE VALIDATION
-            # At least one NEW image OR one EXISTING Proforma slip
-            # ---------------------------------------------------------
-            if not payment_images and not proforma_payment_slips.exists():
-                return Response(
-                    {
+                if not proforma:
+                    return Response({
+                        "status": "error",
+                        "message": "Proforma not found or already converted"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # STEP 2: GET ALL ORIGINAL PROFORMA PRODUCTS
+
+                proforma_items = list(
+                    PerfomaInvoiceOrderItem.objects
+                    .filter(order=proforma)
+                    .select_related("product")
+                    .order_by("id")
+                )
+
+                if not proforma_items:
+                    return Response({
+                        "status": "error",
+                        "message": "Proforma contains no products"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # STEP 3: FETCH VALID EXISTING PAYMENT SLIPS
+
+                try:
+                    requested_slip_ids = {
+                        int(slip_id)
+                        for slip_id in payment_slip_ids
+                    }
+                except (TypeError, ValueError):
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid payment slip IDs"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                proforma_payment_slips = list(
+                    PerformaPaymentSlip.objects.filter(
+                        proforma=proforma,
+                        id__in=requested_slip_ids
+                    )
+                )
+
+                found_slip_ids = {
+                    slip.id for slip in proforma_payment_slips
+                }
+
+                if found_slip_ids != requested_slip_ids:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid Proforma payment slips"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                has_existing_payment = any(
+                    bool(slip.file)
+                    for slip in proforma_payment_slips
+                )
+
+                if not payment_images and not has_existing_payment:
+                    return Response({
                         "status": "error",
                         "message": "At least one payment image is required"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # STEP 4: VALIDATE ORDER DETAILS
+                # The original Proforma is authoritative
+                # for customer/company/staff/warehouse.
+
+                order_data = request.data.copy()
+
+                source_fields = {
+                    "manage_staff": proforma.manage_staff_id,
+                    "company": proforma.company_id,
+                    "customer": proforma.customer_id,
+                    "billing_address": proforma.billing_address_id,
+                    "family": proforma.family_id,
+                    "state": proforma.state_id,
+                    "warehouses": proforma.warehouses_obj_id,
+                }
+
+                for field, value in source_fields.items():
+                    order_data[field] = (
+                        str(value) if value is not None else ""
+                    )
+
+                # Use saved Proforma amount, not cart amount.
+                order_data["total_amount"] = str(
+                    proforma.total_amount
                 )
 
-            # Fetch cart items
-            cart_items = BeposoftCart.objects.filter(
-                user=authUser
-            )
-
-            if not cart_items.exists():
-                return Response(
-                    {
-                        "status": "error",
-                        "message": "Cart is empty"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                serializer = OrderSerializer(
+                    data=order_data
                 )
 
-            # ---------------------------------------------------------
-            # VALIDATE ORDER SERIALIZER
-            # ---------------------------------------------------------
-            serializer = OrderSerializer(
-                data=request.data
-            )
-
-            if not serializer.is_valid():
-                return Response(
-                    {
+                if not serializer.is_valid():
+                    return Response({
                         "status": "error",
-                        "message": "Validation failed",
+                        "message": "Order validation failed",
                         "errors": serializer.errors
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-            # ---------------------------------------------------------
-            # AGGREGATE CART → PRODUCT-WISE QUANTITY
-            # ---------------------------------------------------------
-            product_data = {}
-            product_ids = set()
+                # STEP 5: CALCULATE TOTAL REQUIRED STOCK
 
-            for item in cart_items:
-                product = item.product
-                product_ids.add(product.id)
+                required_quantities = {}
 
-                if product.id not in product_data:
-                    product_data[product.id] = {
-                        "product": product,
-                        "quantity": Decimal(
-                            item.quantity
-                        ),
-                        "discount": Decimal(
-                            item.discount or 0
-                        ),
-                        "tax": Decimal(
-                            product.tax or 0
-                        ),
-                        "rate": Decimal(
-                            item.price or 0
-                        ),
-                        "description": item.note,
-                    }
+                for item in proforma_items:
 
-                else:
-                    product_data[
-                        product.id
-                    ]["quantity"] += Decimal(
-                        item.quantity
+                    if item.product_id is None:
+                        return Response({
+                            "status": "error",
+                            "message": "Proforma contains an invalid product"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    if item.quantity <= 0:
+                        return Response({
+                            "status": "error",
+                            "message": (
+                                f"Invalid quantity for product "
+                                f"{item.product_id}"
+                            )
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    product_id = item.product_id
+
+                    required_quantities[product_id] = (
+                        required_quantities.get(product_id, 0)
+                        + item.quantity
                     )
 
-                    product_data[
-                        product.id
-                    ]["discount"] += Decimal(
-                        item.discount or 0
-                    )
+                # STEP 6: LOCK PRODUCTS
 
-            # ---------------------------------------------------------
-            # LOCK PRODUCT ROWS & VALIDATE STOCK
-            # ---------------------------------------------------------
-            products = (
-                Products.objects
-                .select_for_update()
-                .filter(id__in=product_ids)
-            )
-
-            product_map = {
-                product.id: product
-                for product in products
-            }
-
-            stock_errors = []
-
-            for product_id, data in product_data.items():
-                product = product_map.get(
-                    product_id
+                products = (
+                    Products.objects
+                    .select_for_update()
+                    .filter(id__in=required_quantities.keys())
+                    .order_by("id")
                 )
 
-                if not product:
-                    stock_errors.append(
-                        {
+                product_map = {
+                    product.id: product
+                    for product in products
+                }
+
+                # STEP 7: VALIDATE STOCK FOR EVERY PRODUCT
+
+                stock_errors = []
+
+                for product_id, requested_qty in (
+                    required_quantities.items()
+                ):
+
+                    product = product_map.get(product_id)
+
+                    if not product:
+                        stock_errors.append({
                             "product_id": product_id,
                             "message": "Product not found"
-                        }
+                        })
+                        continue
+
+                    available_stock = (
+                        (product.stock or 0)
+                        - (product.locked_stock or 0)
                     )
-                    continue
 
-                requested_qty = int(
-                    data["quantity"]
-                )
-
-                available_stock = (
-                    product.stock
-                    - product.locked_stock
-                )
-
-                if requested_qty > available_stock:
-                    stock_errors.append(
-                        {
-                            "product_id": product.id,
+                    if requested_qty > available_stock:
+                        stock_errors.append({
+                            "product_id": product_id,
                             "product_name": product.name,
                             "requested_quantity": requested_qty,
                             "available_stock": available_stock,
-                            "message": (
-                                f"Out of stock. "
-                                f"Only {available_stock} available."
-                            ),
-                        }
-                    )
+                            "message": "Insufficient stock"
+                        })
 
-            # Stop order creation if stock fails
-            if stock_errors:
-                return Response(
-                    {
+                if stock_errors:
+                    return Response({
                         "status": "error",
                         "error_code": "OUT_OF_STOCK",
-                        "message": "Some products are out of stock",
+                        "message": (
+                            "Conversion cancelled because "
+                            "some products have insufficient stock"
+                        ),
                         "errors": stock_errors
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # STEP 8: CREATE ORDER
+
+                order = serializer.save()
+
+                # STEP 9: COPY ALL PROFORMA ITEMS
+                # Preserve individual lines, even when
+                # the same product appears multiple times.
+
+                for item in proforma_items:
+                    OrderItem.objects.create(
+                        order=order,
+                        product=product_map[item.product_id],
+                        quantity=item.quantity,
+                        rate=item.rate,
+                        discount=item.discount or 0,
+                        tax=item.tax,
+                        description=item.description,
+                    )
+
+                # STEP 10: VERIFY SAVED ORDER ITEMS
+
+                saved_items = list(
+                    OrderItem.objects.filter(order=order)
+                    .values(
+                        "product_id",
+                        "quantity",
+                        "rate",
+                        "discount",
+                        "tax",
+                        "description"
+                    )
                 )
 
-            # ---------------------------------------------------------
-            # CREATE ORDER
-            # ---------------------------------------------------------
-            order = serializer.save()
+                from collections import Counter
 
-            saved_payment_images = []
+                def normalize_item(
+                    product_id, quantity, rate,
+                    discount, tax, description
+                ):
+                    return (
+                        int(product_id),
+                        int(quantity),
+                        Decimal(str(rate)),
+                        Decimal(str(discount or 0)),
+                        int(tax),
+                        description or ""
+                    )
 
-            # ---------------------------------------------------------
-            # SAVE NEWLY UPLOADED PAYMENT IMAGES
-            # ---------------------------------------------------------
-            for image in payment_images:
-                payment_image = (
+                original_signature = Counter(
+                    normalize_item(
+                        item.product_id,
+                        item.quantity,
+                        item.rate,
+                        item.discount,
+                        item.tax,
+                        item.description
+                    )
+                    for item in proforma_items
+                )
+
+                saved_signature = Counter(
+                    normalize_item(
+                        item["product_id"],
+                        item["quantity"],
+                        item["rate"],
+                        item["discount"],
+                        item["tax"],
+                        item["description"]
+                    )
+                    for item in saved_items
+                )
+
+                if original_signature != saved_signature:
+                    raise ValueError(
+                        "Product verification failed: "
+                        "Order items do not match Proforma"
+                    )
+
+                # STEP 11: SAVE NEW PAYMENT IMAGES
+
+                for image in payment_images:
                     OrderPaymentImages.objects.create(
                         order=order,
                         image=image
                     )
-                )
 
-                saved_payment_images.append(
-                    payment_image
-                )
+                # STEP 12: COPY EXISTING PROFORMA SLIPS
 
-            # ---------------------------------------------------------
-            # COPY EXISTING PROFORMA PAYMENT SLIPS
-            # INTO ORDER PAYMENT IMAGES
-            # ---------------------------------------------------------
-            for slip in proforma_payment_slips:
+                for slip in proforma_payment_slips:
 
-                if not slip.file:
-                    continue
+                    if not slip.file:
+                        continue
 
-                try:
-                    slip.file.open("rb")
-
-                    original_filename = os.path.basename(
-                        slip.file.name
-                    )
-
-                    payment_image = OrderPaymentImages(
-                        order=order
-                    )
-
-                    payment_image.image.save(
-                        original_filename,
-                        File(slip.file),
-                        save=True
-                    )
-
-                    saved_payment_images.append(
-                        payment_image
-                    )
-
-                finally:
                     try:
-                        slip.file.close()
-                    except Exception:
-                        pass
+                        slip.file.open("rb")
 
-            # ---------------------------------------------------------
-            # LOCK STOCK & CREATE ORDER ITEMS
-            # ---------------------------------------------------------
-            for product_id, data in product_data.items():
-                product = product_map[product_id]
+                        original_filename = os.path.basename(
+                            slip.file.name
+                        )
 
-                qty = int(
-                    data["quantity"]
+                        payment_image = OrderPaymentImages(
+                            order=order
+                        )
+
+                        payment_image.image.save(
+                            original_filename,
+                            File(slip.file),
+                            save=True
+                        )
+
+                    finally:
+                        try:
+                            slip.file.close()
+                        except Exception:
+                            pass
+
+                # STEP 13: DELETE CONVERTED PROFORMA
+
+                original_proforma_id = proforma.id
+                original_invoice = proforma.invoice
+
+                proforma.delete()
+
+                # STEP 14: SUCCESS RESPONSE
+
+                response_data = OrderSerializer(order).data
+
+                response_data["proforma_id"] = (
+                    original_proforma_id
+                )
+                response_data["proforma_invoice"] = (
+                    original_invoice
+                )
+                response_data["products_expected"] = len(
+                    proforma_items
+                )
+                response_data["products_created"] = len(
+                    saved_items
                 )
 
-                # Products.objects.filter(
-                #     id=product.id
-                # ).update(
-                #     locked_stock=F("locked_stock") + qty
-                # )
-
-                OrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    quantity=qty,
-                    discount=data["discount"],
-                    tax=data["tax"],
-                    rate=data["rate"],
-                    description=data["description"],
-                )
-
-            # ---------------------------------------------------------
-            # CLEAR CART
-            # ---------------------------------------------------------
-            cart_items.delete()
-
-            # ---------------------------------------------------------
-            # DELETE USED PROFORMA
-            # Only after files have been copied successfully
-            # ---------------------------------------------------------
-            if performa_id:
-                PerfomaInvoiceOrder.objects.filter(
-                    id=performa_id
-                ).delete()
-
-            # ---------------------------------------------------------
-            # SUCCESS RESPONSE
-            # ---------------------------------------------------------
-            return Response(
-                {
+                return Response({
                     "status": "success",
                     "message": (
-                        "Order and payment images "
-                        "created successfully"
+                        "Proforma converted successfully. "
+                        "All products were transferred."
                     ),
-                    "data": OrderSerializer(order).data
-                },
-                status=status.HTTP_201_CREATED
+                    "data": response_data
+                }, status=status.HTTP_201_CREATED)
+
+        except Exception:
+            logger.exception(
+                "Unexpected error during Proforma conversion"
             )
 
-        except Exception as e:
-            logger.error(
-                "Unexpected error during order creation",
-                exc_info=True
-            )
+            return Response({
+                "status": "error",
+                "message": (
+                    "Proforma conversion failed. "
+                    "Database transaction rolled back."
+                )
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            traceback.print_exc()
-
-            return Response(
-                {
-                    "status": "error",
-                    "message": (
-                        "An unexpected error occurred"
-                    ),
-                    "errors": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 
 class OrderItemCreateView(APIView):
