@@ -6626,6 +6626,118 @@ class PerfomaInvoiceListViewNew(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
+class PerfomaInvoiceWithPaymentSlipsView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            search = request.GET.get("search", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+            manage_staff = request.GET.get("manage_staff", "").strip()
+            customer = request.GET.get("customer", "").strip()
+            company = request.GET.get("company", "").strip()
+
+            # Get only proforma invoices with payment slips
+            orders = (
+                PerfomaInvoiceOrder.objects
+                .filter(payment_slips__isnull=False)
+                .select_related(
+                    "manage_staff",
+                    "warehouses_obj",
+                    "company",
+                    "customer",
+                    "billing_address",
+                    "family",
+                    "state",
+                )
+                .prefetch_related(
+                    "payment_slips",
+                    "perfoma_items",
+                )
+                .distinct()
+                .order_by("-order_date", "-id")
+            )
+
+            # Search by invoice number
+            if search:
+                orders = orders.filter(
+                    invoice__icontains=search
+                )
+
+            # Filter by start date
+            if start_date:
+                orders = orders.filter(
+                    order_date__gte=start_date
+                )
+
+            # Filter by end date
+            if end_date:
+                orders = orders.filter(
+                    order_date__lte=end_date
+                )
+
+            # Filter by staff
+            if manage_staff:
+                orders = orders.filter(
+                    manage_staff_id=manage_staff
+                )
+
+            # Filter by customer
+            if customer:
+                orders = orders.filter(
+                    customer_id=customer
+                )
+
+            # Filter by company
+            if company:
+                orders = orders.filter(
+                    company_id=company
+                )
+
+            # Pagination
+            paginator = StandardPagination()
+
+            paginated_orders = paginator.paginate_queryset(
+                orders,
+                request,
+            )
+
+            # Serialize existing proforma data
+            serializer = PerfomaInvoiceProductsSerializers(
+                paginated_orders,
+                many=True,
+                context={"request": request},
+            )
+
+            return paginator.get_paginated_response(
+                serializer.data
+            )
+
+        except DatabaseError as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Database error occurred",
+                    "error": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "status": "error",
+                    "message": str(error),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
         
 class PerfomaInvoiceDetailView(BaseTokenView):
     def get(self, request, invoice):
