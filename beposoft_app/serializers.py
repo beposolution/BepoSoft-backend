@@ -1150,15 +1150,7 @@ class PerfomaInvoiceOrderSerializers(serializers.ModelSerializer):
         order.save()
 
         return order
-       
-     
-
-class PerformaOrderListSerilaizer(serializers.ModelSerializer):
-    customermame=serializers.CharField(source="customer.name",read_only=True)
-    staffname=serializers.CharField(source="manage_staff.name",read_only=True) 
-    class Meta:
-        model=PerfomaInvoiceOrder
-        fields='__all__'       
+          
 
 
 class CallLogSerializer(serializers.ModelSerializer):
@@ -1213,6 +1205,16 @@ class PerformaPaymentSlipSerializer(serializers.ModelSerializer):
             "uploaded_by_name",
             "uploaded_at",
         ]
+
+
+class PerformaOrderListSerilaizer(serializers.ModelSerializer):
+    customermame=serializers.CharField(source="customer.name",read_only=True)
+    staffname=serializers.CharField(source="manage_staff.name",read_only=True) 
+    payment_slips = PerformaPaymentSlipSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model=PerfomaInvoiceOrder
+        fields='__all__'    
 
     
         
