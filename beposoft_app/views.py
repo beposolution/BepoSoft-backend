@@ -9181,13 +9181,10 @@ class MyGRVGETView(BaseTokenView):
             if order_filter:
 
                 if order_filter.isdigit():
-
                     grvdata = grvdata.filter(
                         order_id=int(order_filter)
                     )
-
                 else:
-
                     grvdata = grvdata.filter(
                         order__invoice__icontains=order_filter
                     )
@@ -9196,13 +9193,10 @@ class MyGRVGETView(BaseTokenView):
             if customer_filter:
 
                 if customer_filter.isdigit():
-
                     grvdata = grvdata.filter(
                         order__customer_id=int(customer_filter)
                     )
-
                 else:
-
                     grvdata = grvdata.filter(
                         order__customer__name__icontains=customer_filter
                     )
@@ -9213,7 +9207,6 @@ class MyGRVGETView(BaseTokenView):
                 parsed_start_date = parse_date(start_date)
 
                 if not parsed_start_date:
-
                     return Response(
                         {
                             "status": "error",
@@ -9232,7 +9225,6 @@ class MyGRVGETView(BaseTokenView):
                 parsed_end_date = parse_date(end_date)
 
                 if not parsed_end_date:
-
                     return Response(
                         {
                             "status": "error",
@@ -9247,28 +9239,24 @@ class MyGRVGETView(BaseTokenView):
 
             # Filter by GRV status
             if status_filter:
-
                 grvdata = grvdata.filter(
                     status__iexact=status_filter
                 )
 
             # Filter by remark
             if remark_filter:
-
                 grvdata = grvdata.filter(
                     remark__iexact=remark_filter
                 )
 
             # Filter by return reason
             if returnreason_filter:
-
                 grvdata = grvdata.filter(
                     returnreason__iexact=returnreason_filter
                 )
 
             # Search GRV records
             if search:
-
                 grvdata = grvdata.filter(
                     Q(remark__icontains=search) |
                     Q(price_as_text__icontains=search) |
@@ -9276,7 +9264,181 @@ class MyGRVGETView(BaseTokenView):
                     Q(product__icontains=search)
                 )
 
-            # Pagination
+            # ==========================================
+            # GRV SUMMARY - NEW SECTION
+            # ==========================================
+
+            # Price multiplied by returned quantity
+            grv_amount_expression = ExpressionWrapper(
+                F("price") * F("quantity"),
+                output_field=DecimalField(
+                    max_digits=18,
+                    decimal_places=2
+                )
+            )
+
+            # Aggregate all filtered GRV records
+            # Summary is calculated BEFORE pagination
+            summary_data = grvdata.aggregate(
+
+                # Overall totals
+                total_grv_count=Count("id"),
+
+                total_order_count=Count(
+                    "order_id",
+                    distinct=True
+                ),
+
+                total_quantity=Sum("quantity"),
+
+                total_grv_amount=Sum(
+                    grv_amount_expression
+                ),
+
+                total_cod_amount=Sum("cod_amount"),
+
+                # Status-wise counts
+                pending_count=Count(
+                    "id",
+                    filter=Q(status__iexact="pending")
+                ),
+
+                approved_count=Count(
+                    "id",
+                    filter=Q(status__iexact="approved")
+                ),
+
+                rejected_count=Count(
+                    "id",
+                    filter=Q(status__iexact="rejected")
+                ),
+
+                waiting_for_approval_count=Count(
+                    "id",
+                    filter=Q(
+                        status__iexact="Waiting For Approval"
+                    )
+                ),
+
+                # Remark-wise counts
+                return_count=Count(
+                    "id",
+                    filter=Q(remark__iexact="return")
+                ),
+
+                refund_count=Count(
+                    "id",
+                    filter=Q(remark__iexact="refund")
+                ),
+
+                exchange_count=Count(
+                    "id",
+                    filter=Q(remark__iexact="exchange")
+                ),
+
+                cod_return_count=Count(
+                    "id",
+                    filter=Q(remark__iexact="cod_return")
+                ),
+
+                # Return reason-wise counts
+                damaged_count=Count(
+                    "id",
+                    filter=Q(returnreason__iexact="damaged")
+                ),
+
+                partially_damaged_count=Count(
+                    "id",
+                    filter=Q(
+                        returnreason__iexact="partially_damaged"
+                    )
+                ),
+
+                usable_count=Count(
+                    "id",
+                    filter=Q(returnreason__iexact="usable")
+                )
+            )
+
+            # Format summary response
+            summary = {
+
+                "total_grv_count": (
+                    summary_data["total_grv_count"] or 0
+                ),
+
+                "total_order_count": (
+                    summary_data["total_order_count"] or 0
+                ),
+
+                "total_quantity": (
+                    summary_data["total_quantity"] or 0
+                ),
+
+                "total_grv_amount": str(
+                    summary_data["total_grv_amount"]
+                    or Decimal("0.00")
+                ),
+
+                "total_cod_amount": str(
+                    summary_data["total_cod_amount"]
+                    or Decimal("0.00")
+                ),
+
+                "status_summary": {
+
+                    "pending_count": (
+                        summary_data["pending_count"] or 0
+                    ),
+
+                    "approved_count": (
+                        summary_data["approved_count"] or 0
+                    ),
+
+                    "rejected_count": (
+                        summary_data["rejected_count"] or 0
+                    ),
+
+                    "waiting_for_approval_count": (
+                        summary_data["waiting_for_approval_count"] or 0
+                    )
+                },
+
+                "remark_summary": {
+
+                    "return_count": (
+                        summary_data["return_count"] or 0
+                    ),
+
+                    "refund_count": (
+                        summary_data["refund_count"] or 0
+                    ),
+
+                    "exchange_count": (
+                        summary_data["exchange_count"] or 0
+                    ),
+
+                    "cod_return_count": (
+                        summary_data["cod_return_count"] or 0
+                    )
+                },
+
+                "return_reason_summary": {
+
+                    "damaged_count": (
+                        summary_data["damaged_count"] or 0
+                    ),
+
+                    "partially_damaged_count": (
+                        summary_data["partially_damaged_count"] or 0
+                    ),
+
+                    "usable_count": (
+                        summary_data["usable_count"] or 0
+                    )
+                }
+            }
+
             paginator = StandardPagination()
 
             paginated_grvdata = paginator.paginate_queryset(
@@ -9290,11 +9452,11 @@ class MyGRVGETView(BaseTokenView):
                 many=True
             )
 
-            # Return paginated response
             return paginator.get_paginated_response(
                 {
                     "status": "success",
                     "message": "Logged-in staff GRV records fetched successfully",
+                    "summary": summary,
                     "data": serializer.data
                 }
             )
@@ -9312,6 +9474,7 @@ class MyGRVGETView(BaseTokenView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
         
         
 
