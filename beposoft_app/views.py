@@ -9439,6 +9439,41 @@ class MyGRVGETView(BaseTokenView):
                 }
             }
 
+            # ORDER SUMMARY - NEW SECTION
+            # Fetch orders belonging to logged-in staff
+            orders = Order.objects.filter(
+                manage_staff=authUser
+            )
+
+            # Filter orders by order date
+            if start_date:
+                orders = orders.filter(
+                    order_date__gte=parsed_start_date.isoformat()
+                )
+
+            if end_date:
+                orders = orders.filter(
+                    order_date__lte=parsed_end_date.isoformat()
+                )
+
+            # Calculate order count and total amount
+            order_summary_data = orders.aggregate(
+                total_order_count=Count("id"),
+                total_order_amount=Sum("total_amount")
+            )
+
+            # Format order summary
+            order_summary = {
+                "total_order_count": (
+                    order_summary_data["total_order_count"] or 0
+                ),
+                "total_order_amount": str(
+                    Decimal(str(
+                        order_summary_data["total_order_amount"] or 0
+                    )).quantize(Decimal("0.01"))
+                )
+            }
+
             paginator = StandardPagination()
 
             paginated_grvdata = paginator.paginate_queryset(
@@ -9457,6 +9492,7 @@ class MyGRVGETView(BaseTokenView):
                     "status": "success",
                     "message": "Logged-in staff GRV records fetched successfully",
                     "summary": summary,
+                    "order_summary": order_summary,
                     "data": serializer.data
                 }
             )
