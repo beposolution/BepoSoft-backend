@@ -4723,7 +4723,7 @@ class ProductPointSystemSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
 
-        # For PUT/PATCH, take existing value if not passed
+        # For PUT/PATCH, use existing values if not provided
         point_type = data.get(
             "point_type",
             getattr(self.instance, "point_type", None)
@@ -4744,6 +4744,7 @@ class ProductPointSystemSerializer(serializers.ModelSerializer):
             getattr(self.instance, "point", None)
         )
 
+        # POINT VALIDATION
         if point is not None and point < 0:
             raise serializers.ValidationError({
                 "point": "Point cannot be negative."
@@ -4767,8 +4768,54 @@ class ProductPointSystemSerializer(serializers.ModelSerializer):
                     "quantity": "Quantity must be greater than 0."
                 })
 
+            # CHECK DUPLICATE PRODUCT
+            duplicate = ProductPointSystem.objects.filter(
+                point_type="product",
+                product=product
+            )
+
+            # Exclude current record during update
+            if self.instance:
+                duplicate = duplicate.exclude(
+                    pk=self.instance.pk
+                )
+
+            if duplicate.exists():
+                raise serializers.ValidationError({
+                    "product": (
+                        f"Point system already exists for "
+                        f"product '{product.name}'. "
+                        f"Duplicate products are not allowed."
+                    )
+                })
+
         else:
-            # MD / SD / Leads etc. do not need product & quantity
+
+            # CHECK DUPLICATE POINT TYPE
+            duplicate = ProductPointSystem.objects.filter(
+                point_type=point_type
+            )
+
+            # Exclude current record during update
+            if self.instance:
+                duplicate = duplicate.exclude(
+                    pk=self.instance.pk
+                )
+
+            if duplicate.exists():
+                point_type_name = dict(
+                    ProductPointSystem.POINT_TYPE_CHOICES
+                ).get(point_type, point_type)
+
+                raise serializers.ValidationError({
+                    "point_type": (
+                        f"Point system for '{point_type_name}' "
+                        f"already exists. Duplicate point types "
+                        f"are not allowed."
+                    )
+                })
+
+            # Other point types don't require product/quantity
             data["product"] = None
             data["quantity"] = None
 
