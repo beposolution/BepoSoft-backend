@@ -34309,7 +34309,7 @@ class SalesPointRankingView(BaseTokenView):
     def get(self, request):
         try:
             from collections import defaultdict
-            from decimal import Decimal
+            from decimal import Decimal, ROUND_HALF_UP
             from datetime import datetime, time
             from django.db.models import Sum
             from django.utils import timezone
@@ -34389,7 +34389,7 @@ class SalesPointRankingView(BaseTokenView):
             # 3. Only BDO, BDM, SD staff
             # --------------------------------------------
 
-            allowed_departments = ["BDO", "BDM", "SD"]
+            allowed_departments = ["BDO", "BDM", "SD", "ASD"]
 
             eligible_users = User.objects.select_related(
                 "department_id",
@@ -34677,12 +34677,28 @@ class SalesPointRankingView(BaseTokenView):
                 if required_qty <= 0:
                     continue
 
-                completed_blocks = (
-                    sold_qty // required_qty
+                # Completed quantity blocks
+                completed_blocks = sold_qty // required_qty
+
+                # Remaining quantity
+                remaining_quantity = sold_qty % required_qty
+
+                # Points for all sold quantities
+                earned_points = (
+                    (Decimal(sold_qty) / Decimal(required_qty))
+                    * rule.point
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
                 )
 
-                earned_points = (
-                    Decimal(completed_blocks) * rule.point
+                # Points for remaining quantity
+                remaining_points = (
+                    (Decimal(remaining_quantity) / Decimal(required_qty))
+                    * rule.point
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
                 )
 
                 staff = get_staff(uid)
@@ -34695,7 +34711,9 @@ class SalesPointRankingView(BaseTokenView):
                     "sold_quantity": sold_qty,
                     "required_quantity": required_qty,
                     "completed_blocks": completed_blocks,
+                    "remaining_quantity": remaining_quantity,
                     "point_per_block": str(rule.point),
+                    "remaining_points": str(remaining_points),
                     "earned_points": str(earned_points)
                 }
 
