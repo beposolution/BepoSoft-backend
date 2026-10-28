@@ -481,6 +481,7 @@ urlpatterns = [
     # point system
     path("api/product/point/system/", ProductPointSystemView.as_view()),
     path("api/product/point/system/edit/<int:pk>/", ProductPointSystemDetailView.as_view()),
+    path("api/sales/point/ranking/", SalesPointRankingView.as_view(),),
 
     # salary api
     path("api/staff/salary/", StaffSalaryView.as_view()),

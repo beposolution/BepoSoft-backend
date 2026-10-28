@@ -34302,6 +34302,553 @@ class ProductPointSystemDetailView(BaseTokenView):
             )
 
 
+
+
+class SalesPointRankingView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            from collections import defaultdict
+            from decimal import Decimal
+            from datetime import datetime, time
+            from django.db.models import Sum
+            from django.utils import timezone
+
+            # --------------------------------------------
+            # 1. Authentication
+            # --------------------------------------------
+
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            ZERO = Decimal("0.00")
+
+            # --------------------------------------------
+            # 2. Optional filters
+            # --------------------------------------------
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            staff_id = request.GET.get("staff_id")
+
+            if bool(start_date) != bool(end_date):
+                return Response({
+                    "status": "error",
+                    "message": "Provide both start_date and end_date."
+                }, status=400)
+
+            start_dt = None
+            end_dt = None
+
+            if start_date and end_date:
+                try:
+                    start = datetime.strptime(
+                        start_date, "%Y-%m-%d"
+                    ).date()
+
+                    end = datetime.strptime(
+                        end_date, "%Y-%m-%d"
+                    ).date()
+
+                    if start > end:
+                        return Response({
+                            "status": "error",
+                            "message": "Start date cannot be after end date."
+                        }, status=400)
+
+                    start_dt = timezone.make_aware(
+                        datetime.combine(start, time.min)
+                    )
+
+                    end_dt = timezone.make_aware(
+                        datetime.combine(end, time.max)
+                    )
+
+                except ValueError:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    }, status=400)
+
+            if staff_id:
+                try:
+                    staff_id = int(staff_id)
+
+                    if staff_id <= 0:
+                        raise ValueError()
+
+                except ValueError:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid staff_id."
+                    }, status=400)
+
+            # --------------------------------------------
+            # 3. Only BDO, BDM, SD staff
+            # --------------------------------------------
+
+            allowed_departments = ["BDO", "BDM", "SD"]
+
+            eligible_users = User.objects.select_related(
+                "department_id",
+                "family"
+            ).filter(
+                department_id__name__in=allowed_departments,
+                approval_status="approved"
+            )
+
+            if staff_id:
+                eligible_users = eligible_users.filter(
+                    id=staff_id
+                )
+
+            eligible_users = list(eligible_users)
+
+            eligible_staff_ids = [
+                user.id for user in eligible_users
+            ]
+
+            user_map = {
+                user.id: user for user in eligible_users
+            }
+
+            # --------------------------------------------
+            # 4. Load point configurations
+            # --------------------------------------------
+
+            configurations = ProductPointSystem.objects.select_related(
+                "product"
+            ).order_by("-id")
+
+            general_rules = {}
+            product_rules = {}
+
+            for config in configurations:
+
+                if config.point_type == "product":
+
+                    if not config.product_id:
+                        continue
+
+                    if config.product_id not in product_rules:
+                        product_rules[config.product_id] = config
+
+                elif config.point_type not in general_rules:
+
+                    general_rules[config.point_type] = config
+
+            # --------------------------------------------
+            # 5. Map main products and variants
+            # --------------------------------------------
+
+            product_to_rule = {}
+
+            for main_id, rule in product_rules.items():
+
+                main_product = rule.product
+
+                if not main_product:
+                    continue
+
+                product_to_rule[main_id] = main_id
+
+                # Match related Products records
+                # through the same groupID
+                if main_product.groupID:
+
+                    related_ids = Products.objects.filter(
+                        groupID=main_product.groupID
+                    ).values_list("id", flat=True)
+
+                    for related_id in related_ids:
+                        product_to_rule.setdefault(
+                            related_id,
+                            main_id
+                        )
+
+            # --------------------------------------------
+            # 6. Initialize staff data
+            # --------------------------------------------
+
+            staff_data = {}
+
+            def get_staff(user_id):
+
+                if user_id not in staff_data:
+
+                    staff_data[user_id] = {
+                        "staff_id": user_id,
+
+                        "md_count": 0,
+                        "sd_count": 0,
+                        "new_leads": 0,
+                        "new_customers": 0,
+                        "new_conversions": 0,
+
+                        "product_points": ZERO,
+                        "md_points": ZERO,
+                        "sd_points": ZERO,
+                        "new_lead_points": ZERO,
+                        "new_customer_points": ZERO,
+                        "new_conversion_points": ZERO,
+
+                        "products": {}
+                    }
+
+                return staff_data[user_id]
+
+            # Include all eligible staff, even with 0 points
+            for user_id in eligible_staff_ids:
+                get_staff(user_id)
+
+            # --------------------------------------------
+            # 7. Get SalesTeamDailyReport data
+            # --------------------------------------------
+
+            reports = SalesTeamDailyReport.objects.filter(
+                created_by_id__in=eligible_staff_ids
+            )
+
+            if start_dt:
+                reports = reports.filter(
+                    created_at__range=(start_dt, end_dt)
+                )
+
+            reports = reports.values(
+                "created_by_id"
+            ).annotate(
+                total_md=Sum("md"),
+                total_sd=Sum("sd"),
+                total_leads=Sum("new_leads"),
+                total_customers=Sum("new_customers"),
+                total_conversions=Sum("new_conversions")
+            )
+
+            def calculate_rule_points(point_type, count):
+
+                rule = general_rules.get(point_type)
+
+                if not rule:
+                    return ZERO
+
+                return Decimal(count) * rule.point
+
+            for report in reports:
+
+                uid = report["created_by_id"]
+
+                staff = get_staff(uid)
+
+                staff["md_count"] = report["total_md"] or 0
+
+                staff["sd_count"] = report["total_sd"] or 0
+
+                staff["new_leads"] = (
+                    report["total_leads"] or 0
+                )
+
+                staff["new_customers"] = (
+                    report["total_customers"] or 0
+                )
+
+                staff["new_conversions"] = (
+                    report["total_conversions"] or 0
+                )
+
+                staff["md_points"] = calculate_rule_points(
+                    "md",
+                    staff["md_count"]
+                )
+
+                staff["sd_points"] = calculate_rule_points(
+                    "sd",
+                    staff["sd_count"]
+                )
+
+                staff["new_lead_points"] = calculate_rule_points(
+                    "new_lead",
+                    staff["new_leads"]
+                )
+
+                staff["new_customer_points"] = calculate_rule_points(
+                    "new_customers",
+                    staff["new_customers"]
+                )
+
+                staff["new_conversion_points"] = calculate_rule_points(
+                    "new_conversions",
+                    staff["new_conversions"]
+                )
+
+            # --------------------------------------------
+            # 8. Get valid order items
+            # --------------------------------------------
+
+            excluded_statuses = [
+                "Cancelled",
+                "Refunded",
+                "Rejected",
+                "Return",
+                "Return From Delivery",
+                "Invoice Rejected",
+                "Invoice Created",
+                "Waiting For Confirmation",
+                "Pre Booked",
+                "Order Request by Warehouse"
+            ]
+
+            order_items = OrderItem.objects.select_related(
+                "order",
+                "product",
+                "variant",
+                "size",
+                "size__variant_product"
+            ).filter(
+                order__manage_staff_id__in=eligible_staff_ids
+            ).exclude(
+                order__status__in=excluded_statuses
+            )
+
+            if start_dt:
+                order_items = order_items.filter(
+                    order__created_at__range=(start_dt, end_dt)
+                )
+
+            # Only items whose product or related
+            # product group has a point configuration
+            order_items = order_items.filter(
+                product_id__in=list(product_to_rule.keys())
+            )
+
+            # --------------------------------------------
+            # 9. Calculate sold product quantities
+            # --------------------------------------------
+
+            quantities = defaultdict(int)
+
+            for item in order_items.iterator():
+
+                product_id = item.product_id
+
+                # Verify variant belongs to product
+                if item.variant_id:
+
+                    if item.variant.product_id != product_id:
+                        continue
+
+                # Verify size/attribute variant
+                if item.size_id:
+
+                    size_variant = item.size.variant_product
+
+                    if size_variant.product_id != product_id:
+                        continue
+
+                    if (
+                        item.variant_id and
+                        size_variant.id != item.variant_id
+                    ):
+                        continue
+
+                main_id = product_to_rule.get(product_id)
+
+                if main_id is None:
+                    continue
+
+                user_id = item.order.manage_staff_id
+
+                quantities[(user_id, main_id)] += item.quantity
+
+            # --------------------------------------------
+            # 10. Calculate product points
+            # --------------------------------------------
+
+            for (uid, main_id), sold_qty in quantities.items():
+
+                rule = product_rules.get(main_id)
+
+                if not rule:
+                    continue
+
+                required_qty = rule.quantity or 0
+
+                if required_qty <= 0:
+                    continue
+
+                completed_blocks = (
+                    sold_qty // required_qty
+                )
+
+                earned_points = (
+                    Decimal(completed_blocks) * rule.point
+                )
+
+                staff = get_staff(uid)
+
+                staff["product_points"] += earned_points
+
+                staff["products"][main_id] = {
+                    "product_id": main_id,
+                    "product_name": rule.product.name,
+                    "sold_quantity": sold_qty,
+                    "required_quantity": required_qty,
+                    "completed_blocks": completed_blocks,
+                    "point_per_block": str(rule.point),
+                    "earned_points": str(earned_points)
+                }
+
+            # --------------------------------------------
+            # 11. Calculate total points
+            # --------------------------------------------
+
+            ranking = []
+
+            for uid, staff in staff_data.items():
+
+                user = user_map.get(uid)
+
+                if not user:
+                    continue
+
+                total_points = sum([
+                    staff["product_points"],
+                    staff["md_points"],
+                    staff["sd_points"],
+                    staff["new_lead_points"],
+                    staff["new_customer_points"],
+                    staff["new_conversion_points"]
+                ], ZERO)
+
+                ranking.append({
+                    "staff_id": uid,
+                    "staff_name": user.name,
+
+                    "department": (
+                        user.department_id.name
+                        if user.department_id else None
+                    ),
+
+                    "family": (
+                        user.family.name
+                        if user.family else None
+                    ),
+
+                    "md_count": staff["md_count"],
+                    "sd_count": staff["sd_count"],
+                    "new_leads": staff["new_leads"],
+                    "new_customers": staff["new_customers"],
+                    "new_conversions": staff["new_conversions"],
+
+                    "product_points": str(
+                        staff["product_points"]
+                    ),
+
+                    "md_points": str(
+                        staff["md_points"]
+                    ),
+
+                    "sd_points": str(
+                        staff["sd_points"]
+                    ),
+
+                    "new_lead_points": str(
+                        staff["new_lead_points"]
+                    ),
+
+                    "new_customer_points": str(
+                        staff["new_customer_points"]
+                    ),
+
+                    "new_conversion_points": str(
+                        staff["new_conversion_points"]
+                    ),
+
+                    "total_points": str(total_points),
+
+                    "products": list(
+                        staff["products"].values()
+                    ),
+
+                    "_sort_points": total_points
+                })
+
+            # 12. Sort by highest points
+
+            ranking.sort(
+                key=lambda x: (
+                    -x["_sort_points"],
+                    x["staff_id"]
+                )
+            )
+
+            # 13. Assign rank
+            # Same points = same rank
+            # Example: 1, 2, 2, 4
+
+            previous_points = None
+            current_rank = 0
+
+            for index, row in enumerate(ranking, start=1):
+
+                if row["_sort_points"] != previous_points:
+                    current_rank = index
+
+                row["rank"] = current_rank
+
+                previous_points = row["_sort_points"]
+
+                del row["_sort_points"]
+
+            # 14. Summary
+
+            total_staff = len(ranking)
+
+            total_all_points = sum(
+                (
+                    Decimal(row["total_points"])
+                    for row in ranking
+                ),
+                ZERO
+            )
+
+            # 15. Response
+
+            return Response({
+                "status": "success",
+                "message": "Sales point ranking fetched successfully",
+
+                "count": total_staff,
+
+                "departments": allowed_departments,
+
+                "start_date": start_date,
+                "end_date": end_date,
+
+                "summary": {
+                    "total_staff": total_staff,
+                    "total_points": str(total_all_points)
+                },
+
+                "data": ranking
+
+            }, status=200)
+
+        except Exception as e:
+
+            logger.exception(
+                "Error fetching sales point ranking: %s",
+                str(e)
+            )
+
+            return Response({
+                "status": "error",
+                "message": "Unable to fetch sales point ranking"
+            }, status=500)
+
+
+
 class OrderStatusHistoryView(BaseTokenView):
 
     def get(self, request):
