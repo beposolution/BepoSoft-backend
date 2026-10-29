@@ -34507,6 +34507,7 @@ class SalesPointRankingView(BaseTokenView):
                         "new_leads": 0,
                         "new_customers": 0,
                         "new_conversions": 0,
+                        "invoice_count": 0,
 
                         "product_points": ZERO,
                         "md_points": ZERO,
@@ -34514,6 +34515,7 @@ class SalesPointRankingView(BaseTokenView):
                         "new_lead_points": ZERO,
                         "new_customer_points": ZERO,
                         "new_conversion_points": ZERO,
+                        "invoice_points": ZERO,
 
                         "products": {}
                     }
@@ -34603,6 +34605,48 @@ class SalesPointRankingView(BaseTokenView):
                     staff["new_conversions"]
                 )
 
+
+            # --------------------------------------------
+            # Calculate invoice points from Order
+            # --------------------------------------------
+
+            invoice_orders = Order.objects.filter(
+                manage_staff_id__in=eligible_staff_ids
+            ).exclude(
+                status__in=[
+                    "Cancelled",
+                    "Refunded",
+                    "Rejected",
+                    "Return",
+                    "Return From Delivery",
+                    "Invoice Rejected",
+                    "Pre Booked",
+                    "Order Request by Warehouse"
+                ]
+            )
+
+            if start_dt:
+                invoice_orders = invoice_orders.filter(
+                    created_at__range=(start_dt, end_dt)
+                )
+
+            invoice_counts = invoice_orders.values(
+                "manage_staff_id"
+            ).annotate(
+                total_invoices=Count("id")
+            )
+
+            for invoice in invoice_counts:
+                uid = invoice["manage_staff_id"]
+                staff = get_staff(uid)
+
+                staff["invoice_count"] = invoice["total_invoices"]
+
+                staff["invoice_points"] = calculate_rule_points(
+                    "invoice",
+                    staff["invoice_count"]
+                )
+
             # --------------------------------------------
             # 8. Get valid order items
             # --------------------------------------------
@@ -34614,8 +34658,6 @@ class SalesPointRankingView(BaseTokenView):
                 "Return",
                 "Return From Delivery",
                 "Invoice Rejected",
-                "Invoice Created",
-                "Waiting For Confirmation",
                 "Pre Booked",
                 "Order Request by Warehouse"
             ]
@@ -34757,7 +34799,8 @@ class SalesPointRankingView(BaseTokenView):
                     staff["sd_points"],
                     staff["new_lead_points"],
                     staff["new_customer_points"],
-                    staff["new_conversion_points"]
+                    staff["new_conversion_points"],
+                    staff["invoice_points"]
                 ], ZERO)
 
                 ranking.append({
@@ -34779,6 +34822,7 @@ class SalesPointRankingView(BaseTokenView):
                     "new_leads": staff["new_leads"],
                     "new_customers": staff["new_customers"],
                     "new_conversions": staff["new_conversions"],
+                    "invoice_count": staff["invoice_count"],
 
                     "product_points": str(
                         staff["product_points"]
@@ -34802,6 +34846,10 @@ class SalesPointRankingView(BaseTokenView):
 
                     "new_conversion_points": str(
                         staff["new_conversion_points"]
+                    ),
+
+                    "invoice_points": str(
+                        staff["invoice_points"]
                     ),
 
                     "total_points": str(total_points),
