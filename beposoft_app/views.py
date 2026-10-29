@@ -12723,10 +12723,14 @@ class ProductByWarehouseGETView(BaseTokenView):
                     seen_group_ids.add(group_id)
 
                     main_product = Products.objects.filter(
-                        groupID=group_id,
-                        warehouse=warehouse,
-                        approval_status__in=["Approved", "Disapproved"]
+                        groupID=group_id
                     ).order_by("id").first()
+
+                    # main_product = Products.objects.filter(
+                    #     groupID=group_id,
+                    #     warehouse=warehouse,
+                    #     approval_status__in=["Approved", "Disapproved"]
+                    # ).order_by("id").first()
 
                     if main_product:
                         unique_products.append(main_product)
