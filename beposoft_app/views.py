@@ -12329,11 +12329,33 @@ class GETProductByWarehouseView(BaseTokenView):
             seen_group_ids = set()
             unique_products = []
 
-            for product in products:
-                group_key = product.groupID if product.groupID else f"single-{product.id}"
+            # for product in products:
+            #     group_key = product.groupID if product.groupID else f"single-{product.id}"
 
-                if group_key not in seen_group_ids:
-                    seen_group_ids.add(group_key)
+            #     if group_key not in seen_group_ids:
+            #         seen_group_ids.add(group_key)
+            #         unique_products.append(product)
+
+
+            for product in products:
+                group_id = product.groupID
+
+                if group_id:
+                    if group_id in seen_group_ids:
+                        continue
+
+                    seen_group_ids.add(group_id)
+
+                    # Select the first-created product in the group
+                    # regardless of warehouse or approval status.
+                    main_product = Products.objects.filter(
+                        groupID=group_id
+                    ).order_by("id").first()
+
+                    if main_product:
+                        unique_products.append(main_product)
+
+                else:
                     unique_products.append(product)
 
             # ----------------------------------------------------
