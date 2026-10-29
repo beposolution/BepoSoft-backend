@@ -1940,6 +1940,7 @@ class ProductPointSystem(models.Model):
         ("new_conversions", "New Conversions"),
         ("new_customers", "New Customers"),
         ("new_lead", "New Lead"),
+        ("invoice", "Invoice"),
     ]
     point_type = models.CharField(max_length=50, choices=POINT_TYPE_CHOICES)
     product = models.ForeignKey(Products, on_delete=models.CASCADE, null=True, blank=True)
