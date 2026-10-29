@@ -34399,11 +34399,6 @@ class SalesPointRankingView(BaseTokenView):
                 approval_status="approved"
             )
 
-            if staff_id:
-                eligible_users = eligible_users.filter(
-                    id=staff_id
-                )
-
             eligible_users = list(eligible_users)
 
             eligible_staff_ids = [
@@ -34818,6 +34813,13 @@ class SalesPointRankingView(BaseTokenView):
                 previous_points = row["_sort_points"]
 
                 del row["_sort_points"]
+
+            # Filter only after assigning global ranks
+            if staff_id:
+                ranking = [
+                    row for row in ranking
+                    if row["staff_id"] == staff_id
+                ]
 
             # 14. Summary
 
