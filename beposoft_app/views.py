@@ -34943,6 +34943,811 @@ class SalesPointRankingView(BaseTokenView):
 
 
 
+
+class SalesTeamPointRankingView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            from collections import defaultdict
+            from decimal import Decimal, ROUND_HALF_UP
+            from datetime import datetime, time
+            from django.db.models import Sum, Count
+            from django.utils import timezone
+
+            ZERO = Decimal("0.00")
+
+            # --------------------------------------------
+            # 1. Authentication
+            # --------------------------------------------
+
+            auth_user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # --------------------------------------------
+            # 2. Optional filters
+            # --------------------------------------------
+
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            team_id = request.GET.get("team_id")
+
+            if bool(start_date) != bool(end_date):
+                return Response({
+                    "status": "error",
+                    "message": "Provide both start_date and end_date."
+                }, status=400)
+
+            start_dt = None
+            end_dt = None
+
+            if start_date and end_date:
+                try:
+                    start = datetime.strptime(
+                        start_date, "%Y-%m-%d"
+                    ).date()
+
+                    end = datetime.strptime(
+                        end_date, "%Y-%m-%d"
+                    ).date()
+
+                    if start > end:
+                        return Response({
+                            "status": "error",
+                            "message": "Start date cannot be after end date."
+                        }, status=400)
+
+                    start_dt = timezone.make_aware(
+                        datetime.combine(start, time.min)
+                    )
+
+                    end_dt = timezone.make_aware(
+                        datetime.combine(end, time.max)
+                    )
+
+                except ValueError:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid date format. Use YYYY-MM-DD."
+                    }, status=400)
+
+            if team_id:
+                try:
+                    team_id = int(team_id)
+
+                    if team_id <= 0:
+                        raise ValueError()
+
+                except (ValueError, TypeError):
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid team_id."
+                    }, status=400)
+
+            # --------------------------------------------
+            # 3. Fetch sales teams
+            # --------------------------------------------
+
+            teams = SalesTeam.objects.select_related(
+                "team_leader",
+                "division",
+                "created_by"
+            ).prefetch_related(
+                "members__user",
+                "members__user__department_id",
+                "members__user__family"
+            ).order_by("id")
+
+            if team_id:
+                teams = teams.filter(id=team_id)
+
+            teams = list(teams)
+
+            # --------------------------------------------
+            # 4. Eligible sales staff
+            # --------------------------------------------
+
+            allowed_departments = ["BDO", "BDM", "SD", "ASD"]
+
+            eligible_users = User.objects.select_related(
+                "department_id",
+                "family"
+            ).filter(
+                department_id__name__in=allowed_departments,
+                approval_status="approved"
+            )
+
+            eligible_users = list(eligible_users)
+
+            eligible_staff_ids = [
+                user.id for user in eligible_users
+            ]
+
+            user_map = {
+                user.id: user for user in eligible_users
+            }
+
+            # --------------------------------------------
+            # 5. Load point configurations
+            # --------------------------------------------
+
+            configurations = ProductPointSystem.objects.select_related(
+                "product"
+            ).order_by("-id")
+
+            general_rules = {}
+            product_rules = {}
+
+            for config in configurations:
+
+                if config.point_type == "product":
+
+                    if not config.product_id:
+                        continue
+
+                    if config.product_id not in product_rules:
+                        product_rules[config.product_id] = config
+
+                elif config.point_type not in general_rules:
+
+                    general_rules[config.point_type] = config
+
+            # --------------------------------------------
+            # 6. Map main products and variants
+            # --------------------------------------------
+
+            product_to_rule = {}
+
+            for main_id, rule in product_rules.items():
+
+                main_product = rule.product
+
+                if not main_product:
+                    continue
+
+                product_to_rule[main_id] = main_id
+
+                if main_product.groupID:
+
+                    related_ids = Products.objects.filter(
+                        groupID=main_product.groupID
+                    ).values_list("id", flat=True)
+
+                    for related_id in related_ids:
+                        product_to_rule.setdefault(
+                            related_id,
+                            main_id
+                        )
+
+            # --------------------------------------------
+            # 7. Initialize staff data
+            # --------------------------------------------
+
+            staff_data = {}
+
+            def get_staff(user_id):
+
+                if user_id not in staff_data:
+
+                    staff_data[user_id] = {
+                        "staff_id": user_id,
+
+                        "md_count": 0,
+                        "sd_count": 0,
+                        "new_leads": 0,
+                        "new_customers": 0,
+                        "new_conversions": 0,
+                        "invoice_count": 0,
+
+                        "product_points": ZERO,
+                        "md_points": ZERO,
+                        "sd_points": ZERO,
+                        "new_lead_points": ZERO,
+                        "new_customer_points": ZERO,
+                        "new_conversion_points": ZERO,
+                        "invoice_points": ZERO,
+
+                        "products": {}
+                    }
+
+                return staff_data[user_id]
+
+            for user_id in eligible_staff_ids:
+                get_staff(user_id)
+
+            # --------------------------------------------
+            # 8. SalesTeamDailyReport calculations
+            # --------------------------------------------
+
+            reports = SalesTeamDailyReport.objects.filter(
+                created_by_id__in=eligible_staff_ids
+            )
+
+            if start_dt:
+                reports = reports.filter(
+                    created_at__range=(start_dt, end_dt)
+                )
+
+            reports = reports.values(
+                "created_by_id"
+            ).annotate(
+                total_md=Sum("md"),
+                total_sd=Sum("sd"),
+                total_leads=Sum("new_leads"),
+                total_customers=Sum("new_customers"),
+                total_conversions=Sum("new_conversions")
+            )
+
+            def calculate_rule_points(point_type, count):
+
+                rule = general_rules.get(point_type)
+
+                if not rule:
+                    return ZERO
+
+                return Decimal(count) * rule.point
+
+            for report in reports:
+
+                uid = report["created_by_id"]
+                staff = get_staff(uid)
+
+                staff["md_count"] = report["total_md"] or 0
+                staff["sd_count"] = report["total_sd"] or 0
+                staff["new_leads"] = report["total_leads"] or 0
+                staff["new_customers"] = report["total_customers"] or 0
+                staff["new_conversions"] = report["total_conversions"] or 0
+
+                staff["md_points"] = calculate_rule_points(
+                    "md", staff["md_count"]
+                )
+
+                staff["sd_points"] = calculate_rule_points(
+                    "sd", staff["sd_count"]
+                )
+
+                staff["new_lead_points"] = calculate_rule_points(
+                    "new_lead", staff["new_leads"]
+                )
+
+                staff["new_customer_points"] = calculate_rule_points(
+                    "new_customers", staff["new_customers"]
+                )
+
+                staff["new_conversion_points"] = calculate_rule_points(
+                    "new_conversions", staff["new_conversions"]
+                )
+
+            # --------------------------------------------
+            # 9. Invoice point calculations
+            # --------------------------------------------
+
+            excluded_statuses = [
+                "Cancelled",
+                "Refunded",
+                "Rejected",
+                "Return",
+                "Return From Delivery",
+                "Invoice Rejected",
+                "Pre Booked",
+                "Order Request by Warehouse"
+            ]
+
+            invoice_orders = Order.objects.filter(
+                manage_staff_id__in=eligible_staff_ids
+            ).exclude(
+                status__in=excluded_statuses
+            )
+
+            if start_dt:
+                invoice_orders = invoice_orders.filter(
+                    created_at__range=(start_dt, end_dt)
+                )
+
+            invoice_counts = invoice_orders.values(
+                "manage_staff_id"
+            ).annotate(
+                total_invoices=Count("id")
+            )
+
+            for invoice in invoice_counts:
+
+                uid = invoice["manage_staff_id"]
+                staff = get_staff(uid)
+
+                staff["invoice_count"] = invoice["total_invoices"]
+
+                staff["invoice_points"] = calculate_rule_points(
+                    "invoice",
+                    staff["invoice_count"]
+                )
+
+            # --------------------------------------------
+            # 10. Product order items
+            # --------------------------------------------
+
+            order_items = OrderItem.objects.select_related(
+                "order",
+                "product",
+                "variant",
+                "size",
+                "size__variant_product"
+            ).filter(
+                order__manage_staff_id__in=eligible_staff_ids
+            ).exclude(
+                order__status__in=excluded_statuses
+            )
+
+            if start_dt:
+                order_items = order_items.filter(
+                    order__created_at__range=(start_dt, end_dt)
+                )
+
+            order_items = order_items.filter(
+                product_id__in=list(product_to_rule.keys())
+            )
+
+            # --------------------------------------------
+            # 11. Calculate sold quantities
+            # --------------------------------------------
+
+            quantities = defaultdict(int)
+
+            for item in order_items.iterator():
+
+                product_id = item.product_id
+
+                if item.variant_id:
+
+                    if item.variant.product_id != product_id:
+                        continue
+
+                if item.size_id:
+
+                    size_variant = item.size.variant_product
+
+                    if size_variant.product_id != product_id:
+                        continue
+
+                    if (
+                        item.variant_id and
+                        size_variant.id != item.variant_id
+                    ):
+                        continue
+
+                main_id = product_to_rule.get(product_id)
+
+                if main_id is None:
+                    continue
+
+                uid = item.order.manage_staff_id
+
+                quantities[(uid, main_id)] += item.quantity
+
+            # --------------------------------------------
+            # 12. Calculate product points
+            # --------------------------------------------
+
+            for (uid, main_id), sold_qty in quantities.items():
+
+                rule = product_rules.get(main_id)
+
+                if not rule:
+                    continue
+
+                required_qty = rule.quantity or 0
+
+                if required_qty <= 0:
+                    continue
+
+                completed_blocks = sold_qty // required_qty
+
+                remaining_quantity = sold_qty % required_qty
+
+                earned_points = (
+                    (Decimal(sold_qty) / Decimal(required_qty))
+                    * rule.point
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                remaining_points = (
+                    (
+                        Decimal(remaining_quantity)
+                        / Decimal(required_qty)
+                    ) * rule.point
+                ).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                staff = get_staff(uid)
+
+                staff["product_points"] += earned_points
+
+                staff["products"][main_id] = {
+                    "product_id": main_id,
+                    "product_name": rule.product.name,
+                    "sold_quantity": sold_qty,
+                    "required_quantity": required_qty,
+                    "completed_blocks": completed_blocks,
+                    "remaining_quantity": remaining_quantity,
+                    "point_per_block": str(rule.point),
+                    "remaining_points": str(remaining_points),
+                    "earned_points": str(earned_points)
+                }
+
+            # --------------------------------------------
+            # 13. Calculate individual staff totals
+            # --------------------------------------------
+
+            staff_ranking = []
+
+            count_fields = [
+                "md_count",
+                "sd_count",
+                "new_leads",
+                "new_customers",
+                "new_conversions",
+                "invoice_count"
+            ]
+
+            point_fields = [
+                "product_points",
+                "md_points",
+                "sd_points",
+                "new_lead_points",
+                "new_customer_points",
+                "new_conversion_points",
+                "invoice_points"
+            ]
+
+            for uid, staff in staff_data.items():
+
+                user = user_map.get(uid)
+
+                if not user:
+                    continue
+
+                total_points = sum(
+                    (staff[field] for field in point_fields),
+                    ZERO
+                )
+
+                row = {
+                    "staff_id": uid,
+                    "staff_name": user.name,
+                    "department": (
+                        user.department_id.name
+                        if user.department_id else None
+                    ),
+                    "family": (
+                        user.family.name
+                        if user.family else None
+                    ),
+                    **{
+                        field: staff[field]
+                        for field in count_fields
+                    },
+                    **{
+                        field: str(staff[field])
+                        for field in point_fields
+                    },
+                    "total_points": str(total_points),
+                    "products": list(
+                        staff["products"].values()
+                    ),
+                    "_sort_points": total_points
+                }
+
+                staff_ranking.append(row)
+
+            staff_ranking.sort(
+                key=lambda x: (
+                    -x["_sort_points"],
+                    x["staff_id"]
+                )
+            )
+
+            # Global staff ranking
+            previous_points = None
+            current_rank = 0
+
+            for index, row in enumerate(
+                staff_ranking, start=1
+            ):
+
+                if row["_sort_points"] != previous_points:
+                    current_rank = index
+
+                row["rank"] = current_rank
+                previous_points = row["_sort_points"]
+
+                del row["_sort_points"]
+
+            staff_map = {
+                row["staff_id"]: row
+                for row in staff_ranking
+            }
+
+            # --------------------------------------------
+            # 14. Aggregate points team-wise
+            # --------------------------------------------
+
+            team_ranking = []
+
+            for team in teams:
+
+                team_counts = {
+                    field: 0
+                    for field in count_fields
+                }
+
+                team_points = {
+                    field: ZERO
+                    for field in point_fields
+                }
+
+                team_products = {}
+                members_data = []
+
+                team_total_points = ZERO
+                total_members = 0
+
+                for membership in team.members.all():
+
+                    total_members += 1
+
+                    user = membership.user
+                    staff = staff_map.get(user.id)
+
+                    if not staff:
+                        continue
+
+                    member_points = Decimal(
+                        staff["total_points"]
+                    )
+
+                    team_total_points += member_points
+
+                    for field in count_fields:
+                        team_counts[field] += staff[field]
+
+                    for field in point_fields:
+                        team_points[field] += Decimal(
+                            staff[field]
+                        )
+
+                    member_data = {
+                        **staff,
+                        "team_id": team.id,
+                        "team_name": team.name
+                    }
+
+                    members_data.append(member_data)
+
+                    # Aggregate products across members
+                    for product in staff["products"]:
+
+                        pid = product["product_id"]
+
+                        if pid not in team_products:
+                            team_products[pid] = {
+                                **product
+                            }
+                        else:
+                            existing = team_products[pid]
+
+                            existing["sold_quantity"] += (
+                                product["sold_quantity"]
+                            )
+
+                            existing["completed_blocks"] += (
+                                product["completed_blocks"]
+                            )
+
+                            existing["remaining_quantity"] += (
+                                product["remaining_quantity"]
+                            )
+
+                            existing["remaining_points"] = str(
+                                Decimal(
+                                    existing["remaining_points"]
+                                ) + Decimal(
+                                    product["remaining_points"]
+                                )
+                            )
+
+                            existing["earned_points"] = str(
+                                Decimal(
+                                    existing["earned_points"]
+                                ) + Decimal(
+                                    product["earned_points"]
+                                )
+                            )
+
+                # --------------------------------------------
+                # 15. Rank members within their team
+                # --------------------------------------------
+
+                members_data.sort(
+                    key=lambda x: (
+                        -Decimal(x["total_points"]),
+                        x["staff_id"]
+                    )
+                )
+
+                previous_member_points = None
+                member_rank = 0
+
+                for index, member in enumerate(
+                    members_data, start=1
+                ):
+
+                    points = Decimal(
+                        member["total_points"]
+                    )
+
+                    if points != previous_member_points:
+                        member_rank = index
+
+                    member["team_rank"] = member_rank
+
+                    previous_member_points = points
+
+                team_ranking.append({
+                    "team_id": team.id,
+                    "team_name": team.name,
+
+                    "team_leader_id": team.team_leader_id,
+                    "team_leader_name": (
+                        team.team_leader.name
+                        if team.team_leader else None
+                    ),
+
+                    "division_id": team.division_id,
+                    "division_name": (
+                        team.division.name
+                        if team.division else None
+                    ),
+
+                    "created_by_id": team.created_by_id,
+                    "created_by_name": (
+                        team.created_by.name
+                        if team.created_by else None
+                    ),
+
+                    "total_members": total_members,
+                    "eligible_members": len(members_data),
+
+                    **team_counts,
+
+                    **{
+                        field: str(value)
+                        for field, value in team_points.items()
+                    },
+
+                    "total_points": str(team_total_points),
+
+                    "products": list(
+                        team_products.values()
+                    ),
+
+                    "members": members_data,
+
+                    "_sort_points": team_total_points
+                })
+
+            # --------------------------------------------
+            # 16. Sort teams by highest points
+            # --------------------------------------------
+
+            team_ranking.sort(
+                key=lambda x: (
+                    -x["_sort_points"],
+                    x["team_id"]
+                )
+            )
+
+            # --------------------------------------------
+            # 17. Assign team ranks
+            # Same points = same rank
+            # --------------------------------------------
+
+            previous_points = None
+            current_rank = 0
+
+            for index, row in enumerate(
+                team_ranking, start=1
+            ):
+
+                if row["_sort_points"] != previous_points:
+                    current_rank = index
+
+                row["rank"] = current_rank
+
+                previous_points = row["_sort_points"]
+
+                del row["_sort_points"]
+
+            # Filter after global team ranking
+            if team_id:
+                team_ranking = [
+                    row for row in team_ranking
+                    if row["team_id"] == team_id
+                ]
+
+            # --------------------------------------------
+            # 18. Summary
+            # --------------------------------------------
+
+            total_teams = len(team_ranking)
+
+            total_members = sum(
+                row["total_members"]
+                for row in team_ranking
+            )
+
+            eligible_members = sum(
+                row["eligible_members"]
+                for row in team_ranking
+            )
+
+            total_all_points = sum(
+                (
+                    Decimal(row["total_points"])
+                    for row in team_ranking
+                ),
+                ZERO
+            )
+
+            # --------------------------------------------
+            # 19. Response
+            # --------------------------------------------
+
+            return Response({
+                "status": "success",
+                "message": (
+                    "Team-wise sales point ranking "
+                    "fetched successfully"
+                ),
+
+                "count": total_teams,
+
+                "departments": allowed_departments,
+
+                "start_date": start_date,
+                "end_date": end_date,
+                "team_id": team_id,
+
+                "summary": {
+                    "total_teams": total_teams,
+                    "total_members": total_members,
+                    "eligible_members": eligible_members,
+                    "total_points": str(total_all_points)
+                },
+
+                "data": team_ranking
+
+            }, status=200)
+
+        except Exception as e:
+
+            logger.exception(
+                "Error fetching team-wise sales point ranking: %s",
+                str(e)
+            )
+
+            return Response({
+                "status": "error",
+                "message": "Unable to fetch team-wise sales point ranking"
+            }, status=500)
+
+
+
+
 class OrderStatusHistoryView(BaseTokenView):
 
     def get(self, request):
