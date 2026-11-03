@@ -40055,3 +40055,135 @@ class CompanyWiseFinanceReportAPIView(BaseTokenView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
 
             )
+
+
+
+# family wise state sales report
+
+
+class StateWiseSalesReportView(BaseTokenView):
+
+    def get(self, request):
+        auth_user, error_response = self.get_user_from_token(request)
+        if error_response:
+            return error_response
+
+        # Required query parameters
+        start_date = request.query_params.get("start_date", "").strip()
+        end_date = request.query_params.get("end_date", "").strip()
+        family_id = request.query_params.get("family_id", "").strip()
+
+        if not start_date or not end_date or not family_id:
+            return Response({
+                "status": "error",
+                "message": (
+                    "start_date, end_date and family_id "
+                    "are required."
+                )
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate dates
+        try:
+            start = datetime.strptime(
+                start_date, "%Y-%m-%d"
+            ).date()
+
+            end = datetime.strptime(
+                end_date, "%Y-%m-%d"
+            ).date()
+
+        except ValueError:
+            return Response({
+                "status": "error",
+                "message": "Date format must be YYYY-MM-DD."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if start > end:
+            return Response({
+                "status": "error",
+                "message": (
+                    "start_date cannot be greater than end_date."
+                )
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate family
+        try:
+            family_id = int(family_id)
+            if family_id <= 0:
+                raise ValueError
+        except ValueError:
+            return Response({
+                "status": "error",
+                "message": "family_id must be a positive integer."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        family = Family.objects.filter(id=family_id).first()
+
+        if not family:
+            return Response({
+                "status": "error",
+                "message": "Family not found."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Filter orders
+        # Assumes order_date is stored as YYYY-MM-DD.
+        orders = Order.objects.filter(
+            family_id=family_id,
+            order_date__gte=start_date,
+            order_date__lte=end_date
+        )
+
+        # Aggregate by state
+        state_sales = (
+            orders
+            .values("state_id")
+            .annotate(
+                order_count=Count("id"),
+                volume=Sum("total_amount")
+            )
+        )
+
+        # Lookup for aggregated values
+        sales_lookup = {
+            row["state_id"]: row
+            for row in state_sales
+        }
+
+        # Include all states, including zero-sales states
+        states = State.objects.all().order_by("id")
+
+        report_data = []
+        total_orders = 0
+        total_volume = 0.0
+
+        for state_obj in states:
+            sales = sales_lookup.get(state_obj.id, {})
+
+            order_count = sales.get("order_count", 0)
+            volume = float(sales.get("volume") or 0)
+
+            total_orders += order_count
+            total_volume += volume
+
+            report_data.append({
+                "state_id": state_obj.id,
+                "state_name": state_obj.name,
+                "order_count": order_count,
+                "volume": round(volume, 2)
+            })
+
+        return Response({
+            "status": "success",
+            "message": "State-wise sales report fetched successfully",
+            "filters": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "family_id": family.id,
+                "family_name": family.name
+            },
+            "data": report_data,
+            "summary": {
+                "total_orders": total_orders,
+                "total_volume": round(total_volume, 2)
+            }
+        }, status=status.HTTP_200_OK)
