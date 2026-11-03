@@ -9,6 +9,7 @@ from django.db.models.functions import Cast
 from datetime import date
 from bepocart.models import *
 from bepocart.serializers import *
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -1399,6 +1400,7 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
     state = serializers.CharField(source="state.name", read_only=True)
     company = serializers.CharField(source="company.name", read_only=True)
     total_taxable_value = serializers.SerializerMethodField()
+    total_tax_amount = serializers.SerializerMethodField()
 
     warehouse_data = WarehouseDataSerializer(source="warehouse", many=True, read_only=True)
 
@@ -1409,8 +1411,6 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
 
     def get_total_taxable_value(self, obj):
 
-        from decimal import Decimal, ROUND_HALF_UP
-        
         total_taxable = Decimal("0")
 
         for item in obj.items.all():
@@ -1430,6 +1430,32 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
 
         return float(
             total_taxable.quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+        )
+
+    def get_total_tax_amount(self, obj):
+        total_tax = Decimal("0")
+
+        for item in obj.items.all():
+            rate = item.rate or Decimal("0")
+            discount = item.discount or Decimal("0")
+            quantity = item.quantity or 0
+            tax = Decimal(str(item.tax or 0))
+
+            net_rate = max(Decimal("0"), rate - discount)
+            gross_amount = net_rate * quantity
+
+            taxable_amount = gross_amount / (
+                Decimal("1") + (tax / Decimal("100"))
+            )
+
+            tax_amount = gross_amount - taxable_amount
+            total_tax += tax_amount
+
+        return float(
+            total_tax.quantize(
                 Decimal("0.01"),
                 rounding=ROUND_HALF_UP
             )
