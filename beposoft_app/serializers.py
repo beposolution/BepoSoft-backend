@@ -1398,6 +1398,7 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
     customerID = serializers.IntegerField(source="customer.pk", read_only=True)
     state = serializers.CharField(source="state.name", read_only=True)
     company = serializers.CharField(source="company.name", read_only=True)
+    total_taxable_value = serializers.SerializerMethodField()
 
     warehouse_data = WarehouseDataSerializer(source="warehouse", many=True, read_only=True)
 
@@ -1405,6 +1406,34 @@ class OrderdetailsSerializer(serializers.ModelSerializer):
         model = Order
         fields = "__all__"
         extra_fields = ['warehouse_data'] 
+
+    def get_total_taxable_value(self, obj):
+
+        from decimal import Decimal, ROUND_HALF_UP
+        
+        total_taxable = Decimal("0")
+
+        for item in obj.items.all():
+            rate = item.rate or Decimal("0")
+            discount = item.discount or Decimal("0")
+            quantity = item.quantity or 0
+            tax = Decimal(str(item.tax or 0))
+
+            net_rate = max(Decimal("0"), rate - discount)
+            gross_amount = net_rate * quantity
+
+            taxable_amount = gross_amount / (
+                Decimal("1") + (tax / Decimal("100"))
+            )
+
+            total_taxable += taxable_amount
+
+        return float(
+            total_taxable.quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+        )
 
 
 class MyOrderSerializer(serializers.ModelSerializer):
