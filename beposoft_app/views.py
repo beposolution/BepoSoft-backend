@@ -902,7 +902,9 @@ class CustomerView(BaseTokenView):
 
             # Family filter (Family ID)
             if family:
-                customers = customers.filter(family_id=family)
+                customers = customers.filter(
+                    manager__family_id=family
+                )
 
             # Customer type filter (CustomerType ID)
             if customer_type:
