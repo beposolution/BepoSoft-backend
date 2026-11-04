@@ -348,6 +348,7 @@ class ProductSingleviewSerializres(serializers.ModelSerializer):
                         "size": variant.size if variant.size else None,
                         "selling_price": variant.selling_price , # Selling price field
                         "retail_price": variant.retail_price,  
+                        "tax": variant.tax,
                         "created_user":variant.created_user.name,
                         "approval_status":variant.approval_status,
 
