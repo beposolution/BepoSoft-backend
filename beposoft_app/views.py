@@ -860,17 +860,31 @@ class CustomerTypeView(BaseTokenView):
 
 
 class CustomerView(BaseTokenView):
-   
+
     def get(self, request):
         try:
             authUser, error_response = self.get_user_from_token(request)
             if error_response:
                 return error_response
 
-            search = request.GET.get("search", "")
+            # Get query parameters
+            search = request.GET.get("search", "").strip()
+            manager = request.GET.get("manager", "").strip()
+            state = request.GET.get("state", "").strip()
+            family = request.GET.get("family", "").strip()
+            customer_type = request.GET.get("customer_type", "").strip()
+            gst_confirm = request.GET.get("gst_confirm", "").strip()
 
-            customers = Customers.objects.select_related("manager","state","family").order_by('-created_at')
+            # Base queryset
+            customers = Customers.objects.select_related(
+                "manager",
+                "state",
+                "family",
+                "customer_type",
+                "manager__family"
+            ).order_by("-created_at")
 
+            # Search filter
             if search:
                 customers = customers.filter(
                     Q(name__icontains=search) |
@@ -878,22 +892,75 @@ class CustomerView(BaseTokenView):
                     Q(email__icontains=search)
                 )
 
+            # Manager filter (User ID)
+            if manager:
+                customers = customers.filter(manager_id=manager)
+
+            # State filter (State ID)
+            if state:
+                customers = customers.filter(state_id=state)
+
+            # Family filter (Family ID)
+            if family:
+                customers = customers.filter(family_id=family)
+
+            # Customer type filter (CustomerType ID)
+            if customer_type:
+                customers = customers.filter(
+                    customer_type_id=customer_type
+                )
+
+            # GST confirmation filter
+            if gst_confirm:
+                customers = customers.filter(
+                    gst_confirm__iexact=gst_confirm
+                )
+
+            # Pagination
             paginator = StandardPagination1()
-            result_page = paginator.paginate_queryset(customers, request)
+            result_page = paginator.paginate_queryset(
+                customers,
+                request
+            )
 
-            serializer = CustomerModelSerializerLimited(result_page, many=True)
+            # Serializer
+            serializer = CustomerModelSerializerLimited(
+                result_page,
+                many=True
+            )
 
-            return paginator.get_paginated_response(serializer.data)
-
-            # return Response({"data": serializer.data, "message": "Customers retrieved successfully"}, status=status.HTTP_200_OK)
+            return paginator.get_paginated_response(
+                serializer.data
+            )
 
         except User.DoesNotExist:
-            return Response({"status": "error", "message": "User does not exist"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "User does not exist"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except (ValueError, TypeError):
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Invalid filter parameter. Manager, state, family and customer_type must be valid IDs."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         except Exception as e:
-            return Response({"status": "error", "message": "An error occurred", "errors": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+            return Response(
+                {
+                    "status": "error",
+                    "message": "An error occurred",
+                    "errors": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 class CustomerWithoutPaginationView(BaseTokenView):
 
