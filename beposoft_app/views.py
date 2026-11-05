@@ -40256,3 +40256,1575 @@ class StateWiseSalesReportView(BaseTokenView):
                 "total_volume": round(total_volume, 2)
             }
         }, status=status.HTTP_200_OK)
+
+
+
+
+# customer data complete report view
+
+
+class CustomerCompleteReportView(BaseTokenView):
+
+    @staticmethod
+    def money(value):
+        try:
+            return Decimal(str(value or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    @staticmethod
+    def amount(value):
+        return str(
+            value.quantize(Decimal("0.01"))
+        )
+
+    @staticmethod
+    def parse_date(value):
+        if not value:
+            return None
+        return datetime.strptime(
+            value, "%Y-%m-%d"
+        ).date()
+
+    @staticmethod
+    def date_filter(queryset, field, start, end):
+        if start:
+            queryset = queryset.filter(
+                **{f"{field}__gte": start}
+            )
+        if end:
+            queryset = queryset.filter(
+                **{f"{field}__lte": end}
+            )
+        return queryset
+
+    @staticmethod
+    def order_date_filter(queryset, start, end):
+        """
+        Order.order_date is a CharField.
+
+        Assumes values start with YYYY-MM-DD,
+        such as:
+        2026-11-05
+        2026-11-05T10:30:00
+
+        For ISO-formatted values, string comparison
+        can be used for date-range filtering.
+        """
+
+        if start:
+            queryset = queryset.filter(
+                order_date__gte=start.isoformat()
+            )
+
+        if end:
+            if end.isoformat() == "9999-12-31":
+                queryset = queryset.filter(
+                    order_date__startswith=end.isoformat()
+                ) | queryset.filter(
+                    order_date__lt=end.isoformat()
+                )
+            else:
+                next_day = end + timedelta(days=1)
+                queryset = queryset.filter(
+                    order_date__lt=next_day.isoformat()
+                )
+
+        return queryset
+
+    @staticmethod
+    def get_order_day(value):
+        if not value:
+            return None
+
+        try:
+            return datetime.strptime(
+                str(value)[:10], "%Y-%m-%d"
+            ).date()
+        except (ValueError, TypeError):
+            return None
+
+    def get(self, request):
+
+        # ==========================================
+        # AUTHENTICATION
+        # ==========================================
+
+        user, error_response = self.get_user_from_token(
+            request
+        )
+
+        if error_response:
+            return error_response
+
+        # ==========================================
+        # QUERY PARAMETERS
+        # ==========================================
+
+        customer_id = request.query_params.get(
+            "customer_id"
+        )
+
+        product_id = request.query_params.get(
+            "product_id"
+        )
+
+        start_raw = request.query_params.get(
+            "start_date"
+        )
+
+        end_raw = request.query_params.get(
+            "end_date"
+        )
+
+        # Customer ID is mandatory
+        if not customer_id:
+            return Response({
+                "status": "error",
+                "message": "customer_id is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            customer_id = int(customer_id)
+
+            if customer_id <= 0:
+                raise ValueError()
+
+        except (TypeError, ValueError):
+            return Response({
+                "status": "error",
+                "message": "Invalid customer_id"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if product_id:
+            try:
+                product_id = int(product_id)
+
+                if product_id <= 0:
+                    raise ValueError()
+
+            except (TypeError, ValueError):
+                return Response({
+                    "status": "error",
+                    "message": "Invalid product_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_date = self.parse_date(start_raw)
+            end_date = self.parse_date(end_raw)
+
+        except ValueError:
+            return Response({
+                "status": "error",
+                "message": "Dates must use YYYY-MM-DD"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if (
+            start_date
+            and end_date
+            and start_date > end_date
+        ):
+            return Response({
+                "status": "error",
+                "message": "start_date cannot exceed end_date"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # ==========================================
+        # CUSTOMER VALIDATION
+        # ==========================================
+
+        customer = get_object_or_404(
+            Customers.objects.select_related(
+                "manager",
+                "state",
+                "family",
+                "customer_type"
+            ),
+            pk=customer_id
+        )
+
+        if product_id:
+            if not Products.objects.filter(
+                pk=product_id
+            ).exists():
+                return Response({
+                    "status": "error",
+                    "message": "Product not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        # ==========================================
+        # 1. CUSTOMER DETAILS
+        # ==========================================
+
+        customer_data = {
+            "id": customer.id,
+            "name": customer.name,
+            "phone": customer.phone,
+            "alt_phone": customer.alt_phone,
+            "email": customer.email,
+            "gst": customer.gst,
+            "gst_confirm": customer.gst_confirm,
+            "address": customer.address,
+            "city": customer.city,
+            "zip_code": customer.zip_code,
+            "state_id": customer.state_id,
+            "state_name": (
+                customer.state.name
+                if customer.state else None
+            ),
+            "manager_id": customer.manager_id,
+            "manager_name": (
+                customer.manager.name
+                if customer.manager else None
+            ),
+            "family_id": customer.family_id,
+            "family_name": (
+                customer.family.name
+                if customer.family else None
+            ),
+            "customer_type_id": customer.customer_type_id,
+            "customer_type_name": (
+                customer.customer_type.type_name
+                if customer.customer_type else None
+            ),
+            "customer_status": customer.customer_status,
+            "comment": customer.comment,
+            "created_at": str(customer.created_at),
+        }
+
+        # ==========================================
+        # 2. ORDERS
+        # ==========================================
+
+        orders = Order.objects.filter(
+            customer_id=customer_id
+        ).select_related(
+            "manage_staff",
+            "family",
+            "state",
+            "warehouses",
+            "bank",
+            "company"
+        )
+
+        orders = self.order_date_filter(
+            orders,
+            start_date,
+            end_date
+        )
+
+        if product_id:
+            orders = orders.filter(
+                items__product_id=product_id
+            ).distinct()
+
+        orders = orders.order_by("-id")
+
+        order_ids = list(
+            orders.values_list("id", flat=True)
+        )
+
+        orders_data = []
+        total_sales = Decimal("0")
+        status_counts = defaultdict(int)
+        payment_status_counts = defaultdict(int)
+
+        for order in orders:
+
+            order_amount = self.money(
+                order.total_amount
+            )
+
+            total_sales += order_amount
+
+            status_counts[order.status] += 1
+            payment_status_counts[
+                order.payment_status
+            ] += 1
+
+            orders_data.append({
+                "id": order.id,
+                "invoice": order.invoice,
+                "order_date": order.order_date,
+                "billing_date": (
+                    str(order.billing_date)
+                    if order.billing_date else None
+                ),
+                "status": order.status,
+                "payment_status": order.payment_status,
+                "payment_method": order.payment_method,
+                "total_amount": self.amount(
+                    order_amount
+                ),
+                "shipping_charge": order.shipping_charge,
+                "code_charge": order.code_charge,
+                "cod_amount": order.cod_amount,
+                "cod_status": order.cod_status,
+                "adv_cod_amount": (
+                    str(order.adv_cod_amount)
+                    if order.adv_cod_amount is not None
+                    else None
+                ),
+                "staff_id": order.manage_staff_id,
+                "staff_name": (
+                    order.manage_staff.name
+                    if order.manage_staff else None
+                ),
+                "family_id": order.family_id,
+                "family_name": (
+                    order.family.name
+                    if order.family else None
+                ),
+                "warehouse_id": order.warehouses_id,
+                "warehouse_name": (
+                    order.warehouses.name
+                    if order.warehouses else None
+                ),
+                "company_id": order.company_id,
+                "state_id": order.state_id,
+                "note": order.note,
+                "accounts_note": order.accounts_note,
+                "shipping_mode": order.shipping_mode,
+                "created_at": (
+                    order.created_at.isoformat()
+                    if order.created_at else None
+                ),
+            })
+
+        average_order_value = (
+            total_sales / len(orders_data)
+            if orders_data else Decimal("0")
+        )
+
+        orders_section = {
+            "summary": {
+                "total_orders": len(orders_data),
+                "total_sales": self.amount(
+                    total_sales
+                ),
+                "average_order_value": self.amount(
+                    average_order_value
+                ),
+                "status_wise_count": dict(
+                    status_counts
+                ),
+                "payment_status_wise_count": dict(
+                    payment_status_counts
+                ),
+            },
+            "data": orders_data,
+        }
+
+        # ==========================================
+        # 3. ORDER ITEMS
+        # ==========================================
+
+        items = OrderItem.objects.filter(
+            order_id__in=order_ids
+        ).select_related(
+            "product",
+            "order"
+        )
+
+        if product_id:
+            items = items.filter(
+                product_id=product_id
+            )
+
+        items_data = []
+
+        total_quantity = 0
+        total_gross_value = Decimal("0")
+        total_discount = Decimal("0")
+        total_tax_amount = Decimal("0")
+        total_value_before_tax = Decimal("0")
+        total_value_with_tax = Decimal("0")
+
+        product_summary = {}
+
+        for item in items.iterator():
+
+            qty = item.quantity
+            rate = self.money(item.rate)
+            discount = self.money(item.discount)
+            tax_percent = self.money(item.tax)
+
+            gross = rate * qty
+            discount_total = discount * qty
+
+            taxable = gross - discount_total
+
+            tax_amount = (
+                taxable * tax_percent
+            ) / Decimal("100")
+
+            final_amount = taxable + tax_amount
+
+            total_quantity += qty
+            total_gross_value += gross
+            total_discount += discount_total
+            total_tax_amount += tax_amount
+            total_value_before_tax += taxable
+            total_value_with_tax += final_amount
+
+            key = str(item.product_id)
+
+            if key not in product_summary:
+                product_summary[key] = {
+                    "product_id": item.product_id,
+                    "product_name": item.product.name,
+                    "quantity": 0,
+                    "gross_value": Decimal("0"),
+                    "discount": Decimal("0"),
+                    "tax_amount": Decimal("0"),
+                    "net_value": Decimal("0"),
+                    "total_with_tax": Decimal("0"),
+                }
+
+            p = product_summary[key]
+
+            p["quantity"] += qty
+            p["gross_value"] += gross
+            p["discount"] += discount_total
+            p["tax_amount"] += tax_amount
+            p["net_value"] += taxable
+            p["total_with_tax"] += final_amount
+
+            items_data.append({
+                "id": item.id,
+                "order_id": item.order_id,
+                "invoice": item.order.invoice,
+                "order_date": item.order.order_date,
+                "product_id": item.product_id,
+                "product_name": item.product.name,
+                "size_id": item.size_id,
+                "variant_id": item.variant_id,
+                "description": item.description,
+                "quantity": qty,
+                "rate": self.amount(rate),
+                "discount": self.amount(discount),
+                "tax": item.tax,
+                "gross_value": self.amount(gross),
+                "discount_total": self.amount(
+                    discount_total
+                ),
+                "net_value_before_tax": self.amount(
+                    taxable
+                ),
+                "tax_amount": self.amount(tax_amount),
+                "total_with_tax": self.amount(
+                    final_amount
+                ),
+                "rack_details": item.rack_details,
+            })
+
+        product_wise = []
+
+        for p in product_summary.values():
+
+            product_wise.append({
+                "product_id": p["product_id"],
+                "product_name": p["product_name"],
+                "quantity": p["quantity"],
+                "gross_value": self.amount(
+                    p["gross_value"]
+                ),
+                "discount": self.amount(
+                    p["discount"]
+                ),
+                "tax_amount": self.amount(
+                    p["tax_amount"]
+                ),
+                "net_value": self.amount(
+                    p["net_value"]
+                ),
+                "total_with_tax": self.amount(
+                    p["total_with_tax"]
+                ),
+            })
+
+        average_selling_price = (
+            total_value_with_tax / total_quantity
+            if total_quantity else Decimal("0")
+        )
+
+        items_section = {
+            "summary": {
+                "total_items": len(items_data),
+                "total_quantity": total_quantity,
+                "unique_products": len(product_summary),
+                "total_gross_value": self.amount(
+                    total_gross_value
+                ),
+                "total_discount": self.amount(
+                    total_discount
+                ),
+                "total_value_before_tax": self.amount(
+                    total_value_before_tax
+                ),
+                "total_tax_amount": self.amount(
+                    total_tax_amount
+                ),
+                "total_value_with_tax": self.amount(
+                    total_value_with_tax
+                ),
+                "average_selling_price": self.amount(
+                    average_selling_price
+                ),
+                "product_wise": product_wise,
+            },
+            "data": items_data,
+        }
+
+        # ==========================================
+        # 4. ADVANCE RECEIPTS
+        # ==========================================
+
+        advances = AdvanceReceipt.objects.filter(
+            customer_id=customer_id
+        ).select_related(
+            "bank",
+            "created_by"
+        )
+
+        advances = self.date_filter(
+            advances,
+            "received_at",
+            start_date,
+            end_date
+        )
+
+        advance_data = []
+        advance_total = Decimal("0")
+
+        for obj in advances.order_by(
+            "-received_at", "-id"
+        ):
+
+            value = self.money(obj.amount)
+            advance_total += value
+
+            advance_data.append({
+                "id": obj.id,
+                "payment_receipt": obj.payment_receipt,
+                "amount": self.amount(value),
+                "bank_id": obj.bank_id,
+                "bank_name": obj.bank.name,
+                "transactionID": obj.transactionID,
+                "received_at": str(obj.received_at),
+                "created_by_id": obj.created_by_id,
+                "created_by_name": obj.created_by.name,
+                "remark": obj.remark,
+            })
+
+        advance_section = {
+            "summary": {
+                "count": len(advance_data),
+                "total_amount": self.amount(
+                    advance_total
+                ),
+            },
+            "data": advance_data,
+        }
+
+        # ==========================================
+        # 5. PAYMENT RECEIPTS
+        # ==========================================
+
+        payments = PaymentReceipt.objects.filter(
+            order__customer_id=customer_id
+        ).select_related(
+            "order",
+            "bank",
+            "created_by"
+        )
+
+        payments = self.date_filter(
+            payments,
+            "received_at",
+            start_date,
+            end_date
+        )
+
+        if product_id:
+            payments = payments.filter(
+                order__items__product_id=product_id
+            ).distinct()
+
+        payment_data = []
+        payment_total = Decimal("0")
+
+        for obj in payments.order_by(
+            "-received_at", "-id"
+        ):
+
+            value = self.money(obj.amount)
+            payment_total += value
+
+            payment_data.append({
+                "id": obj.id,
+                "order_id": obj.order_id,
+                "invoice": obj.order.invoice,
+                "payment_receipt": obj.payment_receipt,
+                "amount": self.amount(value),
+                "bank_id": obj.bank_id,
+                "bank_name": obj.bank.name,
+                "transactionID": obj.transactionID,
+                "received_at": str(obj.received_at),
+                "created_by_id": obj.created_by_id,
+                "created_by_name": obj.created_by.name,
+                "remark": obj.remark,
+            })
+
+        payment_section = {
+            "summary": {
+                "count": len(payment_data),
+                "total_received": self.amount(
+                    payment_total
+                ),
+            },
+            "data": payment_data,
+        }
+
+        # ==========================================
+        # 6. COMMISSION RECEIPTS
+        # ==========================================
+
+        commissions = CommissionReceipt.objects.filter(
+            order__customer_id=customer_id
+        ).select_related(
+            "order",
+            "bank",
+            "created_by"
+        )
+
+        commissions = self.date_filter(
+            commissions,
+            "received_at",
+            start_date,
+            end_date
+        )
+
+        if product_id:
+            commissions = commissions.filter(
+                order__items__product_id=product_id
+            ).distinct()
+
+        commission_data = []
+        commission_total = Decimal("0")
+
+        for obj in commissions.order_by(
+            "-received_at", "-id"
+        ):
+
+            value = self.money(obj.amount)
+            commission_total += value
+
+            commission_data.append({
+                "id": obj.id,
+                "order_id": obj.order_id,
+                "invoice": obj.order.invoice,
+                "payment_receipt": obj.payment_receipt,
+                "amount": self.amount(value),
+                "bank_id": obj.bank_id,
+                "bank_name": obj.bank.name,
+                "transactionID": obj.transactionID,
+                "received_at": str(obj.received_at),
+                "created_by_id": obj.created_by_id,
+                "created_by_name": obj.created_by.name,
+                "remark": obj.remark,
+            })
+
+        commission_section = {
+            "summary": {
+                "count": len(commission_data),
+                "total_commission": self.amount(
+                    commission_total
+                ),
+            },
+            "data": commission_data,
+        }
+
+        # ==========================================
+        # 7. REFUND RECEIPTS
+        # ==========================================
+
+        refunds = RefundReceipt.objects.filter(
+            customer_id=customer_id
+        ).select_related(
+            "invoice",
+            "bank",
+            "created_by"
+        )
+
+        refunds = self.date_filter(
+            refunds,
+            "date",
+            start_date,
+            end_date
+        )
+
+        if product_id:
+            refunds = refunds.filter(
+                invoice__items__product_id=product_id
+            ).distinct()
+
+        refund_data = []
+        refund_total = Decimal("0")
+
+        for obj in refunds.order_by(
+            "-date", "-id"
+        ):
+
+            value = self.money(obj.amount)
+            refund_total += value
+
+            refund_data.append({
+                "id": obj.id,
+                "refund_no": obj.refund_no,
+                "order_id": obj.invoice_id,
+                "invoice": (
+                    obj.invoice.invoice
+                    if obj.invoice else None
+                ),
+                "amount": self.amount(value),
+                "bank_id": obj.bank_id,
+                "bank_name": obj.bank.name,
+                "transactionID": obj.transactionID,
+                "date": str(obj.date),
+                "note": obj.note,
+                "created_by_id": obj.created_by_id,
+                "created_by_name": obj.created_by.name,
+            })
+
+        refund_section = {
+            "summary": {
+                "count": len(refund_data),
+                "total_refunded": self.amount(
+                    refund_total
+                ),
+            },
+            "data": refund_data,
+        }
+
+        # ==========================================
+        # 8. ADVANCE AMOUNT TRANSFERS
+        # ==========================================
+
+        transfers = AdvanceAmountTransfer.objects.filter(
+            Q(send_from_id=customer_id) |
+            Q(send_to_id=customer_id)
+        ).select_related(
+            "send_from",
+            "send_to",
+            "created_by"
+        )
+
+        transfers = self.date_filter(
+            transfers,
+            "date",
+            start_date,
+            end_date
+        )
+
+        transfer_data = []
+        incoming = Decimal("0")
+        outgoing = Decimal("0")
+
+        for obj in transfers.order_by(
+            "-date", "-id"
+        ):
+
+            value = self.money(obj.amount)
+
+            is_incoming = (
+                obj.send_to_id == customer_id
+            )
+
+            is_outgoing = (
+                obj.send_from_id == customer_id
+            )
+
+            if is_incoming:
+                incoming += value
+
+            if is_outgoing:
+                outgoing += value
+
+            transfer_data.append({
+                "id": obj.id,
+                "send_from_id": obj.send_from_id,
+                "send_from_name": obj.send_from.name,
+                "send_to_id": obj.send_to_id,
+                "send_to_name": obj.send_to.name,
+                "amount": self.amount(value),
+                "direction": (
+                    "internal"
+                    if is_incoming and is_outgoing
+                    else "incoming"
+                    if is_incoming else "outgoing"
+                ),
+                "date": str(obj.date),
+                "note": obj.note,
+                "created_by_id": obj.created_by_id,
+                "created_by_name": obj.created_by.name,
+            })
+
+        transfer_section = {
+            "summary": {
+                "count": len(transfer_data),
+                "total_incoming": self.amount(
+                    incoming
+                ),
+                "total_outgoing": self.amount(
+                    outgoing
+                ),
+                "net_transfer": self.amount(
+                    incoming - outgoing
+                ),
+            },
+            "data": transfer_data,
+        }
+
+        # ==========================================
+        # 9. GRV / RETURNS
+        # ==========================================
+
+        grvs = GRVModel.objects.filter(
+            order__customer_id=customer_id
+        ).select_related(
+            "order",
+            "product_id"
+        )
+
+        grvs = self.date_filter(
+            grvs,
+            "date",
+            start_date,
+            end_date
+        )
+
+        if product_id:
+            grvs = grvs.filter(
+                product_id_id=product_id
+            )
+
+        grv_data = []
+        grv_quantity = 0
+        grv_value = Decimal("0")
+        grv_cod_total = Decimal("0")
+
+        remark_summary = defaultdict(int)
+        approval_summary = defaultdict(int)
+        reason_summary = defaultdict(int)
+
+        for obj in grvs.order_by(
+            "-date", "-id"
+        ):
+
+            price = self.money(obj.price)
+            line_total = price * obj.quantity
+            cod_value = self.money(obj.cod_amount)
+
+            grv_quantity += obj.quantity
+            grv_value += line_total
+            grv_cod_total += cod_value
+
+            remark_summary[
+                obj.remark or "unspecified"
+            ] += 1
+
+            approval_summary[
+                obj.status or "unspecified"
+            ] += 1
+
+            reason_summary[
+                obj.returnreason or "unspecified"
+            ] += 1
+
+            grv_data.append({
+                "id": obj.id,
+                "order_id": obj.order_id,
+                "invoice": obj.order.invoice,
+                "product_id": obj.product_id_id,
+                "product_name": (
+                    obj.product_id.name
+                    if obj.product_id else obj.product
+                ),
+                "quantity": obj.quantity,
+                "price": self.amount(price),
+                "total_value": self.amount(
+                    line_total
+                ),
+                "returnreason": obj.returnreason,
+                "remark": obj.remark,
+                "status": obj.status,
+                "date": (
+                    str(obj.date)
+                    if obj.date else None
+                ),
+                "time": (
+                    str(obj.time)
+                    if obj.time else None
+                ),
+                "note": obj.note,
+                "cod_amount": self.amount(
+                    cod_value
+                ),
+                "rack_details": obj.rack_details,
+                "selected_racks": obj.selected_racks,
+            })
+
+        grv_section = {
+            "summary": {
+                "count": len(grv_data),
+                "total_quantity": grv_quantity,
+                "total_value": self.amount(
+                    grv_value
+                ),
+                "total_cod_return_amount": self.amount(
+                    grv_cod_total
+                ),
+                "remark_wise_count": dict(
+                    remark_summary
+                ),
+                "status_wise_count": dict(
+                    approval_summary
+                ),
+                "reason_wise_count": dict(
+                    reason_summary
+                ),
+            },
+            "data": grv_data,
+        }
+
+        # ==========================================
+        # 10. GRAPH DATA
+        # ==========================================
+
+        daily = defaultdict(lambda: {
+            "sales": Decimal("0"),
+            "orders": 0,
+            "quantity": 0,
+            "tax": Decimal("0"),
+            "discount": Decimal("0"),
+            "payments": Decimal("0"),
+            "advances": Decimal("0"),
+            "refunds": Decimal("0"),
+            "grv_value": Decimal("0"),
+        })
+
+        # Order sales
+        for order in orders_data:
+
+            day = self.get_order_day(
+                order["order_date"]
+            )
+
+            if day:
+                key = day.isoformat()
+
+                daily[key]["sales"] += self.money(
+                    order["total_amount"]
+                )
+
+                daily[key]["orders"] += 1
+
+        # Order items
+        for item in items_data:
+
+            day = self.get_order_day(
+                item["order_date"]
+            )
+
+            if day:
+                key = day.isoformat()
+
+                daily[key]["quantity"] += (
+                    item["quantity"]
+                )
+
+                daily[key]["tax"] += self.money(
+                    item["tax_amount"]
+                )
+
+                daily[key]["discount"] += self.money(
+                    item["discount_total"]
+                )
+
+        # Payments
+        for payment in payment_data:
+
+            day = self.get_order_day(
+                payment["received_at"]
+            )
+
+            if day:
+                daily[day.isoformat()][
+                    "payments"
+                ] += self.money(
+                    payment["amount"]
+                )
+
+        # Advances
+        for advance in advance_data:
+
+            day = self.get_order_day(
+                advance["received_at"]
+            )
+
+            if day:
+                daily[day.isoformat()][
+                    "advances"
+                ] += self.money(
+                    advance["amount"]
+                )
+
+        # Refunds
+        for refund in refund_data:
+
+            day = self.get_order_day(
+                refund["date"]
+            )
+
+            if day:
+                daily[day.isoformat()][
+                    "refunds"
+                ] += self.money(
+                    refund["amount"]
+                )
+
+        # GRV
+        for grv in grv_data:
+
+            day = self.get_order_day(
+                grv["date"]
+            )
+
+            if day:
+                daily[day.isoformat()][
+                    "grv_value"
+                ] += self.money(
+                    grv["total_value"]
+                )
+
+        available_days = sorted(
+            datetime.strptime(
+                key, "%Y-%m-%d"
+            ).date()
+            for key in daily.keys()
+        )
+
+        graph_start = (
+            start_date
+            or (
+                available_days[0]
+                if available_days else None
+            )
+        )
+
+        graph_end = (
+            end_date
+            or (
+                available_days[-1]
+                if available_days else None
+            )
+        )
+
+        # Prevent excessively large chart responses.
+        if graph_start and not graph_end:
+            graph_end = timezone.localdate()
+
+        if graph_end and not graph_start:
+            graph_start = graph_end - timedelta(
+                days=29
+            )
+
+        # Limit generated daily points to 366 days.
+        if graph_start and graph_end:
+            if (graph_end - graph_start).days > 365:
+                graph_start = graph_end - timedelta(
+                    days=365
+                )
+
+        sales_over_time = []
+
+        cumulative_sales = Decimal("0")
+        cumulative_orders = 0
+        cumulative_quantity = 0
+
+        if graph_start and graph_end:
+
+            current = graph_start
+
+            while current <= graph_end:
+
+                key = current.isoformat()
+                point = daily[key]
+
+                cumulative_sales += point["sales"]
+                cumulative_orders += point["orders"]
+                cumulative_quantity += point["quantity"]
+
+                sales_over_time.append({
+                    "date": key,
+                    "sales": self.amount(
+                        point["sales"]
+                    ),
+                    "orders": point["orders"],
+                    "quantity": point["quantity"],
+                    "tax": self.amount(
+                        point["tax"]
+                    ),
+                    "discount": self.amount(
+                        point["discount"]
+                    ),
+                    "payments": self.amount(
+                        point["payments"]
+                    ),
+                    "advances": self.amount(
+                        point["advances"]
+                    ),
+                    "refunds": self.amount(
+                        point["refunds"]
+                    ),
+                    "grv_value": self.amount(
+                        point["grv_value"]
+                    ),
+                    "cumulative_sales": self.amount(
+                        cumulative_sales
+                    ),
+                    "cumulative_orders": cumulative_orders,
+                    "cumulative_quantity": cumulative_quantity,
+                })
+
+                if current == graph_end:
+                    break
+
+                current += timedelta(days=1)
+
+        # ==========================================
+        # 11. PREVIOUS PERIOD COMPARISON
+        # ==========================================
+
+        previous_period_data = []
+        previous_total_sales = Decimal("0")
+
+        if graph_start and graph_end:
+
+            period_days = (
+                graph_end - graph_start
+            ).days + 1
+
+            previous_end = (
+                graph_start - timedelta(days=1)
+            )
+
+            previous_start = (
+                previous_end - timedelta(
+                    days=period_days - 1
+                )
+            )
+
+            previous_orders = Order.objects.filter(
+                customer_id=customer_id
+            )
+
+            previous_orders = self.order_date_filter(
+                previous_orders,
+                previous_start,
+                previous_end
+            )
+
+            if product_id:
+                previous_orders = previous_orders.filter(
+                    items__product_id=product_id
+                ).distinct()
+
+            previous_daily = defaultdict(
+                lambda: Decimal("0")
+            )
+
+            for order in previous_orders:
+
+                day = self.get_order_day(
+                    order.order_date
+                )
+
+                if day:
+                    previous_daily[
+                        day.isoformat()
+                    ] += self.money(
+                        order.total_amount
+                    )
+
+                    previous_total_sales += self.money(
+                        order.total_amount
+                    )
+
+            previous_cumulative = Decimal("0")
+
+            for index in range(period_days):
+
+                current_day = (
+                    graph_start + timedelta(
+                        days=index
+                    )
+                )
+
+                previous_day = (
+                    previous_start + timedelta(
+                        days=index
+                    )
+                )
+
+                previous_value = previous_daily[
+                    previous_day.isoformat()
+                ]
+
+                previous_cumulative += previous_value
+
+                previous_period_data.append({
+                    "date": current_day.isoformat(),
+                    "previous_date": previous_day.isoformat(),
+                    "sales": self.amount(
+                        previous_value
+                    ),
+                    "cumulative_sales": self.amount(
+                        previous_cumulative
+                    ),
+                })
+
+        # Merge comparison points by relative day
+        comparison_data = []
+
+        for index, current_point in enumerate(
+            sales_over_time
+        ):
+
+            previous_point = (
+                previous_period_data[index]
+                if index < len(previous_period_data)
+                else None
+            )
+
+            comparison_data.append({
+                "date": current_point["date"],
+                "current_sales": current_point["sales"],
+                "previous_sales": (
+                    previous_point["sales"]
+                    if previous_point else "0.00"
+                ),
+                "current_cumulative_sales": (
+                    current_point["cumulative_sales"]
+                ),
+                "previous_cumulative_sales": (
+                    previous_point["cumulative_sales"]
+                    if previous_point else "0.00"
+                ),
+            })
+
+        current_period_total = sum(
+            (
+                self.money(point["sales"])
+                for point in sales_over_time
+            ),
+            Decimal("0")
+        )
+
+        if previous_total_sales > 0:
+            growth_percentage = (
+                (
+                    current_period_total -
+                    previous_total_sales
+                ) / previous_total_sales
+            ) * Decimal("100")
+            growth_value = round(
+                growth_percentage, 2
+            )
+        else:
+            growth_value = None
+
+        # ==========================================
+        # 12. PRODUCT PERFORMANCE GRAPH
+        # ==========================================
+
+        product_performance = sorted(
+            product_wise,
+            key=lambda p: self.money(
+                p["total_with_tax"]
+            ),
+            reverse=True
+        )
+
+        # ==========================================
+        # 13. ORDER STATUS GRAPH
+        # ==========================================
+
+        status_distribution = []
+
+        for order_status, count in status_counts.items():
+
+            percentage = (
+                count / len(orders_data) * 100
+                if orders_data else 0
+            )
+
+            status_distribution.append({
+                "status": order_status,
+                "count": count,
+                "percentage": round(
+                    percentage, 2
+                ),
+            })
+
+        # ==========================================
+        # 14. FAMILY DISTRIBUTION GRAPH
+        # ==========================================
+
+        family_totals = {}
+
+        for order in orders_data:
+
+            family_key = str(
+                order["family_id"]
+            )
+
+            if family_key not in family_totals:
+                family_totals[family_key] = {
+                    "family_id": order["family_id"],
+                    "family_name": order["family_name"],
+                    "orders": 0,
+                    "sales": Decimal("0"),
+                }
+
+            family_totals[
+                family_key
+            ]["orders"] += 1
+
+            family_totals[
+                family_key
+            ]["sales"] += self.money(
+                order["total_amount"]
+            )
+
+        family_distribution = [
+            {
+                "family_id": f["family_id"],
+                "family_name": f["family_name"],
+                "orders": f["orders"],
+                "sales": self.amount(
+                    f["sales"]
+                ),
+            }
+            for f in family_totals.values()
+        ]
+
+        # ==========================================
+        # 15. PAYMENT STATUS GRAPH
+        # ==========================================
+
+        payment_status_distribution = []
+
+        for payment_status, count in (
+            payment_status_counts.items()
+        ):
+
+            payment_status_distribution.append({
+                "payment_status": payment_status,
+                "count": count,
+                "percentage": round(
+                    (
+                        count / len(orders_data) * 100
+                    ) if orders_data else 0,
+                    2
+                ),
+            })
+
+        # ==========================================
+        # 16. GRAPH RESPONSE
+        # ==========================================
+
+        graphs = {
+            "sales_over_time": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "sales",
+                "data": sales_over_time,
+            },
+            "cumulative_sales": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "cumulative_sales",
+                "data": sales_over_time,
+            },
+            "sales_comparison": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "series": [
+                    "current_cumulative_sales",
+                    "previous_cumulative_sales"
+                ],
+                "summary": {
+                    "current_period_sales": self.amount(
+                        current_period_total
+                    ),
+                    "previous_period_sales": self.amount(
+                        previous_total_sales
+                    ),
+                    "growth_percentage": growth_value,
+                },
+                "data": comparison_data,
+            },
+            "order_trend": {
+                "chart_type": "bar",
+                "x_axis": "date",
+                "y_axis": "orders",
+                "data": sales_over_time,
+            },
+            "quantity_trend": {
+                "chart_type": "bar",
+                "x_axis": "date",
+                "y_axis": "quantity",
+                "data": sales_over_time,
+            },
+            "payment_trend": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "payments",
+                "data": sales_over_time,
+            },
+            "advance_trend": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "advances",
+                "data": sales_over_time,
+            },
+            "refund_trend": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "refunds",
+                "data": sales_over_time,
+            },
+            "grv_trend": {
+                "chart_type": "line",
+                "x_axis": "date",
+                "y_axis": "grv_value",
+                "data": sales_over_time,
+            },
+            "product_performance": {
+                "chart_type": "bar",
+                "x_axis": "product_name",
+                "y_axis": "total_with_tax",
+                "data": product_performance,
+            },
+            "order_status_distribution": {
+                "chart_type": "pie",
+                "label": "status",
+                "value": "count",
+                "data": status_distribution,
+            },
+            "payment_status_distribution": {
+                "chart_type": "pie",
+                "label": "payment_status",
+                "value": "count",
+                "data": payment_status_distribution,
+            },
+            "family_distribution": {
+                "chart_type": "pie",
+                "label": "family_name",
+                "value": "sales",
+                "data": family_distribution,
+            },
+        }
+
+        # ==========================================
+        # 17. OVERALL SUMMARY
+        # ==========================================
+
+        overall_summary = {
+            "total_orders": len(orders_data),
+            "total_sales": self.amount(
+                total_sales
+            ),
+            "average_order_value": self.amount(
+                average_order_value
+            ),
+            "total_order_items": len(items_data),
+            "total_product_quantity": total_quantity,
+            "unique_products": len(product_summary),
+            "total_gross_value": self.amount(
+                total_gross_value
+            ),
+            "total_discount": self.amount(
+                total_discount
+            ),
+            "total_taxable_value": self.amount(
+                total_value_before_tax
+            ),
+            "total_tax_amount": self.amount(
+                total_tax_amount
+            ),
+            "total_items_with_tax": self.amount(
+                total_value_with_tax
+            ),
+            "total_advance_receipts": self.amount(
+                advance_total
+            ),
+            "total_payment_receipts": self.amount(
+                payment_total
+            ),
+            "total_commission_receipts": self.amount(
+                commission_total
+            ),
+            "total_refunds": self.amount(
+                refund_total
+            ),
+            "total_incoming_transfers": self.amount(
+                incoming
+            ),
+            "total_outgoing_transfers": self.amount(
+                outgoing
+            ),
+            "net_advance_transfer": self.amount(
+                incoming - outgoing
+            ),
+            "total_grv_count": len(grv_data),
+            "total_grv_quantity": grv_quantity,
+            "total_grv_value": self.amount(
+                grv_value
+            ),
+            "total_cod_return_amount": self.amount(
+                grv_cod_total
+            ),
+        }
+
+        # ==========================================
+        # 18. FINAL RESPONSE
+        # ==========================================
+
+        return Response({
+            "status": "success",
+            "message": (
+                "Customer complete report fetched successfully"
+            ),
+            "filters": {
+                "customer_id": customer_id,
+                "product_id": product_id,
+                "start_date": start_raw,
+                "end_date": end_raw,
+            },
+            "customer": customer_data,
+            "overall_summary": overall_summary,
+            "sections": {
+                "orders": orders_section,
+                "order_items": items_section,
+                "advance_receipts": advance_section,
+                "payment_receipts": payment_section,
+                "commission_receipts": commission_section,
+                "refund_receipts": refund_section,
+                "advance_transfers": transfer_section,
+                "grv": grv_section,
+            },
+            "graphs": graphs,
+        }, status=status.HTTP_200_OK)
