@@ -499,6 +499,9 @@ urlpatterns = [
     # family wise state sales report
     path("api/reports/state/wise/sales/", StateWiseSalesReportView.as_view()),
 
+    # customer data complete report view
+    path("api/customer/complete/report/", CustomerCompleteReportView.as_view()),
+
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
     path("api/internal/mails/<int:pk>/", InternalMailDetailView.as_view(), name="internal-mail-detail"),
