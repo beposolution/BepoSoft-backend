@@ -198,6 +198,8 @@ urlpatterns = [
     
     path('api/perfoma/invoice/create/',CreatePerfomaInvoice.as_view()),
     path('api/perfoma/invoices/',PerfomaInvoiceListView.as_view()),
+    path('api/perfoma/invoice/status/update/<int:pk>/', PerfomaInvoiceStatusUpdateView.as_view()),
+    path('api/perfoma/invoices/status/filter/', PerfomaInvoiceStatusFilterView.as_view()),
     path('api/perfoma/invoices/new/',PerfomaInvoiceListViewNew.as_view()),
     path('api/perfoma/invoices/with/payment/slips/', PerfomaInvoiceWithPaymentSlipsView.as_view()),
     path('api/perfoma/<str:invoice>/invoice/',PerfomaInvoiceDetailView.as_view()),

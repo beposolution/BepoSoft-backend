@@ -6618,6 +6618,174 @@ class PerfomaInvoiceListView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+
+class PerfomaInvoiceStatusUpdateView(BaseTokenView):
+
+    def put(self, request, pk):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            order = PerfomaInvoiceOrder.objects.filter(pk=pk).first()
+
+            if not order:
+                return Response({
+                    "status": "error",
+                    "message": "Performa invoice not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            new_status = request.data.get("status")
+
+            if not isinstance(new_status, str) or not new_status.strip():
+                return Response({
+                    "status": "error",
+                    "message": "Status is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            new_status = new_status.strip()
+
+            valid_statuses = [
+                choice[0]
+                for choice in PerfomaInvoiceOrder._meta.get_field("status").choices
+            ]
+
+            if new_status not in valid_statuses:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid status",
+                    "valid_statuses": valid_statuses
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            old_status = order.status
+            order.status = new_status
+            order.save(update_fields=["status"])
+
+            return Response({
+                "status": "success",
+                "message": "Performa invoice status updated successfully",
+                "data": {
+                    "id": order.id,
+                    "invoice": order.invoice,
+                    "old_status": old_status,
+                    "new_status": order.status
+                }
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError:
+            logger.exception("Database error updating performa invoice status")
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception:
+            logger.exception("Error updating performa invoice status")
+            return Response({
+                "status": "error",
+                "message": "An internal server error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PerfomaInvoiceStatusFilterView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            auth_user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            status_filter = request.GET.get("status", "").strip()
+            start_date = request.GET.get("start_date", "").strip()
+            end_date = request.GET.get("end_date", "").strip()
+
+            start = parse_date(start_date) if start_date else None
+            end = parse_date(end_date) if end_date else None
+
+            if start_date and start is None:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid start_date. Use YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if end_date and end is None:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid end_date. Use YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if start and end and start > end:
+                return Response({
+                    "status": "error",
+                    "message": "start_date cannot be greater than end_date"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            orders = PerfomaInvoiceOrder.objects.select_related(
+                "manage_staff",
+                "warehouses_obj",
+                "company",
+                "customer",
+                "billing_address",
+                "family",
+                "state"
+            ).all().order_by("-order_date", "-id")
+
+            if status_filter:
+                valid_statuses = [
+                    choice[0]
+                    for choice in PerfomaInvoiceOrder._meta.get_field("status").choices
+                ]
+
+                if status_filter not in valid_statuses:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid status filter",
+                        "valid_statuses": valid_statuses
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                orders = orders.filter(status=status_filter)
+
+            # Assumes order_date is stored as YYYY-MM-DD
+            if start:
+                orders = orders.filter(
+                    order_date__gte=start.isoformat()
+                )
+
+            if end:
+                orders = orders.filter(
+                    order_date__lte=end.isoformat()
+                )
+
+            paginator = StandardPagination()
+            paginated_orders = paginator.paginate_queryset(
+                orders, request, view=self
+            )
+
+            serializer = PerfomaInvoiceProductsSerializers(
+                paginated_orders,
+                many=True,
+                context={"request": request}
+            )
+
+            return paginator.get_paginated_response(serializer.data)
+
+        except DatabaseError:
+            logger.exception("Database error filtering performa invoices")
+            return Response({
+                "status": "error",
+                "message": "Database error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception:
+            logger.exception("Error filtering performa invoices")
+            return Response({
+                "status": "error",
+                "message": "An internal server error occurred"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 class PerfomaInvoiceListViewNew(BaseTokenView):
     def get(self, request):
         try:
