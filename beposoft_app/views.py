@@ -9946,6 +9946,8 @@ class SalesReportView(BaseTokenView):
             end_date = request.GET.get("end_date")
             family = request.GET.get("family")
             manage_staff = request.GET.get("staff")
+            state = request.GET.get("state")
+            product = request.GET.get("product")
 
             orders = Order.objects.all()
 
@@ -9972,6 +9974,14 @@ class SalesReportView(BaseTokenView):
 
             if manage_staff:
                 orders = orders.filter(manage_staff_id=manage_staff)
+
+            if state:
+                orders = orders.filter(state_id=state)
+
+            if product:
+                orders = orders.filter(
+                    items__product_id=product
+                ).distinct()
 
             approved_statuses = [
                 'Approved',
