@@ -504,6 +504,9 @@ urlpatterns = [
     # customer data complete report view
     path("api/customer/complete/report/", CustomerCompleteReportView.as_view()),
 
+    # BDM, BDO, ASD & SD full report view
+    path("api/staff/complete/report/", StaffCompleteReportView.as_view()),
+
     # mail box
     path("api/internal/mails/", InternalMailView.as_view(), name="internal-mails"),
     path("api/internal/mails/<int:pk>/", InternalMailDetailView.as_view(), name="internal-mail-detail"),
