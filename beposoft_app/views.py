@@ -22,7 +22,7 @@ from django.db.models import Sum, Min, Max
 from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Q
-from collections import defaultdict
+from collections import Counter, defaultdict
 from rest_framework.parsers import MultiPartParser, FormParser
 import pandas as pd
 import os
@@ -42006,3 +42006,408 @@ class CustomerCompleteReportView(BaseTokenView):
             },
             "graphs": graphs,
         }, status=status.HTTP_200_OK)
+
+
+# BDM, BDO, ASD & SD full report view
+
+class StaffCompleteReportView(BaseTokenView):
+    ALLOWED_DEPARTMENTS = {'BDO', 'BDM', 'ASD', 'SD'}
+    EXCLUDED_REVENUE_STATUSES = {'Cancelled', 'Rejected', 'Invoice Rejected', 'Refunded', 'Return', 'Return From Delivery'}
+
+    @staticmethod
+    def money(value):
+        try:
+            return Decimal(str(value or 0))
+        except (ValueError, TypeError, InvalidOperation):
+            return Decimal('0')
+
+    @classmethod
+    def amount(cls, value):
+        return str(cls.money(value).quantize(Decimal('0.01')))
+
+    @staticmethod
+    def percentage(current, previous):
+        if not previous:
+            return None  # Undefined when previous value is zero
+        return round(float((current - previous) * 100 / previous), 2)
+
+    @staticmethod
+    def order_day(order):
+        try:
+            return datetime.strptime(str(order.order_date)[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def filter_dates(queryset, start, end):
+        # Order.order_date is a CharField in the supplied model; this
+        # assumes ISO-formatted dates beginning YYYY-MM-DD.
+        return queryset.filter(order_date__gte=start.isoformat(),
+                               order_date__lt=(end + timedelta(days=1)).isoformat())
+
+    @staticmethod
+    def staff_orders(staff):
+        # Attribution: orders managed by staff OR invoices explicitly linked
+        # to this staff as BDM/BDO. distinct() prevents duplicate invoices.
+        linked = BDMBDOReport.objects.filter(
+            Q(bdo_id=staff.id) | Q(bdm_id=staff.id)
+        ).values_list('invoice_id', flat=True)
+        return Order.objects.filter(
+            Q(manage_staff_id=staff.id) | Q(pk__in=linked)
+        ).distinct()
+
+    @classmethod
+    def summarize(cls, orders):
+        statuses = Counter()
+        payment_statuses = Counter()
+        daily = defaultdict(lambda: {'bills': 0, 'gross_amount': Decimal('0'), 'sales_amount': Decimal('0')})
+        total = Decimal('0')
+        sales = Decimal('0')
+        customers = set()
+        for order in orders:
+            value = cls.money(order.total_amount)
+            total += value
+            statuses[order.status or 'Unknown'] += 1
+            payment_statuses[order.payment_status or 'Unknown'] += 1
+            customers.add(order.customer_id)
+            is_sale = order.status not in cls.EXCLUDED_REVENUE_STATUSES
+            if is_sale:
+                sales += value
+            day = cls.order_day(order)
+            if day:
+                point = daily[day.isoformat()]
+                point['bills'] += 1
+                point['gross_amount'] += value
+                if is_sale:
+                    point['sales_amount'] += value
+        return {
+            'total_bills': len(orders),
+            'gross_order_amount': cls.amount(total),
+            'sales_order_amount': cls.amount(sales),
+            'excluded_status_amount': cls.amount(total - sales),
+            'unique_customers': len(customers),
+            'average_bill_amount': cls.amount(total / len(orders) if orders else 0),
+            'order_status_counts': dict(sorted(statuses.items())),
+            'payment_status_counts': dict(sorted(payment_statuses.items())),
+            'daily': daily,
+        }
+
+    def get(self, request):
+        authenticated_user, error = self.get_user_from_token(request)
+        if error:
+            return error
+
+        user_id = request.query_params.get('user_id')
+        if not user_id or not user_id.isdecimal() or int(user_id) <= 0:
+            return Response({'status': 'error', 'message': 'No staff found'}, status=404)
+
+        staff = User.objects.select_related('department_id', 'family', 'supervisor_id',
+                                            'warehouse_id').filter(pk=int(user_id)).first()
+        if not staff:
+            return Response({'status': 'error', 'message': 'No staff found'}, status=404)
+
+        department = (staff.department_id.name if staff.department_id else '').strip().upper()
+        if department not in self.ALLOWED_DEPARTMENTS:
+            return Response({
+                'status': 'unavailable', 'staff_id': staff.id,
+                'message': 'Currently this report is available only for BDM, BDO, ASD and SD. Available soon for other departments.'
+            }, status=403)
+
+        today = timezone.localdate()
+        try:
+            start = datetime.strptime(request.query_params.get('start_date', today.replace(day=1).isoformat()), '%Y-%m-%d').date()
+            end = datetime.strptime(request.query_params.get('end_date', today.isoformat()), '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'status': 'error', 'message': 'Dates must use YYYY-MM-DD'}, status=400)
+        if start > end:
+            return Response({'status': 'error', 'message': 'start_date cannot exceed end_date'}, status=400)
+        if end.year == 9999:
+            return Response({'status': 'error', 'message': 'end_date is out of supported range'}, status=400)
+
+        days = (end - start).days + 1
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days - 1)
+
+        all_staff_orders = self.staff_orders(staff).select_related(
+            'customer', 'family', 'state', 'warehouses', 'bank', 'company', 'manage_staff'
+        )
+        current_orders = list(self.filter_dates(all_staff_orders, start, end).order_by('-id'))
+        previous_orders = list(self.filter_dates(all_staff_orders, prev_start, prev_end))
+        current = self.summarize(current_orders)
+        previous = self.summarize(previous_orders)
+        current_ids = [order.id for order in current_orders]
+
+        items_by_order = defaultdict(list)
+        products = defaultdict(lambda: {'quantity': 0, 'line_amount': Decimal('0'), 'bills': set()})
+        total_items = 0
+        total_quantity = 0
+        for item in OrderItem.objects.filter(order_id__in=current_ids).select_related(
+            'product', 'size', 'variant'
+        ).order_by('id').iterator():
+            # OrderItem has rate, quantity, discount and tax, but no stored
+            # final line amount. Calculated estimates are labelled accordingly.
+            base = self.money(item.rate) * item.quantity
+            discount = self.money(item.discount)
+            taxable = base - discount
+            estimated_total = taxable * (Decimal('1') + Decimal(item.tax or 0) / Decimal('100'))
+            detail = {
+                'id': item.id, 'product_id': item.product_id,
+                'product_name': item.product.name, 'description': item.description,
+                'quantity': item.quantity, 'rate': self.amount(item.rate),
+                'discount': self.amount(discount), 'tax_percent': item.tax,
+                'estimated_line_total': self.amount(estimated_total),
+                'size_id': item.size_id, 'variant_id': item.variant_id,
+                'rack_details': item.rack_details,
+            }
+            items_by_order[item.order_id].append(detail)
+            group = products[(item.product_id, item.product.name)]
+            group['quantity'] += item.quantity
+            group['line_amount'] += estimated_total
+            group['bills'].add(item.order_id)
+            total_items += 1
+            total_quantity += item.quantity
+
+        grvs_by_order = defaultdict(list)
+        grv_status = Counter()
+        grv_reasons = Counter()
+        grv_remarks = Counter()
+        grv_total = Decimal('0')
+        grv_count = 0
+        for grv in GRVModel.objects.filter(order_id__in=current_ids).order_by('-date', '-id').iterator():
+            amount = self.money(grv.price) * grv.quantity
+            grv_total += amount
+            grv_count += 1
+            grv_status[grv.status or 'Unknown'] += 1
+            grv_reasons[grv.returnreason or 'Unknown'] += 1
+            grv_remarks[grv.remark or 'Unknown'] += 1
+            grvs_by_order[grv.order_id].append({
+                'id': grv.id, 'order_id': grv.order_id, 'product': grv.product,
+                'product_id': grv.product_id_id, 'quantity': grv.quantity,
+                'price': self.amount(grv.price), 'gross_grv_value': self.amount(amount),
+                'status': grv.status, 'return_reason': grv.returnreason,
+                'remark': grv.remark, 'date': grv.date.isoformat() if grv.date else None,
+                'time': grv.time.isoformat() if grv.time else None,
+                'note': grv.note, 'cod_amount': self.amount(grv.cod_amount),
+                'rack_details': grv.rack_details, 'selected_racks': grv.selected_racks,
+            })
+
+        status_bills = defaultdict(list)
+        customer_summary = defaultdict(lambda: {'bills': 0, 'amount': Decimal('0')})
+        state_summary = defaultdict(lambda: {'bills': 0, 'amount': Decimal('0')})
+        month_summary = defaultdict(lambda: {'bills': 0, 'amount': Decimal('0')})
+
+        state_orders = defaultdict(list)
+        previous_state_orders = defaultdict(list)
+
+        for old_order in previous_orders:
+            state_key = (
+                old_order.state_id,
+                old_order.state.name if old_order.state else 'Unknown'
+            )
+            previous_state_orders[state_key].append(old_order)
+
+        order_details = []
+        for order in current_orders:
+            value = self.money(order.total_amount)
+            status_bills[order.status or 'Unknown'].append({'id': order.id, 'invoice': order.invoice, 'amount': self.amount(value)})
+            cust = customer_summary[(order.customer_id, order.customer.name)]
+            cust['bills'] += 1
+            cust['amount'] += value
+            state = state_summary[(order.state_id, order.state.name)]
+            state['bills'] += 1
+            state['amount'] += value
+            state_key = (
+                order.state_id,
+                order.state.name if order.state else 'Unknown'
+            )
+            state_orders[state_key].append(order)
+            day = self.order_day(order)
+            if day:
+                month = month_summary[day.strftime('%Y-%m')]
+                month['bills'] += 1
+                month['amount'] += value
+            order_details.append({
+                'id': order.id, 'invoice': order.invoice, 'order_date': order.order_date,
+                'billing_date': order.billing_date.isoformat() if order.billing_date else None,
+                'created_at': order.created_at.isoformat() if order.created_at else None,
+                'status': order.status, 'payment_status': order.payment_status,
+                'payment_method': order.payment_method, 'total_amount': self.amount(value),
+                'shipping_charge': order.shipping_charge, 'cod_amount': order.cod_amount,
+                'customer': {'id': order.customer_id, 'name': order.customer.name},
+                'family': {'id': order.family_id, 'name': order.family.name},
+                'state': {'id': order.state_id, 'name': order.state.name},
+                'managed_by': {'id': order.manage_staff_id, 'name': order.manage_staff.name},
+                'order_items': items_by_order[order.id],
+                'grv_details': grvs_by_order[order.id],
+            })
+
+        def grouped(mapping, id_label):
+            return sorted([{
+                id_label: key[0], 'name': key[1], 'bills': data['bills'],
+                'amount': self.amount(data['amount'])
+            } for key, data in mapping.items()], key=lambda x: (-x['bills'], x['name']))
+
+        current_gross = self.money(current['gross_order_amount'])
+        previous_gross = self.money(previous['gross_order_amount'])
+        current_sales = self.money(current['sales_order_amount'])
+        previous_sales = self.money(previous['sales_order_amount'])
+        product_list = sorted([{
+            'product_id': pid, 'product_name': name, 'quantity': data['quantity'],
+            'bill_count': len(data['bills']), 'estimated_line_total': self.amount(data['line_amount'])
+        } for (pid, name), data in products.items()], key=lambda x: (-x['quantity'], x['product_name']))
+
+        
+        state_wise_report = []
+
+        for (state_id, state_name), state_order_list in state_orders.items():
+            old_state_orders = previous_state_orders.get(
+                (state_id, state_name), []
+            )
+
+            now_state = self.summarize(state_order_list)
+            old_state = self.summarize(old_state_orders)
+
+            current_amount = self.money(
+                now_state['sales_order_amount']
+            )
+            previous_amount = self.money(
+                old_state['sales_order_amount']
+            )
+
+            state_wise_report.append({
+                'state_id': state_id,
+                'state_name': state_name,
+                'total_bills': now_state['total_bills'],
+                'gross_order_amount': now_state['gross_order_amount'],
+                'sales_order_amount': now_state['sales_order_amount'],
+                'excluded_status_amount': now_state['excluded_status_amount'],
+                'unique_customers': now_state['unique_customers'],
+                'average_bill_amount': now_state['average_bill_amount'],
+                'order_status_counts': now_state['order_status_counts'],
+                'payment_status_counts': now_state['payment_status_counts'],
+                'comparison': {
+                    'previous_bills': old_state['total_bills'],
+                    'bill_difference': (
+                        now_state['total_bills'] -
+                        old_state['total_bills']
+                    ),
+                    'bill_change_percent': self.percentage(
+                        now_state['total_bills'],
+                        old_state['total_bills']
+                    ),
+                    'previous_sales_amount': self.amount(previous_amount),
+                    'sales_difference': self.amount(
+                        current_amount - previous_amount
+                    ),
+                    'sales_change_percent': self.percentage(
+                        current_amount,
+                        previous_amount
+                    ),
+                },
+                'daily_graph': [
+                    {
+                        'date': date_key,
+                        'bills': values['bills'],
+                        'gross_amount': self.amount(
+                            values['gross_amount']
+                        ),
+                        'sales_amount': self.amount(
+                            values['sales_amount']
+                        ),
+                    }
+                    for date_key, values in sorted(
+                        now_state['daily'].items()
+                    )
+                ],
+            })
+
+        state_wise_report.sort(
+            key=lambda row: (
+                -self.money(row['sales_order_amount']),
+                row['state_name']
+            )
+        )
+
+
+        response = {
+            'status': 'success',
+            'message': 'Staff complete report fetched successfully',
+            'filters': {'user_id': staff.id, 'start_date': start.isoformat(), 'end_date': end.isoformat(),
+                        'previous_start_date': prev_start.isoformat(), 'previous_end_date': prev_end.isoformat()},
+            'staff': {
+                'id': staff.id, 'eid': staff.eid, 'staff_id': staff.staff_id,
+                'name': staff.name, 'username': staff.username,
+                'email': staff.email, 'phone': staff.phone, 'alternate_number': staff.alternate_number,
+                'department': department, 'designation': staff.designation, 'grade': staff.grade,
+                'employment_status': staff.employment_status,
+                'join_date': staff.join_date.isoformat() if staff.join_date else None,
+                'confirmation_date': staff.confirmation_date.isoformat() if staff.confirmation_date else None,
+                'termination_date': staff.termination_date.isoformat() if staff.termination_date else None,
+                'approval_status': staff.approval_status, 'is_manager': staff.is_manager,
+                'supervisor': {'id': staff.supervisor_id_id, 'name': staff.supervisor_id.name if staff.supervisor_id else None},
+                'family': {'id': staff.family_id, 'name': staff.family.name if staff.family else None},
+                'warehouse': {'id': staff.warehouse_id_id, 'name': staff.warehouse_id.name if staff.warehouse_id else None},
+                'allocated_states': list(staff.allocated_states.values('id', 'name')),
+            },
+            'summary': {key: value for key, value in current.items() if key != 'daily'},
+            'previous_period_summary': {key: value for key, value in previous.items() if key != 'daily'},
+            'comparison': {
+                'bills': {'current': current['total_bills'], 'previous': previous['total_bills'],
+                          'difference': current['total_bills'] - previous['total_bills'],
+                          'change_percent': self.percentage(current['total_bills'], previous['total_bills'])},
+                'gross_order_amount': {'current': self.amount(current_gross), 'previous': self.amount(previous_gross),
+                                       'difference': self.amount(current_gross - previous_gross),
+                                       'change_percent': self.percentage(current_gross, previous_gross)},
+                'sales_order_amount': {'current': self.amount(current_sales), 'previous': self.amount(previous_sales),
+                                       'difference': self.amount(current_sales - previous_sales),
+                                       'change_percent': self.percentage(current_sales, previous_sales)},
+            },
+            'order_status_details': dict(status_bills),
+            'order_items_summary': {'line_count': total_items, 'total_quantity': total_quantity,
+                                    'unique_products': len(product_list), 'products': product_list},
+            'grv_summary': {'total_grv_records': grv_count, 'gross_grv_value': self.amount(grv_total),
+                            'by_status': dict(grv_status), 'by_reason': dict(grv_reasons),
+                            'by_remark': dict(grv_remarks)},
+            'customers': grouped(customer_summary, 'customer_id'),
+            'states': grouped(state_summary, 'state_id'),
+            'state_wise_report': state_wise_report,
+            'graphs': {
+                'daily_orders': [
+                    {'date': key, 'bills': val['bills'],
+                     'gross_amount': self.amount(val['gross_amount']),
+                     'sales_amount': self.amount(val['sales_amount'])}
+                    for key, val in sorted(current['daily'].items())
+                ],
+                'monthly_orders': [
+                    {'month': key, 'bills': val['bills'], 'amount': self.amount(val['amount'])}
+                    for key, val in sorted(month_summary.items())
+                ],
+                'state_wise_sales': [
+                    {
+                        'state_id': row['state_id'],
+                        'state_name': row['state_name'],
+                        'bills': row['total_bills'],
+                        'gross_amount': row['gross_order_amount'],
+                        'sales_amount': row['sales_order_amount'],
+                    }
+                    for row in state_wise_report
+                ],
+                'order_status': [{'status': key, 'count': count} for key, count in sorted(current['order_status_counts'].items())],
+                'payment_status': [{'status': key, 'count': count} for key, count in sorted(current['payment_status_counts'].items())],
+                'top_products': product_list[:10],
+                'grv_status': [{'status': key, 'count': count} for key, count in sorted(grv_status.items())],
+                'period_comparison': [
+                    {'period': 'previous', 'bills': previous['total_bills'], 'gross_amount': previous['gross_order_amount'], 'sales_amount': previous['sales_order_amount']},
+                    {'period': 'current', 'bills': current['total_bills'], 'gross_amount': current['gross_order_amount'], 'sales_amount': current['sales_order_amount']},
+                ],
+            },
+            'orders': order_details,
+            'notes': [
+                'An invoice may be attributed to multiple staff through BDMBDOReport; do not sum staff totals for company-wide revenue.',
+                'Order amount uses Order.total_amount; GRV values are reported separately and not automatically deducted.',
+                'Estimated item totals assume discount is a flat line discount and tax is applied afterwards; verify against your invoice calculation.',
+                'Date filtering assumes Order.order_date begins with YYYY-MM-DD.',
+                'Sales order amount excludes cancelled, rejected, refunded and return statuses; it is not confirmed cash collection.',
+            ],
+        }
+        return Response(response, status=status.HTTP_200_OK)
