@@ -3511,29 +3511,38 @@ class GSTOrderListView(BaseTokenView):
 
 
 class GSTOrderFilterListView(BaseTokenView):
-    def get(self, request, start_date, end_date):
+    def get(self, request):
         auth_user, error_response = self.get_user_from_token(request)
         if error_response:
             return error_response
 
-        try:
-            datetime.strptime(start_date, "%Y-%m-%d")
-        except ValueError:
+        # Get multiple order IDs from frontend query params
+        order_ids = request.GET.getlist("order_ids")
+
+        # Support comma-separated IDs as well
+        if len(order_ids) == 1:
+            order_ids = order_ids[0].split(",")
+
+        # Validate order IDs
+        if not order_ids:
             return Response(
                 {
                     "status": False,
-                    "message": "Invalid start_date format. Use YYYY-MM-DD."
+                    "message": "Please provide at least one order ID."
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            datetime.strptime(end_date, "%Y-%m-%d")
-        except ValueError:
+            order_ids = [
+                int(order_id.strip())
+                for order_id in order_ids
+            ]
+        except (ValueError, TypeError):
             return Response(
                 {
                     "status": False,
-                    "message": "Invalid end_date format. Use YYYY-MM-DD."
+                    "message": "Invalid order IDs. All order IDs must be integers."
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -3542,12 +3551,12 @@ class GSTOrderFilterListView(BaseTokenView):
 
         base_qs = Order.objects.all()
 
-        date_qs = base_qs.filter(
-            order_date__gte=start_date,
-            order_date__lte=end_date
+        # Filter orders based on frontend order IDs
+        order_qs = base_qs.filter(
+            id__in=order_ids
         )
 
-        status_qs = date_qs.exclude(
+        status_qs = order_qs.exclude(
             status__in=["Invoice Rejected", "Invoice Created"]
         )
 
@@ -3577,14 +3586,13 @@ class GSTOrderFilterListView(BaseTokenView):
             {
                 "status": True,
                 "count": qs.count(),
-                "start_date": start_date,
-                "end_date": end_date,
-                "date_field": "order_date",
+                "order_ids": order_ids,
                 "company": company_id,
                 "results": serializer.data,
             },
             status=status.HTTP_200_OK
         )
+
 
 
 class OrderListByStatusView(BaseTokenView):
