@@ -6807,6 +6807,7 @@ class PerfomaInvoiceListViewNew(BaseTokenView):
             manage_staff = request.GET.get("manage_staff", "").strip()
             customer = request.GET.get("customer", "").strip()
             company = request.GET.get("company", "").strip()
+            status_filter = request.GET.get("status", "").strip()
 
             orders = (
                 PerfomaInvoiceOrder.objects
@@ -6840,6 +6841,9 @@ class PerfomaInvoiceListViewNew(BaseTokenView):
 
             if company:
                 orders = orders.filter(company_id=company)
+
+            if status_filter:
+                orders = orders.filter(status__iexact=status_filter)
 
             paginator = StandardPagination()
             paginated_orders = paginator.paginate_queryset(orders, request)
@@ -7041,6 +7045,7 @@ class PerformaOrderStaffNew(BaseTokenView):
             end_date = request.GET.get("end_date", "").strip()
             customer = request.GET.get("customer", "").strip()
             company = request.GET.get("company", "").strip()
+            status_filter = request.GET.get("status", "").strip()
 
             perfoma_orders = (
                 PerfomaInvoiceOrder.objects
@@ -7084,6 +7089,12 @@ class PerformaOrderStaffNew(BaseTokenView):
             if company:
                 perfoma_orders = perfoma_orders.filter(
                     company_id=company
+                )
+
+            # Status filter
+            if status_filter:
+                perfoma_orders = perfoma_orders.filter(
+                    status__iexact=status_filter
                 )
 
             paginator = StandardPagination()
