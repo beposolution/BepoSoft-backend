@@ -14584,6 +14584,186 @@ def warehouse_delivery_note(request, order_id):
     return render(request, "warehousedeliverynote.html", context)
 
 
+
+
+
+class OrderTaxReportView(BaseTokenView):
+
+    def get(self, request):
+        try:
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+
+            start_date = request.query_params.get("start_date", "").strip()
+            end_date = request.query_params.get("end_date", "").strip()
+            company = request.query_params.get("company", "").strip()
+
+            # Validate dates
+            if start_date and not parse_date(start_date):
+                return Response({
+                    "status": "error",
+                    "message": "Invalid start_date. Use YYYY-MM-DD."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if end_date and not parse_date(end_date):
+                return Response({
+                    "status": "error",
+                    "message": "Invalid end_date. Use YYYY-MM-DD."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if start_date and end_date and start_date > end_date:
+                return Response({
+                    "status": "error",
+                    "message": "start_date cannot be after end_date."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if company:
+                if not company.isdigit() or int(company) < 1:
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid company ID."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if not Company.objects.filter(pk=int(company)).exists():
+                    return Response({
+                        "status": "error",
+                        "message": "Company not found."
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # Filter orders
+            orders = Order.objects.select_related(
+                "company",
+                "customer"
+            ).prefetch_related(
+                "items"
+            ).all()
+
+            # Assumes order_date is stored as YYYY-MM-DD
+            if start_date:
+                orders = orders.filter(order_date__gte=start_date)
+
+            if end_date:
+                orders = orders.filter(order_date__lte=end_date)
+
+            if company:
+                orders = orders.filter(company_id=int(company))
+
+            orders = orders.order_by("-order_date", "-id")
+
+            total_tax_amount = Decimal("0.00")
+            total_net_amount = Decimal("0.00")
+            total_before_tax = Decimal("0.00")
+            total_discount = Decimal("0.00")
+
+            order_data = []
+
+            for order in orders:
+
+                order_tax = Decimal("0.00")
+                order_net = Decimal("0.00")
+                order_before_tax = Decimal("0.00")
+                order_discount = Decimal("0.00")
+
+                for item in order.items.all():
+
+                    rate = Decimal(str(item.rate or 0))
+                    discount = Decimal(str(item.discount or 0))
+                    quantity = Decimal(str(item.quantity or 0))
+
+                    # Same as React item.exclude_price
+                    exclude_price = Decimal(
+                        str(item.product.exclude_price or 0)
+                    )
+
+                    # EXACT REACT TAX CALCULATION
+                    effective_rate = rate - discount
+
+                    tax_per_item = effective_rate - exclude_price
+
+                    item_total_tax = tax_per_item * quantity
+
+                    # Other totals
+                    item_net = effective_rate * quantity
+                    item_before_tax = exclude_price * quantity
+                    item_discount = discount * quantity
+
+                    order_tax += item_total_tax
+                    order_net += item_net
+                    order_before_tax += item_before_tax
+                    order_discount += item_discount
+
+                order_tax = order_tax.quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                order_net = order_net.quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                order_before_tax = order_before_tax.quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                order_discount = order_discount.quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP
+                )
+
+                total_tax_amount += order_tax
+                total_net_amount += order_net
+                total_before_tax += order_before_tax
+                total_discount += order_discount
+
+                order_data.append({
+                    "order_id": order.id,
+                    "invoice": order.invoice,
+                    "order_date": order.order_date,
+                    "company_id": order.company_id,
+                    "company_name": (
+                        order.company.name if order.company else None
+                    ),
+                    "customer_id": order.customer_id,
+                    "customer_name": order.customer.name,
+                    "status": order.status,
+                    "total_amount": order.total_amount,
+                    "total_discount": float(order_discount),
+                    "net_amount": float(order_net),
+                    "amount_before_tax": float(order_before_tax),
+                    "tax_amount": float(order_tax)
+                })
+
+            return Response({
+                "status": "success",
+                "message": "Order tax report fetched successfully",
+                "filters": {
+                    "start_date": start_date or None,
+                    "end_date": end_date or None,
+                    "company": int(company) if company else None
+                },
+                "summary": {
+                    "total_orders": len(order_data),
+                    "total_discount": float(total_discount),
+                    "total_net_amount": float(total_net_amount),
+                    "total_amount_before_tax": float(total_before_tax),
+                    "total_tax_amount": float(total_tax_amount)
+                },
+                "data": order_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception:
+            logger.exception("Error fetching order tax report")
+            return Response({
+                "status": "error",
+                "message": "An internal error occurred."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
 class ContactInfoCreateView(BaseTokenView):
     """GET all customers / POST new customer"""
 
