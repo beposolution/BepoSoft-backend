@@ -14671,21 +14671,29 @@ class OrderTaxReportView(BaseTokenView):
                     discount = Decimal(str(item.discount or 0))
                     quantity = Decimal(str(item.quantity or 0))
 
-                    # Same as React item.exclude_price
-                    exclude_price = Decimal(
-                        str(item.product.exclude_price or 0)
+                    # GST percentage from product
+                    tax_percentage = Decimal(
+                        str(item.product.tax or 0)
                     )
 
-                    # EXACT REACT TAX CALCULATION
+                    # Selling price after discount (GST inclusive)
                     effective_rate = rate - discount
 
-                    tax_per_item = effective_rate - exclude_price
-
-                    item_total_tax = tax_per_item * quantity
-
-                    # Other totals
+                    # Total amount including GST
                     item_net = effective_rate * quantity
-                    item_before_tax = exclude_price * quantity
+
+                    # Calculate amount before GST
+                    if tax_percentage > 0:
+                        item_before_tax = (
+                            item_net * Decimal("100")
+                        ) / (Decimal("100") + tax_percentage)
+                    else:
+                        item_before_tax = item_net
+
+                    # Actual GST amount
+                    item_total_tax = item_net - item_before_tax
+
+                    # Discount amount
                     item_discount = discount * quantity
 
                     order_tax += item_total_tax
