@@ -10388,9 +10388,14 @@ class CODBillsView(BaseTokenView):
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
 
-class ProductSalesReportView(APIView):
+class ProductSalesReportView(BaseTokenView):
     def get(self, request):
         try:
+
+            user, error_response = self.get_user_from_token(request)
+            if error_response:
+                return error_response
+        
             search = request.GET.get("search", "").strip()
             product_id = request.GET.get("product_id", "").strip()
             staff_id = request.GET.get("staff_id", "").strip()
@@ -10405,9 +10410,19 @@ class ProductSalesReportView(APIView):
                 "product",
                 "order",
                 "order__manage_staff",
+                "order__manage_staff__department_id",
                 "order__family",
                 "order__customer",
             ).order_by("-order__order_date", "-id")
+
+            # Exclude Bepocart department sales for CSO
+            if (
+                user.department_id
+                and user.department_id.name.strip().lower() == "cso"
+            ):
+                order_items = order_items.exclude(
+                    order__manage_staff__department_id__name__iexact="Bepocart"
+                )
 
             if search:
                 order_items = order_items.filter(
