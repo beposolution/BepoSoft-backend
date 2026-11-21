@@ -10418,10 +10418,10 @@ class ProductSalesReportView(BaseTokenView):
             # Exclude Bepocart department sales for CSO
             if (
                 user.department_id
-                and user.department_id.name.strip().lower() == "cso"
+                and user.department_id.name.strip().lower() == "CSO"
             ):
                 order_items = order_items.exclude(
-                    order__manage_staff__department_id__name__iexact="Bepocart"
+                    order__manage_staff__department_id__name__iexact="bepocart"
                 )
 
             if search:
