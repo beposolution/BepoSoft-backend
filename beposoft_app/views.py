@@ -29032,6 +29032,17 @@ class OrderComparisonReportView(BaseTokenView):
                 return round((diff_value / base_value) * 100, 2)
 
             def apply_common_filters(qs):
+
+                # Exclude Bepocart department sales for CSO
+                if (
+                    authUser.department_id
+                    and authUser.department_id.name.strip().lower() == "cso"
+                ):
+                    qs = qs.exclude(
+                        Q(manage_staff__department_id__name__iexact="bepocart") |
+                        Q(family__name__iexact="bepocart")
+                    )
+                    
                 search = request.GET.get("search", "").strip()
                 status_filter = request.GET.get("status", "").strip()
                 payment_status = request.GET.get("payment_status", "").strip()
