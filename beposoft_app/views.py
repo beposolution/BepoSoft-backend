@@ -29346,9 +29346,15 @@ class OrderComparisonReportView(BaseTokenView):
 
 
 
-class GRVFamilyPaymentSummaryView(APIView):
+class GRVFamilyPaymentSummaryView(BaseTokenView):
     def get(self, request):
         try:
+
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
             start_date = request.GET.get("start_date")
             end_date = request.GET.get("end_date")
 
@@ -29380,6 +29386,16 @@ class GRVFamilyPaymentSummaryView(APIView):
                 date__range=[start_date, end_date],
                 order__payment_status__in=["paid", "COD"]
             )
+
+            # Exclude Bepocart department sales for CSO
+            if (
+                user.department_id
+                and user.department_id.name.strip().lower() == "cso"
+            ):
+                grv_qs = grv_qs.exclude(
+                    Q(order__manage_staff__department_id__name__iexact="bepocart") |
+                    Q(order__family__name__iexact="bepocart")
+                )
 
             families = defaultdict(lambda: {
                 "family_id": None,
