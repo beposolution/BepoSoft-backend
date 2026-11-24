@@ -23,7 +23,7 @@ from django.http import Http404, JsonResponse
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Q
 from collections import Counter, defaultdict
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import pandas as pd
 import os
 from django.utils import timezone
@@ -42661,3 +42661,174 @@ class StaffCompleteReportView(BaseTokenView):
             ],
         }
         return Response(response, status=status.HTTP_200_OK)
+
+
+# international purchase
+
+class InternationalPurchaseView(BaseTokenView):
+
+    parser_classes = [
+        JSONParser,
+        MultiPartParser,
+        FormParser
+    ]
+
+    def post(self, request):
+
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            data = request.data.copy()
+
+            # Handle items sent as JSON string in multipart form data
+            items = data.get("items", [])
+
+            if isinstance(items, str):
+
+                try:
+                    items = json.loads(items)
+
+                except (json.JSONDecodeError, TypeError):
+
+                    return Response({
+                        "status": "error",
+                        "message": "Invalid items JSON format"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(items, list):
+
+                return Response({
+                    "status": "error",
+                    "message": "Items must be a list"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Convert QueryDict into a normal dictionary
+            if hasattr(data, "dict"):
+                data = data.dict()
+
+            # Handle individual product image uploads
+            for index, item in enumerate(items):
+
+                if not isinstance(item, dict):
+
+                    return Response({
+                        "status": "error",
+                        "message": f"Invalid item at index {index}"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                image = request.FILES.get(
+                    f"item_image_{index}"
+                )
+
+                if image:
+                    item["image"] = image
+
+            data["items"] = items
+
+            serializer = InternationalPurchaseSerializer(
+                data=data,
+                context={"request": request}
+            )
+
+            if serializer.is_valid():
+
+                with transaction.atomic():
+
+                    purchase = serializer.save(
+                        prepared_by=user,
+                        status="pending"
+                    )
+
+                    # Assign logged-in user's signature
+                    if user.signatur_up:
+
+                        purchase.prepared_signature = (
+                            user.signatur_up.name
+                        )
+
+                        purchase.save(
+                            update_fields=[
+                                "prepared_signature",
+                                "updated_at"
+                            ]
+                        )
+
+                    response_serializer = (
+                        InternationalPurchaseSerializer(
+                            purchase,
+                            context={"request": request}
+                        )
+                    )
+
+                    response_data = response_serializer.data
+
+                return Response({
+                    "status": "success",
+                    "message": "International purchase created successfully",
+                    "data": response_data
+                }, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "status": "error",
+                "message": "Validation failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+
+            logger.exception(
+                "Error while creating international purchase"
+            )
+
+            return Response({
+                "status": "error",
+                "message": "An error occurred while creating international purchase"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def get(self, request):
+
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            purchases = InternationalPurchase.objects.select_related(
+                "buyer",
+                "supplierCountry",
+                "prepared_by",
+                "ordered_by",
+                "approved_by_1",
+                "approved_by_2",
+                "approved_by_3"
+            ).prefetch_related(
+                "items"
+            ).all().order_by("-id")
+
+            serializer = InternationalPurchaseSerializer(
+                purchases,
+                many=True,
+                context={"request": request}
+            )
+
+            return Response({
+                "status": "success",
+                "message": "International purchases fetched successfully",
+                "count": len(purchases),
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+
+            logger.exception(
+                "Error while fetching international purchases"
+            )
+
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching international purchases"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

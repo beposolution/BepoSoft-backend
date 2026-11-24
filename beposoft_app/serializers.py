@@ -5229,3 +5229,228 @@ class StaffMonthlySalarySerializer(serializers.ModelSerializer):
             })
 
         return data
+    
+
+# InternationalPurchase
+
+class InternationalPurchaseOrderItemSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = InternationalPurchaseOrderItem
+        fields = [
+            "id",
+            "product_name",
+            "color",
+            "size",
+            "total_pcs",
+            "unit_price",
+            "total_price",
+            "image",
+            "note",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "total_price",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class InternationalPurchaseSerializer(serializers.ModelSerializer):
+
+    items = InternationalPurchaseOrderItemSerializer(many=True)
+
+    buyer_name = serializers.CharField(
+        source="buyer.name",
+        read_only=True,
+        default=None
+    )
+
+    supplier_country_name = serializers.CharField(
+        source="supplierCountry.country_name",
+        read_only=True,
+        default=None
+    )
+
+    prepared_by_name = serializers.CharField(
+        source="prepared_by.name",
+        read_only=True,
+        default=None
+    )
+
+    ordered_by_name = serializers.CharField(
+        source="ordered_by.name",
+        read_only=True,
+        default=None
+    )
+
+    approved_by_1_name = serializers.CharField(
+        source="approved_by_1.name",
+        read_only=True,
+        default=None
+    )
+
+    approved_by_2_name = serializers.CharField(
+        source="approved_by_2.name",
+        read_only=True,
+        default=None
+    )
+
+    approved_by_3_name = serializers.CharField(
+        source="approved_by_3.name",
+        read_only=True,
+        default=None
+    )
+
+    total_quantity = serializers.SerializerMethodField()
+    grand_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InternationalPurchase
+
+        fields = [
+            "id",
+            "buyer",
+            "buyer_name",
+            "date",
+            "invoice",
+            "supplierCompany",
+            "supplierName",
+            "supplierEmail",
+            "supplierPhone",
+            "supplierAddress",
+            "supplierCountry",
+            "supplier_country_name",
+            "status",
+            "description",
+
+            "prepared_by",
+            "prepared_by_name",
+            "prepared_at",
+            "prepared_signature",
+
+            "ordered_by",
+            "ordered_by_name",
+            "ordered_at",
+            "ordered_signature",
+
+            "approved_by_1",
+            "approved_by_1_name",
+            "approved_at_1",
+            "approved_signature_1",
+
+            "approved_by_2",
+            "approved_by_2_name",
+            "approved_at_2",
+            "approved_signature_2",
+
+            "approved_by_3",
+            "approved_by_3_name",
+            "approved_at_3",
+            "approved_signature_3",
+
+            "items",
+            "total_quantity",
+            "grand_total",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "invoice",
+            "status",
+            "prepared_by",
+            "prepared_at",
+            "prepared_signature",
+            "ordered_by",
+            "ordered_at",
+            "ordered_signature",
+            "approved_by_1",
+            "approved_at_1",
+            "approved_signature_1",
+            "approved_by_2",
+            "approved_at_2",
+            "approved_signature_2",
+            "approved_by_3",
+            "approved_at_3",
+            "approved_signature_3",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_total_quantity(self, obj):
+        return sum(
+            item.total_pcs or 0
+            for item in obj.items.all()
+        )
+
+    def get_grand_total(self, obj):
+        total = sum(
+            (
+                item.total_price or Decimal("0.00")
+                for item in obj.items.all()
+            ),
+            Decimal("0.00")
+        )
+
+        return str(total.quantize(Decimal("0.01")))
+
+    def validate_items(self, value):
+
+        if not value:
+            raise serializers.ValidationError(
+                "At least one purchase order item is required."
+            )
+
+        for index, item in enumerate(value, start=1):
+
+            quantity = item.get("total_pcs")
+            unit_price = item.get("unit_price")
+
+            if quantity is None or quantity <= 0:
+                raise serializers.ValidationError(
+                    f"Item {index}: Quantity must be greater than zero."
+                )
+
+            if unit_price is None or unit_price < 0:
+                raise serializers.ValidationError(
+                    f"Item {index}: Enter a valid unit price."
+                )
+
+            total_price = quantity * unit_price
+
+            if total_price > Decimal("9999999999.99"):
+                raise serializers.ValidationError(
+                    f"Item {index}: Total price exceeds the allowed limit."
+                )
+
+        return value
+
+    @transaction.atomic
+    def create(self, validated_data):
+
+        items_data = validated_data.pop("items")
+
+        purchase = InternationalPurchase.objects.create(
+            **validated_data
+        )
+
+        for item_data in items_data:
+
+            quantity = item_data.get("total_pcs", 0)
+            unit_price = item_data.get(
+                "unit_price", Decimal("0.00")
+            )
+
+            item_data["total_price"] = quantity * unit_price
+
+            InternationalPurchaseOrderItem.objects.create(
+                international_purchase=purchase,
+                **item_data
+            )
+
+        return purchase

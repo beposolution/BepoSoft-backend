@@ -7,7 +7,7 @@ from decimal import Decimal
 import random
 from django.utils.timezone import now 
 from datetime import datetime
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 
 # Create your models here.
@@ -2380,6 +2380,111 @@ class LocalPurchaseOrderItem(models.Model):
     def __str__(self):
         return self.product
     
+
+# international purcahse
+class InternationalPurchase(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("confirmed", "Confirmed"),
+        ("rejected", "Rejected"),
+    )
+    buyer = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, related_name="international_purchases")
+    date = models.DateField()
+    invoice = models.CharField(max_length=100, unique=True, editable=False, null=True, blank=True)
+    supplierCompany = models.CharField(max_length=200, null=True, blank=True)
+    supplierName = models.CharField(max_length=200, null=True, blank=True)
+    supplierEmail = models.EmailField(max_length=200, null=True, blank=True)
+    supplierPhone = models.CharField(max_length=20, null=True, blank=True)
+    supplierAddress = models.CharField(max_length=500, null=True, blank=True)
+    supplierCountry = models.ForeignKey(CountryCode, on_delete=models.SET_NULL, null=True, blank=True, related_name="supplier_country_international_purchases")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    description = models.TextField(null=True, blank=True)
+    prepared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="prepared_international_purchases")
+    prepared_at = models.DateTimeField(auto_now_add=True)
+    prepared_signature = models.ImageField(upload_to='international_purchase/prepared_signatures/', null=True, blank=True)
+    ordered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="ordered_international_purchases")
+    ordered_at = models.DateTimeField(null=True, blank=True)
+    ordered_signature = models.ImageField(upload_to='international_purchase/ordered_signatures/', null=True, blank=True)
+    approved_by_1 = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_international_purchases")
+    approved_at_1 = models.DateTimeField(null=True, blank=True)
+    approved_signature_1 = models.ImageField(upload_to='international_purchase/approved_signatures/', null=True, blank=True)
+    approved_by_2 = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_international_purchases_2")
+    approved_at_2 = models.DateTimeField(null=True, blank=True)
+    approved_signature_2 = models.ImageField(upload_to='international_purchase/approved_signatures/', null=True, blank=True)
+    approved_by_3 = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_international_purchases_3")
+    approved_at_3 = models.DateTimeField(null=True, blank=True)
+    approved_signature_3 = models.ImageField(upload_to='international_purchase/approved_signatures/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    def generate_invoice_number(self):
+        date_str = self.date.strftime("%d%m%Y")
+        prefix = f"IP{date_str}"
+
+        existing_invoices = InternationalPurchase.objects.filter(
+            invoice__startswith=prefix
+        ).values_list("invoice", flat=True)
+
+        last_number = max(
+            (
+                int(invoice[len(prefix):])
+                for invoice in existing_invoices
+                if invoice[len(prefix):].isdigit()
+            ),
+            default=0
+        )
+
+        next_number = last_number + 1
+
+        return f"{prefix}{next_number:04d}"
+
+    def save(self, *args, **kwargs):
+        if not self.invoice:
+            for attempt in range(5):
+                try:
+                    with transaction.atomic():
+                        self.invoice = self.generate_invoice_number()
+                        return super().save(*args, **kwargs)
+
+                except IntegrityError:
+                    self.invoice = None
+
+                    if attempt == 4:
+                        raise
+        else:
+            return super().save(*args, **kwargs)
+
+
+    def __str__(self):
+        return self.invoice or "International Purchase"
+
+    class Meta:
+        db_table = "international_purchases" 
+
+
+
+class InternationalPurchaseOrderItem(models.Model):
+    international_purchase = models.ForeignKey(InternationalPurchase, on_delete=models.CASCADE, related_name="items")
+    product_name = models.CharField(max_length=500, null=True, blank=True)
+    color = models.CharField(max_length=100, null=True, blank=True)
+    size = models.CharField(max_length=100, null=True, blank=True)
+    total_pcs = models.PositiveIntegerField(null=True, blank=True)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    image = models.ImageField(upload_to='international_purchase/product_images/', null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.product_name
+
+    class Meta:
+        db_table = "international_purchase_order_items"
+
+
 
 
 # vehicle
