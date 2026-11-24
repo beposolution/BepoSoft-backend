@@ -881,8 +881,20 @@ class CustomerView(BaseTokenView):
                 "state",
                 "family",
                 "customer_type",
-                "manager__family"
+                "manager__family",
+                "manager__department_id"
             ).order_by("-created_at")
+
+            # Exclude Bepocart customers for CSO and SD
+            if (
+                authUser.department_id
+                and authUser.department_id.name.strip().lower() in ["cso", "sd"]
+            ):
+                customers = customers.exclude(
+                    Q(manager__department_id__name__iexact="bepocart") |
+                    Q(manager__family__name__iexact="bepocart") |
+                    Q(family__name__iexact="bepocart")
+                )
 
             # Search filter
             if search:
