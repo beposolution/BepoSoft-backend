@@ -42844,3 +42844,175 @@ class InternationalPurchaseView(BaseTokenView):
                 "status": "error",
                 "message": "An error occurred while fetching international purchases"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class InternationalPurchaseFilterView(BaseTokenView):
+
+    def get(self, request):
+
+        try:
+            user, error_response = self.get_user_from_token(request)
+
+            if error_response:
+                return error_response
+
+            # Get filter parameters
+            start_date = request.GET.get("start_date")
+            end_date = request.GET.get("end_date")
+            buyer = request.GET.get("buyer")
+            supplier_country = request.GET.get("supplierCountry")
+            prepared_by = request.GET.get("prepared_by")
+            ordered_by = request.GET.get("ordered_by")
+            approved_by_1 = request.GET.get("approved_by_1")
+            approved_by_2 = request.GET.get("approved_by_2")
+            approved_by_3 = request.GET.get("approved_by_3")
+            purchase_status = request.GET.get("status", "").strip().lower()
+
+            # Status is mandatory
+            if not purchase_status:
+                return Response({
+                    "status": "error",
+                    "message": "Status parameter is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate status
+            valid_statuses = [
+                choice[0]
+                for choice in InternationalPurchase.STATUS_CHOICES
+            ]
+
+            if purchase_status not in valid_statuses:
+                return Response({
+                    "status": "error",
+                    "message": "Invalid purchase status",
+                    "allowed_statuses": valid_statuses
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Base queryset with mandatory status filter
+            purchases = InternationalPurchase.objects.filter(
+                status=purchase_status
+            ).select_related(
+                "buyer",
+                "supplierCountry",
+                "prepared_by",
+                "ordered_by",
+                "approved_by_1",
+                "approved_by_2",
+                "approved_by_3"
+            ).prefetch_related(
+                "items"
+            ).order_by("-id")
+
+            # Validate date filters
+            parsed_start_date = None
+            parsed_end_date = None
+
+            try:
+
+                if start_date:
+                    parsed_start_date = datetime.strptime(
+                        start_date, "%Y-%m-%d"
+                    ).date()
+
+                if end_date:
+                    parsed_end_date = datetime.strptime(
+                        end_date, "%Y-%m-%d"
+                    ).date()
+
+            except ValueError:
+
+                return Response({
+                    "status": "error",
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate date range
+            if (
+                parsed_start_date and parsed_end_date
+                and parsed_start_date > parsed_end_date
+            ):
+                return Response({
+                    "status": "error",
+                    "message": "Start date cannot be greater than end date"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Date range filter
+            if parsed_start_date:
+                purchases = purchases.filter(
+                    date__gte=parsed_start_date
+                )
+
+            if parsed_end_date:
+                purchases = purchases.filter(
+                    date__lte=parsed_end_date
+                )
+
+            # Foreign key filters
+            filters = {
+                "buyer_id": buyer,
+                "supplierCountry_id": supplier_country,
+                "prepared_by_id": prepared_by,
+                "ordered_by_id": ordered_by,
+                "approved_by_1_id": approved_by_1,
+                "approved_by_2_id": approved_by_2,
+                "approved_by_3_id": approved_by_3,
+            }
+
+            for field, value in filters.items():
+
+                if value is not None and value != "":
+
+                    try:
+                        filter_id = int(value)
+
+                        if filter_id <= 0:
+                            raise ValueError
+
+                    except (ValueError, TypeError):
+
+                        return Response({
+                            "status": "error",
+                            "message": f"Invalid ID for {field}"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    purchases = purchases.filter(
+                        **{field: filter_id}
+                    )
+
+            # Standard pagination
+            paginator = StandardPagination()
+
+            paginated_purchases = paginator.paginate_queryset(
+                purchases,
+                request,
+                view=self
+            )
+
+            serializer = InternationalPurchaseSerializer(
+                paginated_purchases,
+                many=True,
+                context={"request": request}
+            )
+
+            return paginator.get_paginated_response(
+                serializer.data
+            )
+
+        except Http404:
+
+            return Response({
+                "status": "error",
+                "message": "Invalid page number"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+
+            logger.exception(
+                "Error while fetching filtered international purchases"
+            )
+
+            return Response({
+                "status": "error",
+                "message": "An error occurred while fetching international purchases"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
