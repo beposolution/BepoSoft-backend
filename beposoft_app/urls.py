@@ -469,6 +469,7 @@ urlpatterns = [
 
     # internal purchase
     path("api/international/purchase/", InternationalPurchaseView.as_view()),
+    path("api/international/purchase/filter/", InternationalPurchaseFilterView.as_view()),
 
     path("api/vehicles/", VehicleView.as_view()),
     path("api/vehicles/<int:pk>/", VehicleDetailView.as_view()),
